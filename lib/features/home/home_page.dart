@@ -1,28 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:new_nutilize_mobile/features/calendar/calendar_page.dart';
+import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
+import 'package:new_nutilize_mobile/features/calendar/reservation_details_page.dart';
+import 'package:new_nutilize_mobile/features/notifications/notification_page.dart';
 import 'package:new_nutilize_mobile/features/request/request_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
 
-class HomePage extends StatefulWidget {
-  const HomePage({super.key});
-
-  @override
-  State<HomePage> createState() => _HomePageState();
+Route<T> _fadePageRoute<T>(Widget page) {
+  return PageRouteBuilder(
+    pageBuilder: (context, animation, secondaryAnimation) => page,
+    transitionDuration: const Duration(milliseconds: 280),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      return FadeTransition(opacity: animation, child: child);
+    },
+  );
 }
 
-class _HomePageState extends State<HomePage> {
-  Map<String, String>? _recentActivity;
-
-  Route<T> _fadePageRoute<T>(Widget page) {
-    return PageRouteBuilder(
-      pageBuilder: (context, animation, secondaryAnimation) => page,
-      transitionDuration: const Duration(milliseconds: 280),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(opacity: animation, child: child);
-      },
-    );
-  }
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -31,7 +27,14 @@ class _HomePageState extends State<HomePage> {
       body: SafeArea(
         child: Column(
           children: [
-            const AppHeader(title: 'NUtilize'),
+            AppHeader(
+              title: 'NUtilize',
+              onNotificationTap: () {
+                Navigator.of(
+                  context,
+                ).push(_fadePageRoute(const NotificationPage()));
+              },
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
@@ -86,8 +89,15 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                     const SizedBox(height: 8),
-                    _recentActivity == null
-                        ? Container(
+                    ValueListenableBuilder<List<ReservationRecord>>(
+                      valueListenable: ReservationActivityStore.listenable,
+                      builder: (context, reservations, child) {
+                        final recentReservation = reservations.isEmpty
+                            ? null
+                            : reservations.first;
+
+                        if (recentReservation == null) {
+                          return Container(
                             width: double.infinity,
                             padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
                             decoration: BoxDecoration(
@@ -116,17 +126,10 @@ class _HomePageState extends State<HomePage> {
                                   width: 185,
                                   height: 22,
                                   child: ElevatedButton(
-                                    onPressed: () async {
-                                      final result = await Navigator.of(context)
-                                          .push(
-                                            _fadePageRoute(const RequestPage()),
-                                          );
-                                      if (result != null &&
-                                          result is Map<String, String>) {
-                                        setState(() {
-                                          _recentActivity = result;
-                                        });
-                                      }
+                                    onPressed: () {
+                                      Navigator.of(context).push(
+                                        _fadePageRoute(const RequestPage()),
+                                      );
                                     },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFF35489A),
@@ -148,8 +151,23 @@ class _HomePageState extends State<HomePage> {
                                 ),
                               ],
                             ),
-                          )
-                        : _buildRecentActivityCard(),
+                          );
+                        }
+
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              _fadePageRoute(
+                                ReservationDetailsPage(
+                                  reservation: recentReservation,
+                                ),
+                              ),
+                            );
+                          },
+                          child: _buildRecentActivityCard(recentReservation),
+                        );
+                      },
+                    ),
                     const SizedBox(height: 22),
                     const Text(
                       'Quick Actions',
@@ -187,16 +205,10 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(width: 14),
                         Expanded(
                           child: GestureDetector(
-                            onTap: () async {
-                              final result = await Navigator.of(
+                            onTap: () {
+                              Navigator.of(
                                 context,
                               ).push(_fadePageRoute(const RequestPage()));
-                              if (result != null &&
-                                  result is Map<String, String>) {
-                                setState(() {
-                                  _recentActivity = result;
-                                });
-                              }
                             },
                             child: const _ActionTile(
                               icon: Icons.description_outlined,
@@ -213,20 +225,15 @@ class _HomePageState extends State<HomePage> {
             ),
             AppBottomNav(
               selectedIndex: 0,
-              onTap: (index) async {
+              onTap: (index) {
                 if (index == 1) {
                   Navigator.of(
                     context,
                   ).push(_fadePageRoute(const CalendarPage()));
                 } else if (index == 2) {
-                  final result = await Navigator.of(
+                  Navigator.of(
                     context,
                   ).push(_fadePageRoute(const RequestPage()));
-                  if (result != null && result is Map<String, String>) {
-                    setState(() {
-                      _recentActivity = result;
-                    });
-                  }
                 } else if (index == 3) {
                   Navigator.of(context).push(_fadePageRoute(const UserPage()));
                 }
@@ -238,8 +245,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildRecentActivityCard() {
-    final activity = _recentActivity!;
+  Widget _buildRecentActivityCard(ReservationRecord activity) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(16, 18, 16, 20),
@@ -279,7 +285,7 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      activity['room'] ?? 'Room Reservation',
+                      activity.roomName,
                       style: const TextStyle(
                         color: Color(0xFF111111),
                         fontSize: 16,
@@ -288,7 +294,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      activity['subtitle'] ?? 'Room Reservation',
+                      activity.reservationType,
                       style: const TextStyle(
                         color: Color(0xFF6A6F86),
                         fontSize: 12,
@@ -307,13 +313,19 @@ class _HomePageState extends State<HomePage> {
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
-                  activity['status'] ?? 'Pending Approval',
+                  activity.reservationStatus,
                   style: const TextStyle(
                     color: Color(0xFF4D3E00),
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
+              ),
+              const SizedBox(width: 6),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Color(0xFF111111),
+                size: 28,
               ),
             ],
           ),
@@ -327,7 +339,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 8),
               Text(
-                activity['date'] ?? '',
+                _formatDate(activity.date),
                 style: const TextStyle(color: Color(0xFF6A6F86), fontSize: 12),
               ),
               const SizedBox(width: 18),
@@ -338,7 +350,7 @@ class _HomePageState extends State<HomePage> {
               ),
               const SizedBox(width: 8),
               Text(
-                activity['time'] ?? '',
+                activity.reservationTime,
                 style: const TextStyle(color: Color(0xFF6A6F86), fontSize: 12),
               ),
             ],
@@ -346,6 +358,24 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+
+  String _formatDate(DateTime date) {
+    const monthNames = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${monthNames[date.month - 1]} ${date.day}, ${date.year}';
   }
 }
 

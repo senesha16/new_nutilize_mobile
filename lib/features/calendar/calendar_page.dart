@@ -1,6 +1,10 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
+import 'package:new_nutilize_mobile/features/calendar/reservation_details_page.dart';
+import 'package:new_nutilize_mobile/features/home/home_page.dart';
+import 'package:new_nutilize_mobile/features/notifications/notification_page.dart';
 import 'package:new_nutilize_mobile/features/request/request_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
@@ -13,13 +17,6 @@ Route<T> _fadePageRoute<T>(Widget page) {
       return FadeTransition(opacity: animation, child: child);
     },
   );
-}
-
-class _ReservationEntry {
-  const _ReservationEntry({required this.title, required this.time});
-
-  final String title;
-  final String time;
 }
 
 class CalendarPage extends StatefulWidget {
@@ -45,38 +42,19 @@ class _CalendarPageState extends State<CalendarPage> {
     'December',
   ];
 
-  static const Map<int, List<_ReservationEntry>> _sampleReservations = {
-    2: [_ReservationEntry(title: 'Room 618', time: '10:00 AM - 12:00 PM')],
-    5: [
-      _ReservationEntry(title: 'Conference Room', time: '1:00 PM - 3:00 PM'),
-      _ReservationEntry(title: 'Audio Visual Lab', time: '4:00 PM - 6:00 PM'),
-    ],
-    8: [_ReservationEntry(title: 'Studio 2', time: '9:30 AM - 11:30 AM')],
-    12: [_ReservationEntry(title: 'Meeting Room A', time: '2:00 PM - 4:00 PM')],
-    15: [
-      _ReservationEntry(title: 'Innovation Lab', time: '8:00 AM - 10:00 AM'),
-      _ReservationEntry(title: 'Room 204', time: '11:00 AM - 1:00 PM'),
-    ],
-    18: [_ReservationEntry(title: 'Workshop Room', time: '3:00 PM - 5:00 PM')],
-    21: [_ReservationEntry(title: 'Board Room', time: '10:30 AM - 12:30 PM')],
-    24: [
-      _ReservationEntry(title: 'Lab 4', time: '1:30 PM - 3:30 PM'),
-      _ReservationEntry(title: 'Room 310', time: '4:00 PM - 6:00 PM'),
-    ],
-    27: [_ReservationEntry(title: 'Studio 1', time: '9:00 AM - 11:00 AM')],
-    30: [
-      _ReservationEntry(title: 'Civic Center Room', time: '11:00 AM - 1:00 PM'),
-    ],
-  };
-
-  DateTime _today = DateTime.now();
-  DateTime _visibleMonth = DateTime.now();
-  DateTime _selectedDate = DateTime.now();
+  late ReservationRepository _reservationRepository;
+  late DateTime _today;
+  late DateTime _visibleMonth;
+  late DateTime _selectedDate;
   Timer? _midnightTimer;
 
   @override
   void initState() {
     super.initState();
+    _today = _dateOnly(DateTime.now());
+    _visibleMonth = DateTime(_today.year, _today.month);
+    _selectedDate = _today;
+    _reservationRepository = ReservationRepository.sample(_today);
     _scheduleMidnightUpdate();
   }
 
@@ -93,13 +71,32 @@ class _CalendarPageState extends State<CalendarPage> {
     final duration = nextMidnight.difference(now);
     _midnightTimer = Timer(duration, () {
       if (!mounted) return;
+      final previousToday = _today;
       setState(() {
-        _today = DateTime.now();
-        _visibleMonth = DateTime(_today.year, _today.month);
-        _selectedDate = _coerceSelectedDateToVisibleMonth();
+        _today = _dateOnly(DateTime.now());
+        _reservationRepository = ReservationRepository.sample(_today);
+        if (_isSameMonth(_visibleMonth, previousToday)) {
+          _visibleMonth = DateTime(_today.year, _today.month);
+        }
+        if (_isSameDay(_selectedDate, previousToday)) {
+          _selectedDate = _today;
+        }
       });
       _scheduleMidnightUpdate();
     });
+  }
+
+  DateTime _dateOnly(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  bool _isSameDay(DateTime left, DateTime right) {
+    return left.year == right.year &&
+        left.month == right.month &&
+        left.day == right.day;
+  }
+
+  bool _isSameMonth(DateTime left, DateTime right) {
+    return left.year == right.year && left.month == right.month;
   }
 
   DateTime _coerceSelectedDateToVisibleMonth() {
@@ -148,8 +145,8 @@ class _CalendarPageState extends State<CalendarPage> {
     return weeks;
   }
 
-  List<_ReservationEntry> _reservationsForDate(DateTime date) {
-    return _sampleReservations[date.day] ?? const <_ReservationEntry>[];
+  List<ReservationRecord> _reservationsForDate(DateTime date) {
+    return _reservationRepository.reservationsForDate(date);
   }
 
   void _goToPreviousMonth() {
@@ -178,13 +175,21 @@ class _CalendarPageState extends State<CalendarPage> {
         '${_monthNames[_visibleMonth.month - 1]} ${_visibleMonth.year}';
     final weeks = _buildWeeks(_visibleMonth);
     final reservations = _reservationsForDate(_selectedDate);
+    final reservationsByDate = _reservationRepository.groupedReservations();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5FB),
       body: SafeArea(
         child: Column(
           children: [
-            const AppHeader(title: 'NUtilize'),
+            AppHeader(
+              title: 'NUtilize',
+              onNotificationTap: () {
+                Navigator.of(
+                  context,
+                ).push(_fadePageRoute(const NotificationPage()));
+              },
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(22, 22, 22, 16),
@@ -269,7 +274,7 @@ class _CalendarPageState extends State<CalendarPage> {
                             selectedDate: _selectedDate,
                             todayDate: _today,
                             onDaySelected: _onDaySelected,
-                            reservationsByDate: _sampleReservations,
+                            reservationsByDate: reservationsByDate,
                           ),
                           const SizedBox(height: 16),
                           Text(
@@ -305,54 +310,103 @@ class _CalendarPageState extends State<CalendarPage> {
                             Column(
                               children: reservations
                                   .map(
-                                    (reservation) => Container(
-                                      width: double.infinity,
-                                      margin: const EdgeInsets.only(bottom: 8),
-                                      padding: const EdgeInsets.symmetric(
-                                        vertical: 12,
-                                        horizontal: 12,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: const Color(0xFFF3F5FB),
-                                        borderRadius: BorderRadius.circular(12),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 8,
-                                            height: 8,
-                                            decoration: const BoxDecoration(
-                                              color: Color(0xFF35489A),
-                                              shape: BoxShape.circle,
+                                    (reservation) => GestureDetector(
+                                      onTap: () {
+                                        Navigator.of(context).push(
+                                          _fadePageRoute(
+                                            ReservationDetailsPage(
+                                              reservation: reservation,
                                             ),
                                           ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  reservation.title,
-                                                  style: const TextStyle(
-                                                    color: Color(0xFF111111),
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 3),
-                                                Text(
-                                                  reservation.time,
-                                                  style: const TextStyle(
-                                                    color: Color(0xFF7A7A85),
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
+                                        );
+                                      },
+                                      child: Container(
+                                        width: double.infinity,
+                                        margin: const EdgeInsets.only(
+                                          bottom: 8,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          vertical: 12,
+                                          horizontal: 12,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: const Color(0xFFF3F5FB),
+                                          borderRadius: BorderRadius.circular(
+                                            12,
                                           ),
-                                        ],
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              width: 8,
+                                              height: 8,
+                                              decoration: const BoxDecoration(
+                                                color: Color(0xFF35489A),
+                                                shape: BoxShape.circle,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Text(
+                                                    reservation.roomName,
+                                                    style: const TextStyle(
+                                                      color: Color(0xFF111111),
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 3),
+                                                  Text(
+                                                    reservation
+                                                        .reservationTitle,
+                                                    style: const TextStyle(
+                                                      color: Color(0xFF7A7A85),
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    reservation.reservationTime,
+                                                    style: const TextStyle(
+                                                      color: Color(0xFF7A7A85),
+                                                      fontSize: 12,
+                                                      fontWeight:
+                                                          FontWeight.w500,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 10),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 8,
+                                                    vertical: 4,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFFFE4A7),
+                                                borderRadius:
+                                                    BorderRadius.circular(12),
+                                              ),
+                                              child: Text(
+                                                reservation.reservationStatus,
+                                                style: const TextStyle(
+                                                  color: Color(0xFF4D3E00),
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   )
@@ -369,7 +423,10 @@ class _CalendarPageState extends State<CalendarPage> {
               selectedIndex: 1,
               onTap: (index) {
                 if (index == 0) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (_) => const HomePage()),
+                    (route) => false,
+                  );
                 } else if (index == 2) {
                   Navigator.of(
                     context,
@@ -424,7 +481,7 @@ class _CalendarGrid extends StatelessWidget {
   final DateTime selectedDate;
   final DateTime todayDate;
   final ValueChanged<DateTime> onDaySelected;
-  final Map<int, List<_ReservationEntry>> reservationsByDate;
+  final Map<DateTime, List<ReservationRecord>> reservationsByDate;
 
   @override
   Widget build(BuildContext context) {
@@ -448,7 +505,12 @@ class _CalendarGrid extends StatelessWidget {
                             DateUtils.isSameDay(cell.date, todayDate),
                         hasReservation:
                             cell.date != null &&
-                            (reservationsByDate[cell.date!.day] ?? const [])
+                            (reservationsByDate[DateTime(
+                                      cell.date!.year,
+                                      cell.date!.month,
+                                      cell.date!.day,
+                                    )] ??
+                                    const [])
                                 .isNotEmpty,
                         onTap: cell.date == null
                             ? null

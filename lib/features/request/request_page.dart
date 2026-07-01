@@ -1,4 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
+import 'package:new_nutilize_mobile/features/home/home_page.dart';
+import 'package:new_nutilize_mobile/features/request/edit_profile_page.dart';
+import 'package:new_nutilize_mobile/features/request/item_reservation_page.dart';
+import 'package:new_nutilize_mobile/features/request/reservation_history_page.dart';
+import 'package:new_nutilize_mobile/features/request/personal_details_page.dart';
+import 'package:new_nutilize_mobile/features/notifications/notification_page.dart';
+import 'package:new_nutilize_mobile/features/notifications/notification_data.dart';
 import 'package:new_nutilize_mobile/features/calendar/calendar_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
@@ -13,7 +21,14 @@ class RequestPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const AppHeader(title: 'NUtilize'),
+            AppHeader(
+              title: 'NUtilize',
+              onNotificationTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const NotificationPage()),
+                );
+              },
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
@@ -31,7 +46,7 @@ class RequestPage extends StatelessWidget {
                     const SizedBox(height: 24),
                     _ReservationCard(
                       icon: Icons.meeting_room_rounded,
-                      title: 'Room Reservation',
+                      title: 'Venue Reservation',
                       subtitle: 'Classrooms, Gymnasium, AVR',
                       onTap: () {
                         Navigator.of(context).push(
@@ -47,9 +62,9 @@ class RequestPage extends StatelessWidget {
                       title: 'Item Reservation',
                       subtitle: 'TV, Tables, Chairs, etc.',
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Item reservation flow coming soon.'),
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ItemReservationPage(),
                           ),
                         );
                       },
@@ -85,11 +100,9 @@ class RequestPage extends StatelessWidget {
                     const SizedBox(height: 18),
                     GestureDetector(
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Reservation history is not available yet.',
-                            ),
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ReservationHistoryPage(),
                           ),
                         );
                       },
@@ -684,7 +697,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                     ),
                   ),
                   const Text(
-                    'Room Reservation',
+                    'Venue Reservation',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 20,
@@ -726,17 +739,23 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
           ],
         ),
       ),
-      bottomNavigationBar: AppBottomNav(
-        selectedIndex: 2,
-        onTap: (index) {
-          if (index == 0) {
-            Navigator.of(context).pop();
-          } else if (index == 3) {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const UserPage()));
-          }
-        },
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: AppBottomNav(
+          selectedIndex: 2,
+          onTap: (index) {
+            if (index == 0) {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const HomePage()),
+                (route) => false,
+              );
+            } else if (index == 3) {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const UserPage()));
+            }
+          },
+        ),
       ),
     );
   }
@@ -1527,17 +1546,12 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
-                    Navigator.of(context).pop({
-                      'room':
-                          _selectedRoomRecommendation ??
-                          _selectedRoomType ??
-                          'Room Reservation',
-                      'subtitle': 'Room Reservation',
-                      'status': 'Pending Approval',
-                      'date': _dateController.text,
-                      'time':
-                          '${_fromTimeController.text} - ${_toTimeController.text}',
-                    });
+                    final reservation = _createRecentActivityReservation();
+                    ReservationActivityStore.addReservation(reservation);
+                    NotificationCenterStore.addReservationSubmittedNotification(
+                      reservation,
+                    );
+                    Navigator.of(context).pop(reservation);
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFF6C914),
@@ -1563,6 +1577,77 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         ),
       ),
     );
+  }
+
+  ReservationRecord _createRecentActivityReservation() {
+    final String roomName =
+        _selectedRoomRecommendation ?? _selectedRoomType ?? 'Venue Reservation';
+    final String reservationTitle = _activityTitleController.text.trim().isEmpty
+        ? 'Venue Reservation'
+        : _activityTitleController.text.trim();
+    final DateTime selectedDate = _parseDate(_dateController.text);
+    final String timeRange =
+        '${_fromTimeController.text} - ${_toTimeController.text}';
+
+    return ReservationRecord(
+      id: 'recent-${DateTime.now().microsecondsSinceEpoch}',
+      date: selectedDate,
+      roomName: roomName,
+      reservationType: 'Venue Reservation',
+      reservationTitle: reservationTitle,
+      reservationTime: timeRange,
+      reservationStatus: 'Pending Approval',
+      roomNumber: _roomNumberFor(roomName),
+      approvalState: ReservationApprovalState.pending,
+      approvalTimeline: const [
+        ReservationTimelineEntry(
+          timestamp: '12:01 AM',
+          title: 'Request Submitted',
+          description: 'Your reservation request has been submitted.',
+          isCompleted: true,
+        ),
+        ReservationTimelineEntry(
+          timestamp: 'Pending',
+          title: 'Request Logged',
+          description:
+              'Your reservation request has been logged and forwarded for approval.',
+          isCompleted: false,
+        ),
+        ReservationTimelineEntry(
+          timestamp: 'Pending',
+          title: 'Approval Pending',
+          description:
+              'Approval steps will appear here once the request moves forward.',
+          isCompleted: false,
+        ),
+      ],
+    );
+  }
+
+  DateTime _parseDate(String text) {
+    final parts = text.split('/');
+    if (parts.length != 3) {
+      return DateTime.now();
+    }
+
+    final month = int.tryParse(parts[0]);
+    final day = int.tryParse(parts[1]);
+    final year = int.tryParse(parts[2]);
+    if (month == null || day == null || year == null) {
+      return DateTime.now();
+    }
+    return DateTime(year, month, day);
+  }
+
+  String _roomNumberFor(String roomName) {
+    final match = RegExp(
+      r'^Room\s+(.*)$',
+      caseSensitive: false,
+    ).firstMatch(roomName);
+    if (match != null) {
+      return match.group(1)!.trim();
+    }
+    return roomName;
   }
 
   Widget _buildProgressBar() {
@@ -1723,7 +1808,14 @@ class UserPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const AppHeader(title: 'NUtilize'),
+            AppHeader(
+              title: 'NUtilize',
+              onNotificationTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const NotificationPage()),
+                );
+              },
+            ),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
@@ -1831,10 +1923,24 @@ class UserPage extends StatelessWidget {
                         _MenuItem(
                           icon: Icons.person_outline_rounded,
                           label: 'Personal Details',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const PersonalDetailsPage(),
+                              ),
+                            );
+                          },
                         ),
                         _MenuItem(
                           icon: Icons.edit_outlined,
                           label: 'Edit Profile',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const EditProfilePage(),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -1853,6 +1959,13 @@ class UserPage extends StatelessWidget {
                         _MenuItem(
                           icon: Icons.history_rounded,
                           label: 'Reservation History',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const ReservationHistoryPage(),
+                              ),
+                            );
+                          },
                         ),
                         _MenuItem(
                           icon: Icons.description_outlined,
@@ -1936,21 +2049,27 @@ class UserPage extends StatelessWidget {
           ],
         ),
       ),
-      bottomNavigationBar: AppBottomNav(
-        selectedIndex: 3,
-        onTap: (index) {
-          if (index == 0) {
-            Navigator.of(context).popUntil((route) => route.isFirst);
-          } else if (index == 1) {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const CalendarPage()));
-          } else if (index == 2) {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RoomReservationPage()),
-            );
-          }
-        },
+      bottomNavigationBar: SafeArea(
+        top: false,
+        child: AppBottomNav(
+          selectedIndex: 3,
+          onTap: (index) {
+            if (index == 0) {
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const HomePage()),
+                (route) => false,
+              );
+            } else if (index == 1) {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const CalendarPage()));
+            } else if (index == 2) {
+              Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const RequestPage()));
+            }
+          },
+        ),
       ),
     );
   }
@@ -2051,7 +2170,7 @@ class UserPage extends StatelessWidget {
                       color: Color(0xFF6A6F86),
                       size: 22,
                     ),
-                    onTap: () {},
+                    onTap: item.onTap,
                   ),
                   if (item != items.last)
                     const Divider(height: 1, indent: 78, endIndent: 18),
@@ -2065,8 +2184,9 @@ class UserPage extends StatelessWidget {
 }
 
 class _MenuItem {
-  const _MenuItem({required this.icon, required this.label});
+  const _MenuItem({required this.icon, required this.label, this.onTap});
 
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
 }
