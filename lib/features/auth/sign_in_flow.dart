@@ -3,8 +3,22 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:new_nutilize_mobile/features/auth/loading_screen_page.dart';
+import 'package:new_nutilize_mobile/features/home/home_page.dart';
 
-enum SignInStep { login, email, code, role, profile, setPassword }
+enum SignInStep {
+  login,
+
+  // Registration
+  email,
+  code,
+  role,
+  profile,
+  setPassword,
+
+  // Login
+  loginEmail,
+  loginCode,
+}
 
 class SignInFlowPage extends StatefulWidget {
   const SignInFlowPage({super.key});
@@ -125,15 +139,63 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         return _AuthCard(
           key: const ValueKey('login'),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             children: [
               _MicrosoftButton(
                 label: 'Register with Microsoft',
                 onPressed: () => _goToStep(SignInStep.email),
               ),
+
+              const SizedBox(height: 18),
+
+              _PrimaryButton(
+                label: 'LOG IN',
+                onPressed: () => _goToStep(SignInStep.loginEmail),
+              ),
             ],
           ),
         );
+
+      case SignInStep.loginEmail:
+        return _AuthCard(
+          key: const ValueKey('loginEmail'),
+          title: 'Log In',
+          subtitle: 'Enter your email and password.',
+          child: Column(
+            children: [
+              _InputField(
+                controller: _emailController,
+                hintText: 'Enter your email',
+                keyboardType: TextInputType.emailAddress,
+                prefix: const Icon(
+                  Icons.email_outlined,
+                  color: Color(0xFFF6C914),
+                ),
+              ),
+
+              const SizedBox(height: 14),
+
+              _InputField(
+                controller: _passwordController,
+                hintText: 'Enter your password',
+                obscureText: true,
+                prefix: const Icon(
+                  Icons.lock_outline,
+                  color: Color(0xFFF6C914),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              _PrimaryButton(
+                label: 'NEXT',
+                onPressed: () {
+                  _goToStep(SignInStep.loginCode);
+                },
+              ),
+            ],
+          ),
+        );
+
       case SignInStep.email:
         return _AuthCard(
           key: const ValueKey('email'),
@@ -185,6 +247,48 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
             ],
           ),
         );
+
+      case SignInStep.loginCode:
+        return _AuthCard(
+          key: const ValueKey('loginCode'),
+          title: 'Verify Email',
+          subtitle: 'Enter the 6-digit code sent to your email.',
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(
+                  6,
+                  (index) =>
+                      _CodeDigitField(controller: _codeControllers[index]),
+                ),
+              ),
+
+              const SizedBox(height: 12),
+
+              TextButton(
+                onPressed: () {},
+                child: const Text(
+                  'Resend Code',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+
+              const SizedBox(height: 10),
+
+              _PrimaryButton(
+                label: 'VERIFY',
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(builder: (_) => const HomePage()),
+                  );
+                },
+              ),
+            ],
+          ),
+        );
+
       case SignInStep.role:
         return _AuthCard(
           key: const ValueKey('role'),
