@@ -128,7 +128,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _MicrosoftButton(
-                label: 'Log In with Microsoft',
+                label: 'Register with Microsoft',
                 onPressed: () => _goToStep(SignInStep.email),
               ),
             ],
