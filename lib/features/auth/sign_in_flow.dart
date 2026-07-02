@@ -140,16 +140,35 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
           key: const ValueKey('login'),
           child: Column(
             children: [
-              _MicrosoftButton(
-                label: 'Register with Microsoft',
-                onPressed: () => _goToStep(SignInStep.email),
-              ),
-
-              const SizedBox(height: 18),
-
               _PrimaryButton(
                 label: 'LOG IN',
                 onPressed: () => _goToStep(SignInStep.loginEmail),
+              ),
+
+              const SizedBox(height: 20),
+
+              Row(
+                children: const [
+                  Expanded(child: Divider(color: Colors.white54, thickness: 1)),
+                  Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 10),
+                    child: Text(
+                      'OR',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Expanded(child: Divider(color: Colors.white54, thickness: 1)),
+                ],
+              ),
+
+              const SizedBox(height: 20),
+
+              _MicrosoftButton(
+                label: 'Register with Microsoft',
+                onPressed: () => _goToStep(SignInStep.email),
               ),
             ],
           ),
@@ -187,10 +206,8 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               const SizedBox(height: 20),
 
               _PrimaryButton(
-                label: 'NEXT',
-                onPressed: () {
-                  _goToStep(SignInStep.loginCode);
-                },
+                label: 'LOG IN',
+                onPressed: () => _goToStep(SignInStep.loginEmail),
               ),
             ],
           ),
@@ -663,6 +680,36 @@ class _MicrosoftButton extends StatelessWidget {
   }
 }
 
+class _LoginButton extends StatelessWidget {
+  const _LoginButton({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.white,
+          foregroundColor: const Color(0xFF141414),
+          elevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+        child: Text(
+          label,
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
+        ),
+      ),
+    );
+  }
+}
+
 class _MicrosoftMark extends StatelessWidget {
   const _MicrosoftMark({required this.size});
 
@@ -874,7 +921,7 @@ class _PrimaryButton extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      height: 36,
+      height: 52,
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
@@ -885,7 +932,7 @@ class _PrimaryButton extends StatelessWidget {
         ),
         child: Text(
           label,
-          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
         ),
       ),
     );
