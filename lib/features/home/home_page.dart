@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:new_nutilize_mobile/features/calendar/calendar_page.dart';
-import 'package:new_nutilize_mobile/features/request/request_page.dart';
-import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
+import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -13,16 +11,6 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   Map<String, String>? _recentActivity;
-
-  Route<T> _fadePageRoute<T>(Widget page) {
-    return PageRouteBuilder(
-      pageBuilder: (context, animation, secondaryAnimation) => page,
-      transitionDuration: const Duration(milliseconds: 280),
-      transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        return FadeTransition(opacity: animation, child: child);
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -116,17 +104,10 @@ class _HomePageState extends State<HomePage> {
                                   width: 185,
                                   height: 22,
                                   child: ElevatedButton(
-                                    onPressed: () async {
-                                      final result = await Navigator.of(context)
-                                          .push(
-                                            _fadePageRoute(const RequestPage()),
-                                          );
-                                      if (result != null &&
-                                          result is Map<String, String>) {
-                                        setState(() {
-                                          _recentActivity = result;
-                                        });
-                                      }
+                                    onPressed: () {
+                                      AppShellScope.maybeOf(
+                                        context,
+                                      )?.onTabSelected(2);
                                     },
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFF35489A),
@@ -165,9 +146,7 @@ class _HomePageState extends State<HomePage> {
                         Expanded(
                           child: GestureDetector(
                             onTap: () {
-                              Navigator.of(
-                                context,
-                              ).push(_fadePageRoute(const CalendarPage()));
+                              AppShellScope.maybeOf(context)?.onTabSelected(1);
                             },
                             child: const _ActionTile(
                               icon: Icons.event_note_rounded,
@@ -187,21 +166,13 @@ class _HomePageState extends State<HomePage> {
                         const SizedBox(width: 14),
                         Expanded(
                           child: GestureDetector(
-                            onTap: () async {
-                              final result = await Navigator.of(
-                                context,
-                              ).push(_fadePageRoute(const RequestPage()));
-                              if (result != null &&
-                                  result is Map<String, String>) {
-                                setState(() {
-                                  _recentActivity = result;
-                                });
-                              }
+                            onTap: () {
+                              AppShellScope.maybeOf(context)?.onTabSelected(2);
                             },
                             child: const _ActionTile(
                               icon: Icons.description_outlined,
                               iconColor: Color(0xFF5A9E33),
-                              label: 'Book Room',
+                              label: 'Book Venue',
                             ),
                           ),
                         ),
@@ -210,27 +181,6 @@ class _HomePageState extends State<HomePage> {
                   ],
                 ),
               ),
-            ),
-            AppBottomNav(
-              selectedIndex: 0,
-              onTap: (index) async {
-                if (index == 1) {
-                  Navigator.of(
-                    context,
-                  ).push(_fadePageRoute(const CalendarPage()));
-                } else if (index == 2) {
-                  final result = await Navigator.of(
-                    context,
-                  ).push(_fadePageRoute(const RequestPage()));
-                  if (result != null && result is Map<String, String>) {
-                    setState(() {
-                      _recentActivity = result;
-                    });
-                  }
-                } else if (index == 3) {
-                  Navigator.of(context).push(_fadePageRoute(const UserPage()));
-                }
-              },
             ),
           ],
         ),
@@ -472,7 +422,7 @@ class _ActionTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 88,
+      height: 100,
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
       decoration: BoxDecoration(
         color: const Color(0xFFF5F6FB),
@@ -486,6 +436,7 @@ class _ActionTile extends StatelessWidget {
         ],
       ),
       child: Column(
+        mainAxisSize: MainAxisSize.min,
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
@@ -495,13 +446,17 @@ class _ActionTile extends StatelessWidget {
             child: Icon(icon, color: Colors.white, size: 26),
           ),
           const SizedBox(height: 8),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: Color(0xFF1C1F2A),
-              fontSize: 11,
-              fontWeight: FontWeight.w700,
+          Flexible(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF1C1F2A),
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],

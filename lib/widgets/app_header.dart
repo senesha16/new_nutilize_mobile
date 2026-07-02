@@ -25,14 +25,10 @@ class AppHeader extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 28,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.5,
-            ),
+          Image.asset(
+            'assets/images/nutilize_logo.png',
+            height: 38,
+            fit: BoxFit.contain,
           ),
           GestureDetector(
             onTap: onNotificationTap,

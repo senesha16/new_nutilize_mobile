@@ -1,19 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:new_nutilize_mobile/features/request/request_page.dart';
-import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
-
-Route<T> _fadePageRoute<T>(Widget page) {
-  return PageRouteBuilder(
-    pageBuilder: (context, animation, secondaryAnimation) => page,
-    transitionDuration: const Duration(milliseconds: 280),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      return FadeTransition(opacity: animation, child: child);
-    },
-  );
-}
 
 class _ReservationEntry {
   const _ReservationEntry({required this.title, required this.time});
@@ -364,20 +352,6 @@ class _CalendarPageState extends State<CalendarPage> {
                   ],
                 ),
               ),
-            ),
-            AppBottomNav(
-              selectedIndex: 1,
-              onTap: (index) {
-                if (index == 0) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                } else if (index == 2) {
-                  Navigator.of(
-                    context,
-                  ).push(_fadePageRoute(const RequestPage()));
-                } else if (index == 3) {
-                  Navigator.of(context).push(_fadePageRoute(const UserPage()));
-                }
-              },
             ),
           ],
         ),

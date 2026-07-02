@@ -5,8 +5,15 @@
 // gestures. You can also use WidgetTester to find child widgets in the widget
 // tree, read text, and verify that the values of widget properties are correct.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:new_nutilize_mobile/features/user/about_developers_page.dart';
+import 'package:new_nutilize_mobile/features/user/about_nutilize_page.dart';
+import 'package:new_nutilize_mobile/features/user/edit_profile_page.dart';
+import 'package:new_nutilize_mobile/features/user/personal_details_page.dart';
+import 'package:new_nutilize_mobile/features/user/report_issue_page.dart';
+import 'package:new_nutilize_mobile/features/user/request_history_page.dart';
 import 'package:new_nutilize_mobile/main.dart';
 
 void main() {
@@ -15,5 +22,67 @@ void main() {
 
     expect(find.text('Welcome to'), findsOneWidget);
     expect(find.text('Log In with Microsoft'), findsOneWidget);
+  });
+
+  testWidgets('shows request history entries and filters', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: RequestHistoryPage()));
+
+    expect(find.text('Request History'), findsOneWidget);
+    expect(find.text('Pending'), findsWidgets);
+  });
+
+  testWidgets('shows the report issue form', (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: ReportIssuePage()));
+
+    expect(find.text('Report an Issue'), findsOneWidget);
+    expect(find.text('Issue Category'), findsOneWidget);
+    expect(find.text('Subject'), findsOneWidget);
+    expect(find.text('Description'), findsOneWidget);
+    expect(find.text('Submit'), findsOneWidget);
+  });
+
+  testWidgets('shows the personal details screen', (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: PersonalDetailsPage()));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('personal_details_title')),
+      findsOneWidget,
+    );
+    expect(find.text('Personal Details'), findsOneWidget);
+  });
+
+  testWidgets('shows the edit profile form', (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: EditProfilePage()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('edit_profile_title')), findsOneWidget);
+    expect(find.text('Edit Profile'), findsOneWidget);
+  });
+
+  testWidgets('shows the about nutilize information', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(const MaterialApp(home: AboutNutilizePage()));
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('about_nutilize_title')), findsOneWidget);
+  });
+
+  testWidgets('shows the developers section', (WidgetTester tester) async {
+    await tester.pumpWidget(const MaterialApp(home: AboutDevelopersPage()));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey('about_developers_title')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey('about_developers_team_heading')),
+      findsOneWidget,
+    );
+    expect(find.text('Juan Agoncillo Dela Cruz'), findsOneWidget);
   });
 }

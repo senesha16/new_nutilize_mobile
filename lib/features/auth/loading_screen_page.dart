@@ -1,7 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:new_nutilize_mobile/features/home/home_page.dart';
+import 'package:new_nutilize_mobile/widgets/app_shell.dart';
 
 class LoadingScreenPage extends StatefulWidget {
   const LoadingScreenPage({super.key});
@@ -18,7 +18,7 @@ class _LoadingScreenPageState extends State<LoadingScreenPage> {
       if (!mounted) return;
       Navigator.of(
         context,
-      ).pushReplacement(MaterialPageRoute(builder: (_) => const HomePage()));
+      ).pushReplacement(MaterialPageRoute(builder: (_) => const AppShell()));
     });
   }
 
@@ -41,7 +41,7 @@ class _LoadingScreenPageState extends State<LoadingScreenPage> {
               ),
               SizedBox(height: 18),
               Text(
-                'Loading your next module...',
+                'Loading NUtilize...',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 18,

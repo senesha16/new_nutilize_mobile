@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:new_nutilize_mobile/features/calendar/calendar_page.dart';
-import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
+import 'package:new_nutilize_mobile/features/user/about_developers_page.dart';
+import 'package:new_nutilize_mobile/features/user/about_nutilize_page.dart';
+import 'package:new_nutilize_mobile/features/user/help_faq_page.dart';
+import 'package:new_nutilize_mobile/features/user/report_issue_page.dart';
+import 'package:new_nutilize_mobile/features/user/request_history_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
 
 class RequestPage extends StatelessWidget {
@@ -31,7 +34,7 @@ class RequestPage extends StatelessWidget {
                     const SizedBox(height: 24),
                     _ReservationCard(
                       icon: Icons.meeting_room_rounded,
-                      title: 'Room Reservation',
+                      title: 'Venue Reservation',
                       subtitle: 'Classrooms, Gymnasium, AVR',
                       onTap: () {
                         Navigator.of(context).push(
@@ -49,130 +52,14 @@ class RequestPage extends StatelessWidget {
                       onTap: () {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
-                            content: Text('Item reservation flow coming soon.'),
+                            content: Text('Item reservation coming soon.'),
                           ),
                         );
                       },
-                    ),
-                    const SizedBox(height: 32),
-                    const Row(
-                      children: [
-                        Expanded(
-                          child: Divider(
-                            color: Color(0xFFBCC2D9),
-                            thickness: 1,
-                          ),
-                        ),
-                        Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 10),
-                          child: Text(
-                            'More Actions',
-                            style: TextStyle(
-                              color: Color(0xFF4053A7),
-                              fontSize: 14,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        Expanded(
-                          child: Divider(
-                            color: Color(0xFFBCC2D9),
-                            thickness: 1,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 18),
-                    GestureDetector(
-                      onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text(
-                              'Reservation history is not available yet.',
-                            ),
-                          ),
-                        );
-                      },
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-                        decoration: BoxDecoration(
-                          color: Colors.white,
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: const Color(0xFFF6C914),
-                            width: 1.5,
-                          ),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x14000000),
-                              blurRadius: 16,
-                              offset: Offset(0, 8),
-                            ),
-                          ],
-                        ),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 50,
-                              height: 50,
-                              decoration: const BoxDecoration(
-                                color: Color(0xFFF6C914),
-                                shape: BoxShape.circle,
-                              ),
-                              child: const Icon(
-                                Icons.history_rounded,
-                                color: Colors.white,
-                                size: 26,
-                              ),
-                            ),
-                            const SizedBox(width: 14),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'View History of Reservation',
-                                    style: TextStyle(
-                                      color: Color(0xFF1C1F2A),
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                  SizedBox(height: 4),
-                                  Text(
-                                    'Review your past room and item reservations.',
-                                    style: TextStyle(
-                                      color: Color(0xFF6A6F86),
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const Icon(
-                              Icons.chevron_right_rounded,
-                              color: Color(0xFF6A6F86),
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
                   ],
                 ),
               ),
-            ),
-            AppBottomNav(
-              selectedIndex: 2,
-              onTap: (index) {
-                if (index == 0) {
-                  Navigator.of(context).pop();
-                } else if (index == 3) {
-                  Navigator.of(
-                    context,
-                  ).push(MaterialPageRoute(builder: (_) => const UserPage()));
-                }
-              },
             ),
           ],
         ),
@@ -684,7 +571,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                     ),
                   ),
                   const Text(
-                    'Room Reservation',
+                    'Venue Reservation',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 20,
@@ -725,18 +612,6 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: AppBottomNav(
-        selectedIndex: 2,
-        onTap: (index) {
-          if (index == 0) {
-            Navigator.of(context).pop();
-          } else if (index == 3) {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const UserPage()));
-          }
-        },
       ),
     );
   }
@@ -1514,7 +1389,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Your room reservation request has been submitted successfully.',
+                'Your venue reservation request has been submitted successfully.',
                 textAlign: TextAlign.center,
                 style: TextStyle(
                   color: Color(0xFF6A6F86),
@@ -1531,8 +1406,8 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                       'room':
                           _selectedRoomRecommendation ??
                           _selectedRoomType ??
-                          'Room Reservation',
-                      'subtitle': 'Room Reservation',
+                          'Venue Reservation',
+                      'subtitle': 'Venue Reservation',
                       'status': 'Pending Approval',
                       'date': _dateController.text,
                       'time':
@@ -1857,6 +1732,13 @@ class UserPage extends StatelessWidget {
                         _MenuItem(
                           icon: Icons.description_outlined,
                           label: 'Request History',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const RequestHistoryPage(),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -1875,10 +1757,24 @@ class UserPage extends StatelessWidget {
                         _MenuItem(
                           icon: Icons.report_problem_outlined,
                           label: 'Report an Issue',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const ReportIssuePage(),
+                              ),
+                            );
+                          },
                         ),
                         _MenuItem(
                           icon: Icons.help_outline,
                           label: 'Help & FAQ',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const HelpFaqPage(),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -1897,10 +1793,24 @@ class UserPage extends StatelessWidget {
                         _MenuItem(
                           icon: Icons.info_outline,
                           label: 'About NUtilize',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const AboutNutilizePage(),
+                              ),
+                            );
+                          },
                         ),
                         _MenuItem(
                           icon: Icons.group_outlined,
                           label: 'About the Developers',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const AboutDevelopersPage(),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -1935,22 +1845,6 @@ class UserPage extends StatelessWidget {
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: AppBottomNav(
-        selectedIndex: 3,
-        onTap: (index) {
-          if (index == 0) {
-            Navigator.of(context).popUntil((route) => route.isFirst);
-          } else if (index == 1) {
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const CalendarPage()));
-          } else if (index == 2) {
-            Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const RoomReservationPage()),
-            );
-          }
-        },
       ),
     );
   }
@@ -2051,7 +1945,7 @@ class UserPage extends StatelessWidget {
                       color: Color(0xFF6A6F86),
                       size: 22,
                     ),
-                    onTap: () {},
+                    onTap: item.onTap ?? () {},
                   ),
                   if (item != items.last)
                     const Divider(height: 1, indent: 78, endIndent: 18),
@@ -2065,8 +1959,9 @@ class UserPage extends StatelessWidget {
 }
 
 class _MenuItem {
-  const _MenuItem({required this.icon, required this.label});
+  const _MenuItem({required this.icon, required this.label, this.onTap});
 
   final IconData icon;
   final String label;
+  final VoidCallback? onTap;
 }
