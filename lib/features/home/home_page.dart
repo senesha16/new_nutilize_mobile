@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
+import 'package:new_nutilize_mobile/features/calendar/reservation_details_page.dart';
 import 'package:new_nutilize_mobile/features/request/reservation_history_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
@@ -57,18 +59,78 @@ class HomePage extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 18),
-                    const Text(
-                      'Recent Activity',
-                      style: TextStyle(
-                        color: Color(0xFF4053A7),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Recent Activity',
+                          style: TextStyle(
+                            color: Color(0xFF4053A7),
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const ReservationHistoryPage(),
+                              ),
+                            );
+                          },
+                          style: TextButton.styleFrom(
+                            foregroundColor: const Color(0xFF35489A),
+                            padding: EdgeInsets.zero,
+                            minimumSize: const Size(0, 0),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'View All',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 8),
-                    _EmptyActivityCard(
-                      onReserve: () {
-                        AppShellScope.maybeOf(context)?.onTabSelected(2);
+                    AnimatedBuilder(
+                      animation: ReservationActivityStore.listenable,
+                      builder: (context, child) {
+                        final recentActivities = recentReservations(
+                          DateTime.now(),
+                        );
+                        if (recentActivities.isEmpty) {
+                          return _EmptyActivityCard(
+                            onReserve: () {
+                              AppShellScope.maybeOf(context)?.onTabSelected(2);
+                            },
+                          );
+                        }
+
+                        return Column(
+                          children: recentActivities
+                              .map(
+                                (reservation) => Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: _RecentActivityCard(
+                                    reservation: reservation,
+                                    onTap: () {
+                                      Navigator.of(context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              ReservationDetailsPage(
+                                                reservation: reservation,
+                                              ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                        );
                       },
                     ),
                     const SizedBox(height: 22),
@@ -189,6 +251,181 @@ class _EmptyActivityCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _RecentActivityCard extends StatelessWidget {
+  const _RecentActivityCard({required this.reservation, required this.onTap});
+
+  final ReservationRecord reservation;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = switch (reservation.reservationStatus.toLowerCase()) {
+      'approved' || 'completed' => const Color(0xFF2E9D50),
+      'cancelled' => const Color(0xFFD22828),
+      'rejected' => const Color(0xFFD22828),
+      _ => const Color(0xFFD79700),
+    };
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Ink(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: const Color(0xFFE4E7FB),
+            borderRadius: BorderRadius.circular(18),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x1F000000),
+                blurRadius: 16,
+                offset: Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFE6EAF9),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(
+                      Icons.meeting_room_outlined,
+                      color: Color(0xFF35489A),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          reservation.roomName,
+                          style: const TextStyle(
+                            color: Color(0xFF111111),
+                            fontSize: 14,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          reservation.reservationType,
+                          style: const TextStyle(
+                            color: Color(0xFF6A6F86),
+                            fontSize: 11,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  _StatusBadge(
+                    label: reservation.reservationStatus,
+                    color: statusColor,
+                  ),
+                  const SizedBox(width: 6),
+                  const Icon(
+                    Icons.chevron_right_rounded,
+                    color: Color(0xFF1C1F2A),
+                    size: 22,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              const Divider(height: 1),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Icon(
+                    Icons.calendar_today_outlined,
+                    size: 15,
+                    color: Color(0xFF6A6F86),
+                  ),
+                  const SizedBox(width: 7),
+                  Text(
+                    _formatDate(reservation.date),
+                    style: const TextStyle(
+                      color: Color(0xFF6A6F86),
+                      fontSize: 11,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Icon(
+                    Icons.access_time_rounded,
+                    size: 16,
+                    color: Color(0xFF6A6F86),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      reservation.reservationTime,
+                      style: const TextStyle(
+                        color: Color(0xFF6A6F86),
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusBadge extends StatelessWidget {
+  const _StatusBadge({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+String _formatDate(DateTime date) {
+  const months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+  return '${months[date.month - 1]} ${date.day}, ${date.year}';
 }
 
 class _AnnouncementCard extends StatelessWidget {

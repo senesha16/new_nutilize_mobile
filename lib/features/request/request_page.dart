@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/features/user/about_developers_page.dart';
 import 'package:new_nutilize_mobile/features/user/about_nutilize_page.dart';
 import 'package:new_nutilize_mobile/features/user/help_faq_page.dart';
@@ -1405,6 +1406,22 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                 width: double.infinity,
                 child: ElevatedButton(
                   onPressed: () {
+                    final reservation = ReservationRecord(
+                      reservationTitle: _activityTitleController.text.isEmpty
+                          ? 'Venue Reservation'
+                          : _activityTitleController.text,
+                      roomName:
+                          _selectedRoomRecommendation ??
+                          _selectedRoomType ??
+                          'Venue Reservation',
+                      reservationType: 'Venue Reservation',
+                      reservationStatus: 'Pending Approval',
+                      date: _selectedDate ?? DateTime.now(),
+                      reservationTime:
+                          '${_fromTimeController.text} - ${_toTimeController.text}',
+                    );
+                    ReservationActivityStore.upsert(reservation);
+
                     Navigator.of(context).pop({
                       'room':
                           _selectedRoomRecommendation ??

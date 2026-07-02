@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:new_nutilize_mobile/features/notifications/notification_page.dart';
 
 class AppHeader extends StatelessWidget {
   const AppHeader({
@@ -31,7 +32,13 @@ class AppHeader extends StatelessWidget {
             fit: BoxFit.contain,
           ),
           GestureDetector(
-            onTap: onNotificationTap,
+            onTap:
+                onNotificationTap ??
+                () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const NotificationPage()),
+                  );
+                },
             child: Stack(
               clipBehavior: Clip.none,
               children: [

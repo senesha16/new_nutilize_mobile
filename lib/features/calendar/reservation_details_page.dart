@@ -160,6 +160,7 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                               padding: EdgeInsets.symmetric(vertical: 13),
                               child: Text(
                                 'Report an Issue',
+                                textAlign: TextAlign.center,
                                 style: TextStyle(
                                   fontSize: 14,
                                   fontWeight: FontWeight.w700,
@@ -273,7 +274,7 @@ class _DownloadPermitDialogState extends State<_DownloadPermitDialog> {
 
     return _DialogShell(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+        padding: EdgeInsets.fromLTRB(22, 20, 22, 18),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -282,8 +283,8 @@ class _DownloadPermitDialogState extends State<_DownloadPermitDialog> {
               'Download Reservation Permit',
               style: TextStyle(
                 color: _brandBlue,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
               ),
             ),
             const SizedBox(height: 12),
@@ -353,7 +354,7 @@ class _PermitSuccessDialog extends StatelessWidget {
             ),
             const SizedBox(height: 22),
             SizedBox(
-              width: double.infinity,
+              width: 130,
               child: ElevatedButton(
                 onPressed: () => Navigator.of(context).pop(),
                 style: ElevatedButton.styleFrom(
@@ -489,19 +490,15 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Row(
-                children: [
-                  Icon(Icons.warning_amber_rounded, color: _brandRed, size: 22),
-                  SizedBox(width: 6),
-                  Text(
-                    'Report an Issue',
-                    style: TextStyle(
-                      color: _brandRed,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w800,
-                    ),
+              const Center(
+                child: Text(
+                  'Report an Issue',
+                  style: TextStyle(
+                    color: _brandRed,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
                   ),
-                ],
+                ),
               ),
               const SizedBox(height: 14),
               Text(
@@ -515,13 +512,13 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
               const SizedBox(height: 8),
               InkWell(
                 onTap: _pickImage,
-                borderRadius: BorderRadius.circular(10),
+                borderRadius: BorderRadius.circular(6),
                 child: Container(
                   width: double.infinity,
-                  padding: const EdgeInsets.all(12),
+                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
                     color: const Color(0xFFF3F5FB),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(6),
                   ),
                   child: _isPickingImage
                       ? const Row(
@@ -606,17 +603,21 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
               const SizedBox(height: 8),
               TextFormField(
                 controller: _descriptionController,
-                maxLines: 4,
+                minLines: 2,
+                maxLines: 2,
                 textInputAction: TextInputAction.newline,
                 decoration: InputDecoration(
                   hintText: 'Describe the issue...',
                   filled: true,
                   fillColor: const Color(0xFFF3F5FB),
                   border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(6),
                     borderSide: BorderSide.none,
                   ),
-                  contentPadding: const EdgeInsets.all(14),
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                 ),
                 validator: (value) {
                   if ((value ?? '').trim().isEmpty) {
@@ -718,9 +719,10 @@ class _ReportConfirmationDialogState extends State<_ReportConfirmationDialog> {
                 SizedBox(width: 6),
                 Text(
                   'Report an Issue',
+                  textAlign: TextAlign.center,
                   style: TextStyle(
                     color: _brandRed,
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
@@ -729,6 +731,7 @@ class _ReportConfirmationDialogState extends State<_ReportConfirmationDialog> {
             const SizedBox(height: 14),
             Text(
               'Are you sure you want to submit this report?\n\nOur team will review your concern and contact you if additional information is required.',
+              textAlign: TextAlign.center,
               style: TextStyle(color: onSurface, fontSize: 13, height: 1.45),
             ),
             if (widget.draft.imageBytes != null) ...[
@@ -778,7 +781,7 @@ class _ReportSuccessDialog extends StatelessWidget {
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: _brandRed,
-                fontSize: 18,
+                fontSize: 16,
                 fontWeight: FontWeight.w800,
               ),
             ),
@@ -794,7 +797,7 @@ class _ReportSuccessDialog extends StatelessWidget {
             ),
             const SizedBox(height: 22),
             SizedBox(
-              width: double.infinity,
+              width: 130,
               child: ElevatedButton(
                 onPressed: () => Navigator.of(context).pop(),
                 style: ElevatedButton.styleFrom(
@@ -825,23 +828,19 @@ class _DialogShell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final surface = Theme.of(context).colorScheme.surface;
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 420),
-      child: Material(
-        color: surface,
-        borderRadius: BorderRadius.circular(18),
-        clipBehavior: Clip.antiAlias,
+    return Material(
+      color: Colors.transparent,
+      child: Center(
         child: Container(
+          width: 340,
           decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(18),
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(14),
             boxShadow: const [
               BoxShadow(
-                color: Color(0x24000000),
-                blurRadius: 24,
-                offset: Offset(0, 10),
+                color: Color(0x22000000),
+                blurRadius: 18,
+                offset: Offset(0, 6),
               ),
             ],
           ),
@@ -897,9 +896,9 @@ class _DialogButtonRow extends StatelessWidget {
             style: ElevatedButton.styleFrom(
               backgroundColor: primaryColor,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 13),
+              padding: const EdgeInsets.symmetric(vertical: 11),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(4),
+                borderRadius: BorderRadius.circular(6),
               ),
             ),
             child: primaryIsBusy
@@ -914,7 +913,7 @@ class _DialogButtonRow extends StatelessWidget {
                 : Text(
                     primaryLabel,
                     style: const TextStyle(
-                      fontSize: 14,
+                      fontSize: 13,
                       fontWeight: FontWeight.w700,
                     ),
                   ),
@@ -938,7 +937,7 @@ class _SelectedImagePreview extends StatelessWidget {
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: const Color(0xFFF3F5FB),
-        borderRadius: BorderRadius.circular(10),
+        borderRadius: BorderRadius.circular(6),
       ),
       child: Row(
         children: [
