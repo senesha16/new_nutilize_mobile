@@ -1,14 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
+import 'package:new_nutilize_mobile/features/calendar/reservation_details_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
-
-class _ReservationEntry {
-  const _ReservationEntry({required this.title, required this.time});
-
-  final String title;
-  final String time;
-}
 
 class CalendarPage extends StatefulWidget {
   const CalendarPage({super.key});
@@ -33,29 +28,7 @@ class _CalendarPageState extends State<CalendarPage> {
     'December',
   ];
 
-  static const Map<int, List<_ReservationEntry>> _sampleReservations = {
-    2: [_ReservationEntry(title: 'Room 618', time: '10:00 AM - 12:00 PM')],
-    5: [
-      _ReservationEntry(title: 'Conference Room', time: '1:00 PM - 3:00 PM'),
-      _ReservationEntry(title: 'Audio Visual Lab', time: '4:00 PM - 6:00 PM'),
-    ],
-    8: [_ReservationEntry(title: 'Studio 2', time: '9:30 AM - 11:30 AM')],
-    12: [_ReservationEntry(title: 'Meeting Room A', time: '2:00 PM - 4:00 PM')],
-    15: [
-      _ReservationEntry(title: 'Innovation Lab', time: '8:00 AM - 10:00 AM'),
-      _ReservationEntry(title: 'Room 204', time: '11:00 AM - 1:00 PM'),
-    ],
-    18: [_ReservationEntry(title: 'Workshop Room', time: '3:00 PM - 5:00 PM')],
-    21: [_ReservationEntry(title: 'Board Room', time: '10:30 AM - 12:30 PM')],
-    24: [
-      _ReservationEntry(title: 'Lab 4', time: '1:30 PM - 3:30 PM'),
-      _ReservationEntry(title: 'Room 310', time: '4:00 PM - 6:00 PM'),
-    ],
-    27: [_ReservationEntry(title: 'Studio 1', time: '9:00 AM - 11:00 AM')],
-    30: [
-      _ReservationEntry(title: 'Civic Center Room', time: '11:00 AM - 1:00 PM'),
-    ],
-  };
+  late final ReservationRepository _reservationRepository;
 
   DateTime _today = DateTime.now();
   DateTime _visibleMonth = DateTime.now();
@@ -65,6 +38,7 @@ class _CalendarPageState extends State<CalendarPage> {
   @override
   void initState() {
     super.initState();
+    _reservationRepository = ReservationRepository.sample(_today);
     _scheduleMidnightUpdate();
   }
 
@@ -78,17 +52,19 @@ class _CalendarPageState extends State<CalendarPage> {
     _midnightTimer?.cancel();
     final now = DateTime.now();
     final nextMidnight = DateTime(now.year, now.month, now.day + 1);
-    final duration = nextMidnight.difference(now);
-    _midnightTimer = Timer(duration, () {
+    _midnightTimer = Timer(nextMidnight.difference(now), () {
       if (!mounted) return;
       setState(() {
         _today = DateTime.now();
-        _visibleMonth = DateTime(_today.year, _today.month);
-        _selectedDate = _coerceSelectedDateToVisibleMonth();
+        _visibleMonth = DateTime(_today.year, _today.month, 1);
+        _selectedDate = _today;
       });
       _scheduleMidnightUpdate();
     });
   }
+
+  DateTime _normalizeDate(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
 
   DateTime _coerceSelectedDateToVisibleMonth() {
     final daysInMonth = DateTime(
@@ -136,20 +112,53 @@ class _CalendarPageState extends State<CalendarPage> {
     return weeks;
   }
 
-  List<_ReservationEntry> _reservationsForDate(DateTime date) {
-    return _sampleReservations[date.day] ?? const <_ReservationEntry>[];
+  List<ReservationRecord> _allReservations() {
+    final combined = <ReservationRecord>[];
+    final seenIds = <String>{};
+
+    for (final reservation in [
+      ...ReservationActivityStore.listenable.value,
+      ..._reservationRepository.reservations,
+    ]) {
+      if (seenIds.add(reservation.stableId)) {
+        combined.add(reservation);
+      }
+    }
+
+    combined.sort((a, b) => a.date.compareTo(b.date));
+    return combined;
+  }
+
+  Map<DateTime, int> _reservationCountsByDay(
+    List<ReservationRecord> reservations,
+  ) {
+    final counts = <DateTime, int>{};
+    for (final reservation in reservations) {
+      final key = _normalizeDate(reservation.date);
+      counts[key] = (counts[key] ?? 0) + 1;
+    }
+    return counts;
+  }
+
+  List<ReservationRecord> _reservationsForDate(DateTime date) {
+    final normalized = _normalizeDate(date);
+    return _allReservations()
+        .where(
+          (reservation) => DateUtils.isSameDay(reservation.date, normalized),
+        )
+        .toList();
   }
 
   void _goToPreviousMonth() {
     setState(() {
-      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1);
+      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month - 1, 1);
       _selectedDate = _coerceSelectedDateToVisibleMonth();
     });
   }
 
   void _goToNextMonth() {
     setState(() {
-      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1);
+      _visibleMonth = DateTime(_visibleMonth.year, _visibleMonth.month + 1, 1);
       _selectedDate = _coerceSelectedDateToVisibleMonth();
     });
   }
@@ -164,8 +173,10 @@ class _CalendarPageState extends State<CalendarPage> {
   Widget build(BuildContext context) {
     final monthLabel =
         '${_monthNames[_visibleMonth.month - 1]} ${_visibleMonth.year}';
+    final allReservations = _allReservations();
     final weeks = _buildWeeks(_visibleMonth);
     final reservations = _reservationsForDate(_selectedDate);
+    final reservationCounts = _reservationCountsByDay(allReservations);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5FB),
@@ -257,12 +268,12 @@ class _CalendarPageState extends State<CalendarPage> {
                             selectedDate: _selectedDate,
                             todayDate: _today,
                             onDaySelected: _onDaySelected,
-                            reservationsByDate: _sampleReservations,
+                            reservationCountsByDate: reservationCounts,
                           ),
                           const SizedBox(height: 16),
-                          Text(
+                          const Text(
                             'Reservations',
-                            style: const TextStyle(
+                            style: TextStyle(
                               color: Color(0xFF111111),
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
@@ -304,43 +315,68 @@ class _CalendarPageState extends State<CalendarPage> {
                                         color: const Color(0xFFF3F5FB),
                                         borderRadius: BorderRadius.circular(12),
                                       ),
-                                      child: Row(
-                                        children: [
-                                          Container(
-                                            width: 8,
-                                            height: 8,
-                                            decoration: const BoxDecoration(
-                                              color: Color(0xFF35489A),
-                                              shape: BoxShape.circle,
-                                            ),
+                                      child: Material(
+                                        color: Colors.transparent,
+                                        child: InkWell(
+                                          borderRadius: BorderRadius.circular(
+                                            12,
                                           ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment:
-                                                  CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  reservation.title,
-                                                  style: const TextStyle(
-                                                    color: Color(0xFF111111),
-                                                    fontSize: 13,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
+                                          onTap: () {
+                                            Navigator.of(context).push(
+                                              MaterialPageRoute(
+                                                builder: (_) =>
+                                                    ReservationDetailsPage(
+                                                      reservation: reservation,
+                                                    ),
+                                              ),
+                                            );
+                                          },
+                                          child: Row(
+                                            children: [
+                                              Container(
+                                                width: 8,
+                                                height: 8,
+                                                decoration: const BoxDecoration(
+                                                  color: Color(0xFF35489A),
+                                                  shape: BoxShape.circle,
                                                 ),
-                                                const SizedBox(height: 3),
-                                                Text(
-                                                  reservation.time,
-                                                  style: const TextStyle(
-                                                    color: Color(0xFF7A7A85),
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w500,
-                                                  ),
+                                              ),
+                                              const SizedBox(width: 10),
+                                              Expanded(
+                                                child: Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.start,
+                                                  children: [
+                                                    Text(
+                                                      reservation.roomName,
+                                                      style: const TextStyle(
+                                                        color: Color(
+                                                          0xFF111111,
+                                                        ),
+                                                        fontSize: 13,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(height: 3),
+                                                    Text(
+                                                      reservation
+                                                          .reservationTime,
+                                                      style: const TextStyle(
+                                                        color: Color(
+                                                          0xFF7A7A85,
+                                                        ),
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
-                                              ],
-                                            ),
+                                              ),
+                                            ],
                                           ),
-                                        ],
+                                        ),
                                       ),
                                     ),
                                   )
@@ -391,14 +427,14 @@ class _CalendarGrid extends StatelessWidget {
     required this.selectedDate,
     required this.todayDate,
     required this.onDaySelected,
-    required this.reservationsByDate,
+    required this.reservationCountsByDate,
   });
 
   final List<List<_CalendarCell>> weeks;
   final DateTime selectedDate;
   final DateTime todayDate;
   final ValueChanged<DateTime> onDaySelected;
-  final Map<int, List<_ReservationEntry>> reservationsByDate;
+  final Map<DateTime, int> reservationCountsByDate;
 
   @override
   Widget build(BuildContext context) {
@@ -422,8 +458,13 @@ class _CalendarGrid extends StatelessWidget {
                             DateUtils.isSameDay(cell.date, todayDate),
                         hasReservation:
                             cell.date != null &&
-                            (reservationsByDate[cell.date!.day] ?? const [])
-                                .isNotEmpty,
+                            (reservationCountsByDate[DateTime(
+                                      cell.date!.year,
+                                      cell.date!.month,
+                                      cell.date!.day,
+                                    )] ??
+                                    0) >
+                                0,
                         onTap: cell.date == null
                             ? null
                             : () => onDaySelected(cell.date!),

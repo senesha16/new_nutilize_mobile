@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:new_nutilize_mobile/notifications/notification_page.dart';
 
 class AppHeader extends StatelessWidget {
   const AppHeader({
