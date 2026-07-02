@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:new_nutilize_mobile/features/user/report_issue_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
-import 'package:new_nutilize_mobile/widgets/app_header.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
+import 'package:new_nutilize_mobile/widgets/secondary_header.dart';
 
 class HelpFaqPage extends StatefulWidget {
   const HelpFaqPage({super.key});
@@ -49,20 +49,11 @@ class _HelpFaqPageState extends State<HelpFaqPage> {
       body: SafeArea(
         child: Column(
           children: [
-            const AppHeader(title: 'NUtilize'),
+            const SecondaryHeader(title: 'Help & FAQ'),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
                 children: [
-                  const Text(
-                    'Help & FAQ',
-                    style: TextStyle(
-                      color: Color(0xFF111111),
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
                   const Text(
                     'Find quick answers to common questions about reservations and support.',
                     style: TextStyle(

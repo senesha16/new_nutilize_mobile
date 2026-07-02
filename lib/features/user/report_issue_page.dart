@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
-import 'package:new_nutilize_mobile/widgets/app_header.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
+import 'package:new_nutilize_mobile/widgets/secondary_header.dart';
 
 class ReportIssuePage extends StatefulWidget {
   const ReportIssuePage({super.key});
@@ -51,7 +51,7 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
       body: SafeArea(
         child: Column(
           children: [
-            const AppHeader(title: 'NUtilize'),
+            const SecondaryHeader(title: 'Report an Issue'),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
@@ -60,15 +60,6 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text(
-                        'Report an Issue',
-                        style: TextStyle(
-                          color: Color(0xFF111111),
-                          fontSize: 22,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -95,7 +86,7 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
                             ),
                             const SizedBox(height: 8),
                             DropdownButtonFormField<String>(
-                              value: _selectedCategory,
+                              initialValue: _selectedCategory,
                               decoration: InputDecoration(
                                 filled: true,
                                 fillColor: const Color(0xFFF3F5FB),

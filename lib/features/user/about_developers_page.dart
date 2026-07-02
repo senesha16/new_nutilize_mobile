@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
-import 'package:new_nutilize_mobile/widgets/app_header.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
+import 'package:new_nutilize_mobile/widgets/secondary_header.dart';
 
 class AboutDevelopersPage extends StatelessWidget {
   const AboutDevelopersPage({super.key});
@@ -32,21 +32,14 @@ class AboutDevelopersPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const AppHeader(title: 'NUtilize'),
+            const SecondaryHeader(
+              title: 'About the Developers',
+              titleKey: ValueKey('about_developers_title'),
+            ),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
                 children: [
-                  const Text(
-                    'About the Developers',
-                    key: ValueKey('about_developers_title'),
-                    style: TextStyle(
-                      color: Color(0xFF111111),
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
                   const Text(
                     'The team behind NUtilize is focused on creating practical, student-centered tools for campus operations.',
                     style: TextStyle(

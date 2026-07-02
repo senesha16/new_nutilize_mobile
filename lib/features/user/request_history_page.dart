@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
-import 'package:new_nutilize_mobile/widgets/app_header.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
+import 'package:new_nutilize_mobile/widgets/secondary_header.dart';
 
 class RequestHistoryPage extends StatefulWidget {
   const RequestHistoryPage({super.key});
@@ -64,20 +64,11 @@ class _RequestHistoryPageState extends State<RequestHistoryPage> {
       body: SafeArea(
         child: Column(
           children: [
-            const AppHeader(title: 'NUtilize'),
+            const SecondaryHeader(title: 'Request History'),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
                 children: [
-                  const Text(
-                    'Request History',
-                    style: TextStyle(
-                      color: Color(0xFF111111),
-                      fontSize: 22,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(height: 14),
                   Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(

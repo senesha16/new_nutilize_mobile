@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:new_nutilize_mobile/features/user/about_developers_page.dart';
 import 'package:new_nutilize_mobile/features/user/about_nutilize_page.dart';
 import 'package:new_nutilize_mobile/features/user/help_faq_page.dart';
+import 'package:new_nutilize_mobile/features/user/edit_profile_page.dart';
+import 'package:new_nutilize_mobile/features/user/personal_details_page.dart';
 import 'package:new_nutilize_mobile/features/user/report_issue_page.dart';
 import 'package:new_nutilize_mobile/features/user/request_history_page.dart';
+import 'package:new_nutilize_mobile/features/request/reservation_history_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
 
 class RequestPage extends StatelessWidget {
@@ -1706,10 +1709,24 @@ class UserPage extends StatelessWidget {
                         _MenuItem(
                           icon: Icons.person_outline_rounded,
                           label: 'Personal Details',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const PersonalDetailsPage(),
+                              ),
+                            );
+                          },
                         ),
                         _MenuItem(
                           icon: Icons.edit_outlined,
                           label: 'Edit Profile',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const EditProfilePage(),
+                              ),
+                            );
+                          },
                         ),
                       ],
                     ),
@@ -1728,6 +1745,13 @@ class UserPage extends StatelessWidget {
                         _MenuItem(
                           icon: Icons.history_rounded,
                           label: 'Reservation History',
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => const ReservationHistoryPage(),
+                              ),
+                            );
+                          },
                         ),
                         _MenuItem(
                           icon: Icons.description_outlined,
