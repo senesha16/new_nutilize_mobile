@@ -1,9 +1,28 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:new_nutilize_mobile/features/auth/sign_in_flow.dart';
+import 'package:new_nutilize_mobile/widgets/app_shell.dart';
+import 'package:new_nutilize_mobile/services/supabase_service.dart';
+import 'package:new_nutilize_mobile/services/auth_service.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await SupabaseService.init();
+  await _repairPersistedSession();
   runApp(const NUtilizeApp());
+}
+
+Future<void> _repairPersistedSession() async {
+  final auth = Supabase.instance.client.auth;
+  final session = auth.currentSession;
+  if (session == null) {
+    return;
+  }
+
+  final profile = await AuthService.restoreCurrentUser();
+  if (profile == null) {
+    await AuthService.signOut();
+  }
 }
 
 class NUtilizeApp extends StatelessWidget {
@@ -11,6 +30,8 @@ class NUtilizeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final hasSession = Supabase.instance.client.auth.currentSession != null;
+
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'NUtilize',
@@ -18,10 +39,8 @@ class NUtilizeApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFFF6C914)),
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.transparent,
-        textTheme: GoogleFonts.poppinsTextTheme(),
-        fontFamily: GoogleFonts.poppins().fontFamily,
       ),
-      home: const SignInFlowPage(),
+      home: hasSession ? const AppShell() : const SignInFlowPage(),
     );
   }
 }

@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:new_nutilize_mobile/features/calendar/calendar_page.dart';
 import 'package:new_nutilize_mobile/features/home/home_page.dart';
 import 'package:new_nutilize_mobile/features/request/request_page.dart';
+import 'package:new_nutilize_mobile/features/user/profile_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
 
@@ -56,7 +57,7 @@ class _AppShellState extends State<AppShell> {
                 HomePage(),
                 CalendarPage(),
                 RequestPage(),
-                UserPage(),
+                ProfilePage(),
               ],
             ),
           ),

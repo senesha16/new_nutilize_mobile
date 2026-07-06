@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_details_page.dart';
 import 'package:new_nutilize_mobile/features/request/reservation_history_page.dart';
+import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
 
@@ -10,6 +11,8 @@ class HomePage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final userName = AuthService.currentUser?['username'] ?? 'User';
+    
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5FB),
       body: SafeArea(
@@ -22,9 +25,9 @@ class HomePage extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
-                      'Good Evening, Juan! 👋',
-                      style: TextStyle(
+                    Text(
+                      'Good Evening, $userName! 👋',
+                      style: const TextStyle(
                         color: Color(0xFF111111),
                         fontSize: 22,
                         fontWeight: FontWeight.w800,

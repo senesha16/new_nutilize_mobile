@@ -4,6 +4,7 @@ import 'package:image_picker/image_picker.dart';
 
 import 'package:new_nutilize_mobile/features/auth/loading_screen_page.dart';
 import 'package:new_nutilize_mobile/features/home/home_page.dart';
+import 'package:new_nutilize_mobile/services/auth_service.dart';
 
 enum SignInStep {
   login,
@@ -40,6 +41,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
+  final TextEditingController _firstNameController = TextEditingController();
+  final TextEditingController _lastNameController = TextEditingController();
+  final TextEditingController _contactNumberController = TextEditingController();
   final List<TextEditingController> _codeControllers = List.generate(
     6,
     (_) => TextEditingController(),
@@ -50,10 +54,104 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
+    _firstNameController.dispose();
+    _lastNameController.dispose();
+    _contactNumberController.dispose();
     for (final controller in _codeControllers) {
       controller.dispose();
     }
     super.dispose();
+  }
+
+  Future<void> _attemptLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter email and password')),
+      );
+      return;
+    }
+
+    final token = await AuthService.signIn(email: email, password: password);
+    if (token != null) {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (_) => const HomePage()),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Login failed. Check credentials.')),
+      );
+    }
+  }
+
+  Future<void> _attemptSignUp() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    final confirm = _confirmPasswordController.text;
+    if (email.isEmpty || password.isEmpty || confirm.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please fill required fields')),
+      );
+      return;
+    }
+    if (password != confirm) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Passwords do not match')),
+      );
+      return;
+    }
+
+    final profile = {
+      'email': email,
+      'first_name': _firstNameController.text.trim(),
+      'last_name': _lastNameController.text.trim(),
+      'contact_number': _contactNumberController.text.trim(),
+      'role': _selectedRole,
+      'department': _selectedDepartment,
+    };
+
+    final result = await AuthService.signUp(email: email, password: password, profile: profile);
+    final error = result['error'] as String?;
+    final accessToken = result['access_token'] as String?;
+
+    if (error == null) {
+      // Show warning if present but do not treat it as failure.
+      final warning = result['warning'] as String?;
+      if (warning != null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Registration: $warning')),
+        );
+      }
+
+      if (accessToken != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        return;
+      }
+
+      // If no token returned, try client sign-in as fallback.
+      final token = await AuthService.signIn(email: email, password: password);
+      if (token != null) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Registration successful. Check your email to confirm, then log in.')),
+      );
+      _goToStep(SignInStep.loginEmail);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Registration failed: $error')),
+      );
+    }
   }
 
   void _goToStep(SignInStep step) {
@@ -207,7 +305,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
 
               _PrimaryButton(
                 label: 'LOG IN',
-                onPressed: () => _goToStep(SignInStep.loginEmail),
+                onPressed: _attemptLogin,
               ),
             ],
           ),
@@ -228,7 +326,26 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               const SizedBox(height: 18),
               _PrimaryButton(
                 label: 'SEND CODE',
-                onPressed: () => _goToStep(SignInStep.code),
+                onPressed: () async {
+                  final email = _emailController.text.trim();
+                  if (email.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter your email')),
+                    );
+                    return;
+                  }
+                  final error = await AuthService.sendEmailCode(email);
+                  if (error == null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Code sent. Check your email')),
+                    );
+                    _goToStep(SignInStep.code);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Failed to send code: $error')),
+                    );
+                  }
+                },
               ),
             ],
           ),
@@ -250,7 +367,21 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               ),
               const SizedBox(height: 10),
               TextButton(
-                onPressed: () {},
+                onPressed: () async {
+                  final email = _emailController.text.trim();
+                  if (email.isEmpty) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Enter your email to resend the code')),
+                    );
+                    return;
+                  }
+                  final error = await AuthService.sendEmailCode(email);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(error == null ? 'Code resent. Check your email.' : 'Failed to resend code: $error'),
+                    ),
+                  );
+                },
                 child: const Text(
                   'Resend Code',
                   style: TextStyle(color: Colors.white70),
@@ -259,7 +390,27 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               const SizedBox(height: 4),
               _PrimaryButton(
                 label: 'VERIFY CODE',
-                onPressed: () => _goToStep(SignInStep.role),
+                onPressed: () async {
+                  final email = _emailController.text.trim();
+                  final code = _codeControllers.map((c) => c.text).join();
+                  if (code.length != 6) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Please enter the 6-digit code')),
+                    );
+                    return;
+                  }
+                  final ok = await AuthService.verifyEmailCode(email, code);
+                  if (ok) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Email verified')),
+                    );
+                    _goToStep(SignInStep.role);
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Invalid code')),
+                    );
+                  }
+                },
               ),
             ],
           ),
@@ -354,6 +505,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               ),
               const SizedBox(height: 6),
               _InputField(
+                controller: _firstNameController,
                 hintText: 'Juan',
                 prefix: const Icon(
                   Icons.badge_outlined,
@@ -370,6 +522,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               ),
               const SizedBox(height: 6),
               _InputField(
+                controller: _lastNameController,
                 hintText: 'Dela Cruz',
                 prefix: const Icon(
                   Icons.badge_outlined,
@@ -386,6 +539,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               ),
               const SizedBox(height: 6),
               _InputField(
+                controller: _contactNumberController,
                 hintText: '09XXXXXXXXX',
                 prefix: const Icon(Icons.phone, color: Color(0xFFF6C914)),
                 keyboardType: TextInputType.phone,
@@ -565,13 +719,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               const SizedBox(height: 18),
               _PrimaryButton(
                 label: 'SAVE',
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const LoadingScreenPage(),
-                    ),
-                  );
-                },
+                onPressed: _attemptSignUp,
               ),
             ],
           ),
