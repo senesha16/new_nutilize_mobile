@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 
 class AuthService {
   static const String _baseUrl = 'https://uszlgigsuseomkwmqwan.supabase.co';
@@ -172,6 +173,7 @@ class AuthService {
   // Clear the current session and cached user.
   static Future<void> signOut() async {
     currentUser = null;
+    ReservationActivityStore.clear();
     await Supabase.instance.client.auth.signOut();
   }
 

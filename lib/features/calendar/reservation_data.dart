@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:new_nutilize_mobile/services/auth_service.dart';
 
 class ReservationTimelineEntry {
   const ReservationTimelineEntry({
@@ -34,6 +35,7 @@ class ReservationApprovalState {
 class ReservationRecord {
   const ReservationRecord({
     this.id,
+    this.userId,
     required this.reservationTitle,
     required this.roomName,
     required this.reservationType,
@@ -44,6 +46,7 @@ class ReservationRecord {
   });
 
   final String? id;
+  final int? userId;
   final String reservationTitle;
   final String roomName;
   final String reservationType;
@@ -57,6 +60,40 @@ class ReservationRecord {
       '${reservationTitle.toLowerCase()}-${roomName.toLowerCase()}-${date.millisecondsSinceEpoch}';
 
   String get roomNumber => roomName;
+
+  String get approvalSummary {
+    if (timeline.isEmpty) {
+      return 'Waiting for approval.';
+    }
+
+    String? lastApproved;
+    String? nextPending;
+    String? rejectedBy;
+
+    for (final entry in timeline.skip(1)) {
+      if (entry.status.toLowerCase() == 'rejected' ||
+          entry.status.toLowerCase() == 'denied') {
+        rejectedBy = entry.title;
+        break;
+      }
+      if (!entry.isCompleted) {
+        nextPending = entry.title;
+        break;
+      }
+      lastApproved = entry.title;
+    }
+
+    if (rejectedBy != null) {
+      return 'Your request was rejected by $rejectedBy.';
+    }
+    if (nextPending != null) {
+      if (lastApproved != null) {
+        return 'Approved by $lastApproved, now waiting for $nextPending.';
+      }
+      return 'Waiting for approval from $nextPending.';
+    }
+    return 'All approvals complete.';
+  }
 
   ReservationApprovalState get approvalState {
     final status = reservationStatus.toLowerCase();
@@ -188,11 +225,16 @@ class ReservationActivityStore {
 List<ReservationRecord> collectReservations(DateTime now) {
   final combined = <ReservationRecord>[];
   final seenIds = <String>{};
+  final currentUserId = AuthService.currentUser?['user_id'] as int?;
 
   for (final reservation in [
     ...ReservationActivityStore.listenable.value,
     ...ReservationRepository.sample(now).reservations,
   ]) {
+    if (currentUserId != null && reservation.userId != currentUserId) {
+      continue;
+    }
+
     if (seenIds.add(reservation.stableId)) {
       combined.add(reservation);
     }

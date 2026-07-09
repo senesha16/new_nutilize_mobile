@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/features/request/request_page.dart';
+import 'package:new_nutilize_mobile/features/user/profile_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/secondary_header.dart';
 
@@ -140,6 +141,7 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                     _ApprovalProcessCard(
                       currentStep:
                           widget.reservation.approvalState.progressIndex,
+                      message: widget.reservation.approvalSummary,
                     ),
                     const SizedBox(height: 18),
                     _ApprovalTimelineCard(reservation: widget.reservation),
@@ -210,7 +212,7 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                     context,
                   ).push(_fadePageRoute(const RequestPage()));
                 } else if (index == 3) {
-                  Navigator.of(context).push(_fadePageRoute(const UserPage()));
+                  Navigator.of(context).push(_fadePageRoute(const ProfilePage()));
                 }
               },
             ),
@@ -1041,9 +1043,10 @@ class _ReservationSummaryCard extends StatelessWidget {
 }
 
 class _ApprovalProcessCard extends StatelessWidget {
-  const _ApprovalProcessCard({required this.currentStep});
+  const _ApprovalProcessCard({required this.currentStep, required this.message});
 
   final int currentStep;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
@@ -1075,6 +1078,14 @@ class _ApprovalProcessCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _ProcessProgressBar(currentStep: currentStep),
+          const SizedBox(height: 10),
+          Text(
+            message,
+            style: const TextStyle(
+              fontSize: 12,
+              color: Color(0xFF6A6F86),
+            ),
+          ),
         ],
       ),
     );

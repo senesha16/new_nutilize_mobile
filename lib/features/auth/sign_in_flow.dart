@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import 'package:new_nutilize_mobile/features/auth/loading_screen_page.dart';
-import 'package:new_nutilize_mobile/features/home/home_page.dart';
+import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
+import 'package:new_nutilize_mobile/services/reservation_service.dart';
+import 'package:new_nutilize_mobile/widgets/app_shell.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
 
 enum SignInStep {
@@ -75,9 +77,14 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
 
     final token = await AuthService.signIn(email: email, password: password);
     if (token != null) {
+      final userId = AuthService.currentUser?['user_id'] as int?;
+      if (userId != null) {
+        final records = await ReservationService().getReservationRecordsForUser(userId);
+        ReservationActivityStore.replaceAll(records);
+      }
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const HomePage()),
+        MaterialPageRoute(builder: (_) => const AppShell()),
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -126,9 +133,14 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       }
 
       if (accessToken != null) {
+        final userId = AuthService.currentUser?['user_id'] as int?;
+        if (userId != null) {
+          final records = await ReservationService().getReservationRecordsForUser(userId);
+          ReservationActivityStore.replaceAll(records);
+        }
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const HomePage()),
+          MaterialPageRoute(builder: (_) => const AppShell()),
         );
         return;
       }
@@ -136,9 +148,14 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       // If no token returned, try client sign-in as fallback.
       final token = await AuthService.signIn(email: email, password: password);
       if (token != null) {
+        final userId = AuthService.currentUser?['user_id'] as int?;
+        if (userId != null) {
+          final records = await ReservationService().getReservationRecordsForUser(userId);
+          ReservationActivityStore.replaceAll(records);
+        }
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (_) => const HomePage()),
+          MaterialPageRoute(builder: (_) => const AppShell()),
         );
         return;
       }
@@ -449,7 +466,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                 onPressed: () {
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (_) => const HomePage()),
+                    MaterialPageRoute(builder: (_) => const AppShell()),
                   );
                 },
               ),

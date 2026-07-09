@@ -1,13 +1,8 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
-import 'package:new_nutilize_mobile/features/user/about_developers_page.dart';
-import 'package:new_nutilize_mobile/features/user/about_nutilize_page.dart';
-import 'package:new_nutilize_mobile/features/user/help_faq_page.dart';
-import 'package:new_nutilize_mobile/features/user/edit_profile_page.dart';
-import 'package:new_nutilize_mobile/features/user/personal_details_page.dart';
-import 'package:new_nutilize_mobile/features/user/report_issue_page.dart';
-import 'package:new_nutilize_mobile/features/user/request_history_page.dart';
 import 'package:new_nutilize_mobile/features/request/reservation_history_page.dart';
+import 'package:new_nutilize_mobile/services/auth_service.dart';
+import 'package:new_nutilize_mobile/services/reservation_service.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
 
 class RequestPage extends StatelessWidget {
@@ -37,9 +32,9 @@ class RequestPage extends StatelessWidget {
                     ),
                     const SizedBox(height: 24),
                     _ReservationCard(
-                      icon: Icons.meeting_room_rounded,
-                      title: 'Venue Reservation',
-                      subtitle: 'Classrooms, Gymnasium, AVR',
+                      icon: Icons.home_work_rounded,
+                      title: 'Room Reservation',
+                      subtitle: 'Classrooms, gymnasium, AMP',
                       onTap: () {
                         Navigator.of(context).push(
                           MaterialPageRoute(
@@ -48,18 +43,62 @@ class RequestPage extends StatelessWidget {
                         );
                       },
                     ),
-                    const SizedBox(height: 18),
+                    const SizedBox(height: 16),
                     _ReservationCard(
-                      icon: Icons.tv_rounded,
+                      icon: Icons.devices_outlined,
                       title: 'Item Reservation',
-                      subtitle: 'TV, Tables, Chairs, etc.',
+                      subtitle: 'TVs, tables, chairs, and equipment',
                       onTap: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Item reservation coming soon.'),
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ItemReservationPage(),
                           ),
                         );
                       },
+                    ),
+                    const SizedBox(height: 32),
+                    const Text(
+                      'More Actions',
+                      style: TextStyle(
+                        color: Color(0xFF111111),
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: 40, vertical: 12),
+                      child: Divider(
+                        color: Color(0xFFD0D0D6),
+                        thickness: 1,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _ReservationCard(
+                      icon: Icons.history_rounded,
+                      title: 'View History of Reservation',
+                      subtitle: '',
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const ReservationHistoryPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 22),
+                    const Text(
+                      'Today’s reservations',
+                      style: TextStyle(
+                        color: Color(0xFF4053A7),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _SmallInfoCard(
+                      icon: Icons.info_outline,
+                      title: 'Need help?',
+                      subtitle: 'Tap a reservation card to continue.',
                     ),
                   ],
                 ),
@@ -67,6 +106,147 @@ class RequestPage extends StatelessWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _ReservationCard extends StatelessWidget {
+  const _ReservationCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          border: Border.all(color: const Color(0xFFF6C914), width: 2),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x0F000000),
+              blurRadius: 18,
+              offset: Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Column(
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: Color(0xFFF6C914),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: Colors.white, size: 36),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF111111),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            if (subtitle.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: Color(0xFF9A9A9A),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SmallInfoCard extends StatelessWidget {
+  const _SmallInfoCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x0F000000),
+            blurRadius: 12,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: const BoxDecoration(
+              color: Color(0xFFE4E7FB),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: const Color(0xFF35489A), size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    color: Color(0xFF111111),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    color: Color(0xFF6A6F86),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -80,93 +260,99 @@ class RoomReservationPage extends StatefulWidget {
 }
 
 class _RoomReservationPageState extends State<RoomReservationPage> {
-  final List<String> _roomTypes = [
-    'Classrooms',
-    'Laboratory',
+  final _reservationService = ReservationService();
+  final _activityController = TextEditingController();
+  final _chairController = TextEditingController();
+  final _miscController = TextEditingController();
+  final _dateController = TextEditingController();
+
+  int _currentStep = 1;
+  String? _selectedRoomType;
+  String? _selectedRoomTableType;
+  String? _selectedAttendance;
+  bool _chairsNeeded = false;
+  bool _equipmentNeeded = false;
+  bool _miscNeeded = false;
+  bool _agreedToTerms = false;
+  int? _selectedChairs;
+  DateTime? _selectedDate;
+  TimeOfDay? _selectedStartTime;
+  TimeOfDay? _selectedEndTime;
+  Room? _selectedRoom;
+  List<Room> _availableRooms = [];
+  List<ItemModel> _equipmentItems = [];
+  final Set<int> _selectedItemIds = {};
+  bool _isLoadingRooms = false;
+  bool _isLoadingItems = false;
+  String? _loadError;
+
+  static const _roomTypes = [
+    'Classroom',
     'Gym',
-    'Audio Visual Room',
+    'AVR',
+    'Lobby',
+    'Student Lounge',
   ];
-  final List<String> _attendanceOptions = [
+
+  static const _roomTableTypes = [
+    'Armchair',
+    'Trapezoidal',
+    'Accounting Table',
+  ];
+
+  static const _attendanceOptions = [
     '1 - 20',
     '21 - 50',
     '51 - 100',
     '101+',
   ];
-  final List<String> _chairTypes = ['Monoblock', 'Steel', 'Armchairs'];
-  final List<String> _equipmentTypes = ['TV', 'Speaker', 'Monitor'];
-  final List<String> _miscTypes = ['Podium', 'Industrial Fans', 'Tables'];
-  final List<Map<String, Object>> _roomRecommendations = [
-    {
-      'room': 'Room 503',
-      'capacity': '50',
-      'floor': '5th Floor',
-      'features': 'TV, Chair',
-      'status': 'Available (All Day)',
-    },
-    {
-      'room': 'Room 526',
-      'capacity': '30',
-      'floor': '5th Floor',
-      'features': 'TV, Chair',
-      'status': 'Available (8:00AM - 12:00PM)',
-    },
-    {
-      'room': 'Room 101',
-      'capacity': '70',
-      'floor': '1st Floor',
-      'features': 'TV',
-      'status': 'Available (10:00PM - 12:00PM)',
-    },
-    {
-      'room': 'Room 618',
-      'capacity': '40',
-      'floor': '6th Floor',
-      'features': 'TV, Chair',
-      'status': 'Available (All Day)',
-    },
-  ];
 
-  int _currentStep = 0;
-  bool _addChairs = false;
-  bool _addEquipment = false;
-  bool _addMisc = false;
-  bool _acceptedTerms = false;
-  bool _submitted = false;
+  static final _timeOptions = List.generate(
+    32,
+    (index) => TimeOfDay(hour: 7 + index ~/ 2, minute: index.isOdd ? 30 : 0),
+  );
 
-  String? _selectedRoomType;
-  String? _selectedAttendance;
-  String? _selectedChairType;
-  String? _selectedEquipmentType;
-  String? _selectedMiscType;
-  String? _selectedRoomRecommendation;
-  final TextEditingController _activityTitleController =
-      TextEditingController();
-  final TextEditingController _fromTimeController = TextEditingController();
-  final TextEditingController _toTimeController = TextEditingController();
-  final TextEditingController _dateController = TextEditingController();
-  DateTime? _selectedDate;
+  @override
+  void initState() {
+    super.initState();
+    _loadEquipmentItems();
+  }
 
   @override
   void dispose() {
-    _activityTitleController.dispose();
-    _fromTimeController.dispose();
-    _toTimeController.dispose();
+    _activityController.dispose();
+    _chairController.dispose();
+    _miscController.dispose();
     _dateController.dispose();
     super.dispose();
   }
 
-  Future<void> _pickDate() async {
-    final DateTime? picked = await showDatePicker(
+  Future<void> _loadEquipmentItems() async {
+    setState(() {
+      _isLoadingItems = true;
+    });
+    final items = await _reservationService.getAllItems();
+    if (mounted) {
+      setState(() {
+        _equipmentItems = items;
+        _isLoadingItems = false;
+      });
+    }
+  }
+
+  void _startDatePicker() async {
+    final today = DateTime.now();
+    final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? DateTime.now(),
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDate: _selectedDate ?? today,
+      firstDate: today,
+      lastDate: DateTime(today.year + 1),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme: const ColorScheme.light(
-            primary: Color(0xFF35489A),
+          colorScheme: Theme.of(context).colorScheme.copyWith(
+            primary: const Color(0xFF35489A),
             onPrimary: Colors.white,
-            onSurface: Color(0xFF35489A),
+            onSurface: Colors.black,
           ),
         ),
         child: child!,
@@ -176,374 +362,801 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
     if (picked != null) {
       setState(() {
         _selectedDate = picked;
-        _dateController.text =
-            '${picked.month.toString().padLeft(2, '0')}/${picked.day.toString().padLeft(2, '0')}/${picked.year}';
+        _dateController.text = '${picked.month}/${picked.day}/${picked.year}';
       });
     }
   }
 
-  Future<void> _pickTime(TextEditingController controller) async {
-    final List<TimeOfDay> validTimes = List.generate(13 * 6, (index) {
-      final int totalMinutes = 7 * 60 + (index * 10);
-      final int hour = totalMinutes ~/ 60;
-      final int minute = totalMinutes % 60;
-      return TimeOfDay(hour: hour, minute: minute);
-    });
-    TimeOfDay initial = _parseTime(controller.text) ?? validTimes.first;
-    if (!validTimes.contains(initial)) {
-      initial = validTimes.first;
-    }
+  String _timeLabel(TimeOfDay? time) {
+    if (time == null) return 'Select';
+    final hour = time.hourOfPeriod == 0 ? 12 : time.hourOfPeriod;
+    final minute = time.minute.toString().padLeft(2, '0');
+    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute $period';
+  }
 
-    final List<int> minuteOptions = [0, 10, 20, 30, 40, 50];
+  String _formatTimestamp(DateTime date) {
+    final hour = date.hour == 0 ? 12 : (date.hour > 12 ? date.hour - 12 : date.hour);
+    final minute = date.minute.toString().padLeft(2, '0');
+    final period = date.hour >= 12 ? 'PM' : 'AM';
+    return '${date.month}/${date.day}/${date.year} $hour:$minute $period';
+  }
 
-    List<int> hourOptions(String period) {
-      return period == 'AM'
-          ? const [7, 8, 9, 10, 11, 12]
-          : const [12, 1, 2, 3, 4, 5, 6, 7];
-    }
+  void _showTimePicker({required bool isStart}) async {
+    final initial = isStart
+        ? _selectedStartTime ?? const TimeOfDay(hour: 8, minute: 0)
+        : _selectedEndTime ?? const TimeOfDay(hour: 10, minute: 0);
 
-    int currentMinute = minuteOptions.contains(initial.minute)
-        ? initial.minute
-        : 0;
-    String currentPeriod = initial.period == DayPeriod.am ? 'AM' : 'PM';
-    int currentHour = initial.hourOfPeriod == 0 ? 12 : initial.hourOfPeriod;
-    if (!hourOptions(currentPeriod).contains(currentHour)) {
-      currentPeriod = 'AM';
-      currentHour = 7;
-    }
-    List<int> currentHourOptions = hourOptions(currentPeriod);
-    int currentHourIndex = currentHourOptions.indexOf(currentHour);
-    int currentMinuteIndex = minuteOptions.indexOf(currentMinute);
-    int currentPeriodIndex = currentPeriod == 'AM' ? 0 : 1;
-
-    Widget buildPickerWheel({
-      required List<String> items,
-      required int selectedIndex,
-      required ValueChanged<int> onSelectedItemChanged,
-    }) {
-      return Stack(
-        alignment: Alignment.center,
-        children: [
-          Positioned.fill(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  height: 48,
-                  decoration: const BoxDecoration(
-                    border: Border.symmetric(
-                      horizontal: BorderSide(
-                        color: Color.fromRGBO(53, 72, 154, 0.18),
-                        width: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          ListWheelScrollView.useDelegate(
-            itemExtent: 48,
-            diameterRatio: 1.4,
-            overAndUnderCenterOpacity: 0.4,
-            physics: const FixedExtentScrollPhysics(),
-            perspective: 0.002,
-            childDelegate: ListWheelChildBuilderDelegate(
-              builder: (context, index) {
-                final bool isSelected = index == selectedIndex;
-                return Center(
-                  child: Text(
-                    items[index],
-                    style: TextStyle(
-                      fontSize: isSelected ? 20 : 16,
-                      fontWeight: isSelected
-                          ? FontWeight.w700
-                          : FontWeight.w500,
-                      color: isSelected
-                          ? const Color(0xFF111111)
-                          : const Color(0xFF8F95A6),
-                    ),
-                  ),
-                );
-              },
-              childCount: items.length,
-            ),
-            onSelectedItemChanged: onSelectedItemChanged,
-            controller: FixedExtentScrollController(initialItem: selectedIndex),
-          ),
-        ],
-      );
-    }
-
-    final TimeOfDay? result = await showDialog<TimeOfDay>(
+    final picked = await showTimePicker(
       context: context,
-      builder: (context) {
-        return Dialog(
-          insetPadding: const EdgeInsets.symmetric(
-            horizontal: 30,
-            vertical: 80,
+      initialTime: initial,
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          timePickerTheme: const TimePickerThemeData(
+            dialBackgroundColor: Colors.white,
           ),
-          backgroundColor: Colors.transparent,
-          child: Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(28),
-            ),
-            padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-            child: StatefulBuilder(
-              builder: (context, setDialogState) {
-                currentHourOptions = hourOptions(currentPeriod);
-                if (!currentHourOptions.contains(currentHour)) {
-                  currentHour = currentHourOptions.first;
-                  currentHourIndex = 0;
-                }
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text(
-                      'Select Time',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Color(0xFF111111),
-                        fontSize: 18,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    SizedBox(
-                      height: 220,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          Expanded(
-                            child: buildPickerWheel(
-                              items: currentHourOptions
-                                  .map((hour) => hour.toString())
-                                  .toList(),
-                              selectedIndex: currentHourIndex,
-                              onSelectedItemChanged: (index) {
-                                setDialogState(() {
-                                  currentHourIndex = index;
-                                  currentHour = currentHourOptions[index];
-                                });
-                              },
-                            ),
-                          ),
-                          const Padding(
-                            padding: EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              ':',
-                              style: TextStyle(
-                                fontSize: 20,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF111111),
-                              ),
-                            ),
-                          ),
-                          Expanded(
-                            child: buildPickerWheel(
-                              items: minuteOptions
-                                  .map(
-                                    (minute) =>
-                                        minute.toString().padLeft(2, '0'),
-                                  )
-                                  .toList(),
-                              selectedIndex: currentMinuteIndex,
-                              onSelectedItemChanged: (index) {
-                                setDialogState(() {
-                                  currentMinuteIndex = index;
-                                  currentMinute = minuteOptions[index];
-                                });
-                              },
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: buildPickerWheel(
-                              items: const ['AM', 'PM'],
-                              selectedIndex: currentPeriodIndex,
-                              onSelectedItemChanged: (index) {
-                                setDialogState(() {
-                                  currentPeriodIndex = index;
-                                  currentPeriod = index == 0 ? 'AM' : 'PM';
-                                  currentHourOptions = hourOptions(
-                                    currentPeriod,
-                                  );
-                                  if (!currentHourOptions.contains(
-                                    currentHour,
-                                  )) {
-                                    currentHour = currentHourOptions.first;
-                                    currentHourIndex = 0;
-                                  } else {
-                                    currentHourIndex = currentHourOptions
-                                        .indexOf(currentHour);
-                                  }
-                                });
-                              },
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: () {
-                              Navigator.of(context).pop();
-                            },
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF35489A),
-                              side: const BorderSide(color: Color(0xFF94A0D1)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 14),
-                              child: Text('Cancel'),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: () {
-                              final int selectedHour = currentHour == 12
-                                  ? (currentPeriod == 'AM' ? 0 : 12)
-                                  : (currentPeriod == 'PM'
-                                        ? currentHour + 12
-                                        : currentHour);
-                              Navigator.of(context).pop(
-                                TimeOfDay(
-                                  hour: selectedHour,
-                                  minute: currentMinute,
-                                ),
-                              );
-                            },
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFFF6C914),
-                              foregroundColor: const Color(0xFF1A2254),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                            ),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 14),
-                              child: Text('OK'),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        );
-      },
+        ),
+        child: child!,
+      ),
     );
 
-    if (result != null) {
+    if (picked != null) {
       setState(() {
-        controller.text = _formatTimeOfDay(result);
+        if (isStart) {
+          _selectedStartTime = picked;
+          if (_selectedEndTime != null && _isBeforeOrEqual(_selectedEndTime!, picked)) {
+            _selectedEndTime = null;
+          }
+        } else {
+          _selectedEndTime = picked;
+        }
       });
     }
   }
 
-  TimeOfDay? _parseTime(String text) {
-    if (text.isEmpty) return null;
-    final String normalized = text.toUpperCase().trim();
-    final RegExp match = RegExp(r'^(\d{1,2}):(\d{2})\s*([AP]M)$');
-    final RegExpMatch? parsed = match.firstMatch(normalized);
-    if (parsed == null) return null;
-    final int rawHour = int.parse(parsed.group(1)!);
-    final int minute = int.parse(parsed.group(2)!);
-    final String period = parsed.group(3)!;
-    int hour = rawHour == 12 ? 0 : rawHour;
-    if (period == 'PM') hour += 12;
-    return TimeOfDay(hour: hour, minute: minute);
+  bool _isBeforeOrEqual(TimeOfDay a, TimeOfDay b) {
+    return a.hour < b.hour || (a.hour == b.hour && a.minute <= b.minute);
   }
 
-  String _formatTimeOfDay(TimeOfDay time) {
-    return MaterialLocalizations.of(
-      context,
-    ).formatTimeOfDay(time, alwaysUse24HourFormat: false);
+  bool _matchesAttendance(Room room) {
+    if (_selectedAttendance == null || room.roomCapacity == null) {
+      return true;
+    }
+    switch (_selectedAttendance) {
+      case '1 - 20':
+        return room.roomCapacity! >= 1;
+      case '21 - 50':
+        return room.roomCapacity! >= 21;
+      case '51 - 100':
+        return room.roomCapacity! >= 51;
+      case '101+':
+        return room.roomCapacity! >= 101;
+      default:
+        return true;
+    }
   }
 
-  void _showValidationMessage(String message) {
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
-  }
-
-  void _goNext() {
-    if (_submitted) return;
-
-    switch (_currentStep) {
-      case 0:
-        if (_selectedRoomType == null ||
-            _activityTitleController.text.isEmpty ||
-            _fromTimeController.text.isEmpty ||
-            _toTimeController.text.isEmpty ||
-            _dateController.text.isEmpty ||
-            _selectedAttendance == null) {
-          _showValidationMessage('Please complete all required fields.');
-          return;
-        }
-        break;
-      case 1:
-        if (_addChairs && _selectedChairType == null) {
-          _showValidationMessage('Please select a chair type.');
-          return;
-        }
-        if (_addEquipment && _selectedEquipmentType == null) {
-          _showValidationMessage('Please select equipment to add.');
-          return;
-        }
-        if (_addMisc && _selectedMiscType == null) {
-          _showValidationMessage('Please select a miscellaneous item.');
-          return;
-        }
-        break;
-      case 2:
-        if (_selectedRoomRecommendation == null) {
-          _showValidationMessage('Please choose one of the recommended rooms.');
-          return;
-        }
-        break;
-      case 3:
-        // Review step always passes through.
-        break;
-      case 4:
-        if (!_acceptedTerms) {
-          _showValidationMessage('You must accept the terms and conditions.');
-          return;
-        }
-        setState(() {
-          _submitted = true;
-        });
-        return;
+  Future<void> _loadAvailableRooms() async {
+    if (_selectedRoomType == null || _selectedDate == null || _selectedStartTime == null || _selectedEndTime == null) {
+      return;
     }
 
     setState(() {
-      if (_currentStep < 4) {
-        _currentStep += 1;
+      _isLoadingRooms = true;
+      _loadError = null;
+      _availableRooms = [];
+      _selectedRoom = null;
+    });
+
+    try {
+      final rooms = _selectedRoomType == 'Classroom'
+          ? await _reservationService.getRoomsByType('Classroom')
+          : await _reservationService.getRoomsByType(_selectedRoomType!);
+      final available = <Room>[];
+      for (final room in rooms) {
+        final hasConflict = await _reservationService.hasTimeConflict(
+          roomId: room.roomId,
+          reservationDate: _selectedDate!,
+          startTime: DateTime(
+            _selectedDate!.year,
+            _selectedDate!.month,
+            _selectedDate!.day,
+            _selectedStartTime!.hour,
+            _selectedStartTime!.minute,
+          ),
+          endTime: DateTime(
+            _selectedDate!.year,
+            _selectedDate!.month,
+            _selectedDate!.day,
+            _selectedEndTime!.hour,
+            _selectedEndTime!.minute,
+          ),
+        );
+        if (!hasConflict && _matchesAttendance(room)) {
+          if (_selectedRoomType == 'Classroom' && _selectedRoomTableType != null) {
+            if (room.roomTableType?.toLowerCase() == _selectedRoomTableType!.toLowerCase()) {
+              available.add(room);
+            }
+          } else {
+            available.add(room);
+          }
+        }
       }
+      setState(() {
+        _availableRooms = available;
+      });
+    } catch (e) {
+      setState(() {
+        _loadError = 'Unable to load available rooms. Please try again.';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoadingRooms = false;
+        });
+      }
+    }
+  }
+
+  void _goToNextStep() async {
+    if (_currentStep == 1) {
+      if (_selectedRoomType == null) {
+        _showError('Please select a room type.');
+        return;
+      }
+      if (_activityController.text.isEmpty) {
+        _showError('Enter the title of activity.');
+        return;
+      }
+      if (_selectedDate == null) {
+        _showError('Select the date of activity.');
+        return;
+      }
+      if (_selectedStartTime == null || _selectedEndTime == null) {
+        _showError('Select the start and end time.');
+        return;
+      }
+      if (_isBeforeOrEqual(_selectedEndTime!, _selectedStartTime!)) {
+        _showError('End time must be after start time.');
+        return;
+      }
+      if (_selectedAttendance == null) {
+        _showError('Select expected attendance.');
+        return;
+      }
+      if (_selectedRoomType == 'Classroom' && _selectedRoomTableType == null) {
+        _showError('Select a classroom table type.');
+        return;
+      }
+      setState(() {
+        _currentStep = 2;
+      });
+      return;
+    }
+
+    if (_currentStep == 2) {
+      if (_chairsNeeded && _chairController.text.isEmpty) {
+        _showError('Enter the number of chairs.');
+        return;
+      }
+      if (_chairsNeeded) {
+        final parsed = int.tryParse(_chairController.text);
+        if (parsed == null || parsed < 0) {
+          _showError('Chairs must be a valid number.');
+          return;
+        }
+        _selectedChairs = parsed;
+      } else {
+        _selectedChairs = null;
+      }
+      setState(() {
+        _currentStep = 3;
+      });
+      await _loadAvailableRooms();
+      return;
+    }
+
+    if (_currentStep == 3) {
+      if (_selectedRoom == null) {
+        _showError('Choose a recommended room.');
+        return;
+      }
+      setState(() {
+        _currentStep = 4;
+      });
+      return;
+    }
+
+    if (_currentStep == 4) {
+      setState(() {
+        _currentStep = 5;
+      });
+      return;
+    }
+  }
+
+  void _goToPreviousStep() {
+    if (_currentStep == 1) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() {
+      _currentStep -= 1;
     });
   }
 
-  void _goBack() {
-    if (_submitted) return;
-    if (_currentStep > 0) {
-      setState(() {
-        _currentStep -= 1;
-      });
-    } else {
-      Navigator.of(context).pop();
+  void _showError(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _submitReservation() async {
+    if (!_agreedToTerms) {
+      _showError('Please agree to the terms and conditions.');
+      return;
     }
+    if (_selectedRoom == null || _selectedDate == null || _selectedStartTime == null || _selectedEndTime == null) {
+      _showError('Reservation is incomplete.');
+      return;
+    }
+
+    final currentUser = AuthService.currentUser;
+    if (currentUser == null || currentUser['user_id'] == null) {
+      _showError('Please sign in again.');
+      return;
+    }
+
+    final startDateTime = DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _selectedStartTime!.hour,
+      _selectedStartTime!.minute,
+    );
+    final endDateTime = DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _selectedEndTime!.hour,
+      _selectedEndTime!.minute,
+    );
+
+    final approvalChain = await _reservationService.calculateApprovalChain(
+      roomType: _selectedRoomType ?? '',
+      itemIds: _selectedItemIds.isEmpty ? null : _selectedItemIds.toList(),
+    );
+
+    final reservationId = await _reservationService.createReservation(
+      activityName: _activityController.text.trim(),
+      userId: currentUser['user_id'] as int,
+      roomId: _selectedRoom!.roomId,
+      dateOfActivity: _selectedDate!,
+      startTime: startDateTime,
+      endTime: endDateTime,
+      chairsQuantity: _selectedChairs != null ? [_selectedChairs!] : null,
+      itemIds: _selectedItemIds.isEmpty ? null : _selectedItemIds.toList(),
+      approvalChain: approvalChain.officeIds,
+    );
+
+    if (reservationId != null) {
+      final reservationTime = '${_timeLabel(_selectedStartTime)} - ${_timeLabel(_selectedEndTime)}';
+      final timeline = approvalChain.offices.map((office) {
+        return ReservationTimelineEntry(
+          title: office,
+          status: 'Pending',
+          date: _selectedDate!,
+          timestamp: 'Pending',
+          description: 'Waiting for approval from $office.',
+        );
+      }).toList();
+
+      final newRecord = ReservationRecord(
+        id: reservationId.toString(),
+        userId: currentUser['user_id'] as int,
+        reservationTitle: _activityController.text.trim().isEmpty
+            ? 'Reservation Request'
+            : _activityController.text.trim(),
+        roomName: _selectedRoom!.roomNumber,
+        reservationType: 'Venue Reservation',
+        reservationStatus: 'Pending Approval',
+        date: _selectedDate!,
+        reservationTime: reservationTime,
+        timeline: [
+          ReservationTimelineEntry(
+            title: 'Request Submitted',
+            status: 'Completed',
+            date: _selectedDate!,
+            timestamp: _formatTimestamp(_selectedDate!),
+            description: 'Your reservation request was submitted successfully.',
+          ),
+          ...timeline,
+        ],
+      );
+
+      ReservationActivityStore.add(newRecord);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Room reservation submitted successfully.')));
+        Navigator.of(context).pop();
+      }
+    } else {
+      _showError('Reservation failed. Please try again.');
+    }
+  }
+
+  Widget _buildProgressIndicator() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: List.generate(5, (index) {
+        final active = index < _currentStep;
+        return Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            color: active ? const Color(0xFFF6C914) : const Color(0xFFD9DCE8),
+            shape: BoxShape.circle,
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildStepHeader() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Step $_currentStep out of 5',
+          style: const TextStyle(color: Color(0xFF35489A), fontSize: 14, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 10),
+        _buildProgressIndicator(),
+      ],
+    );
+  }
+
+  Widget _buildFormCard({required List<Widget> children}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: const [
+          BoxShadow(color: Color(0x14000000), blurRadius: 26, offset: Offset(0, 10)),
+        ],
+      ),
+      child: Column(children: children),
+    );
+  }
+
+  Widget _buildStepOne() {
+    return _buildFormCard(children: [
+      _buildDropdownField(
+        label: 'Room Type',
+        hint: 'Select Room Type',
+        value: _selectedRoomType,
+        items: _roomTypes,
+        onChanged: (value) => setState(() {
+          _selectedRoomType = value;
+          if (value != 'Classroom') {
+            _selectedRoomTableType = null;
+          }
+        }),
+      ),
+      const SizedBox(height: 16),
+      _ReservationInputField(label: 'Title of Activity', controller: _activityController, hintText: 'Enter title of activity'),
+      const SizedBox(height: 16),
+      const Align(alignment: Alignment.centerLeft, child: Text('Time of Activity', style: TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700))),
+      const SizedBox(height: 12),
+      Row(
+        children: [
+          Expanded(child: _buildTimeBox('From', _selectedStartTime, () => _showTimePicker(isStart: true))),
+          const SizedBox(width: 12),
+          Expanded(child: _buildTimeBox('To', _selectedEndTime, () => _showTimePicker(isStart: false))),
+        ],
+      ),
+      const SizedBox(height: 16),
+      const Align(alignment: Alignment.centerLeft, child: Text('Date of Activity', style: TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700))),
+      const SizedBox(height: 12),
+      _buildDateBox(),
+      const SizedBox(height: 16),
+      _buildDropdownField(
+        label: 'Expected Attendance',
+        hint: 'Select expected attendees',
+        value: _selectedAttendance,
+        items: _attendanceOptions,
+        onChanged: (value) => setState(() => _selectedAttendance = value),
+      ),
+      if (_selectedRoomType == 'Classroom') ...[
+        const SizedBox(height: 16),
+        _buildDropdownField(
+          label: 'Room Table Type',
+          hint: 'Select table layout',
+          value: _selectedRoomTableType,
+          items: _roomTableTypes,
+          onChanged: (value) => setState(() => _selectedRoomTableType = value),
+        ),
+      ],
+    ]);
+  }
+
+  Widget _buildTimeBox(String label, TimeOfDay? value, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 64,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFF6C914), width: 2),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                value == null ? 'Select' : _timeLabel(value),
+                style: TextStyle(color: value == null ? const Color(0xFFB0B6D7) : const Color(0xFF111111), fontWeight: FontWeight.w600),
+              ),
+            ),
+            const Icon(Icons.watch_later_outlined, color: Color(0xFF35489A)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDateBox() {
+    return GestureDetector(
+      onTap: _startDatePicker,
+      child: Container(
+        height: 64,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: const Color(0xFFF6C914), width: 2),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                _selectedDate == null ? 'MM / DD / YYYY' : '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}',
+                style: TextStyle(color: _selectedDate == null ? const Color(0xFFB0B6D7) : const Color(0xFF111111), fontWeight: FontWeight.w600),
+              ),
+            ),
+            const Icon(Icons.calendar_today, color: Color(0xFF35489A)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDropdownField({
+    required String label,
+    required String hint,
+    required String? value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(label, style: const TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700)),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFF6C914), width: 2),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              value: value,
+              hint: Text(hint, style: const TextStyle(color: Color(0xFFB0B6D7))),
+              isExpanded: true,
+              icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF35489A)),
+              items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+              onChanged: onChanged,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEquipmentSelection() {
+    if (_isLoadingItems) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_equipmentItems.isEmpty) {
+      return const Text(
+        'No equipment is currently available to reserve.',
+        style: TextStyle(color: Color(0xFF6A6F86)),
+      );
+    }
+
+    return Column(
+      children: _equipmentItems.map((item) {
+        final selected = _selectedItemIds.contains(item.itemId);
+        return CheckboxListTile(
+          tileColor: selected ? const Color(0xFFE4E7FB) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          title: Text(item.itemName, style: const TextStyle(fontWeight: FontWeight.w700)),
+          subtitle: Text('Available: ${item.availableQuantity}'),
+          value: selected,
+          onChanged: (value) {
+            setState(() {
+              if (value == true) {
+                _selectedItemIds.add(item.itemId);
+              } else {
+                _selectedItemIds.remove(item.itemId);
+              }
+            });
+          },
+        );
+      }).toList(),
+    );
+  }
+
+  Widget _buildStepTwo() {
+    return _buildFormCard(children: [
+      const Align(alignment: Alignment.centerLeft, child: Text('Do you want to add chairs?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111111)))),
+      const SizedBox(height: 14),
+      _buildYesNoRow(value: _chairsNeeded, onChanged: (value) => setState(() => _chairsNeeded = value)),
+      if (_chairsNeeded) ...[
+        const SizedBox(height: 16),
+        _ReservationInputField(label: 'Number of chairs', controller: _chairController, hintText: 'Enter number of chairs', keyboardType: TextInputType.number),
+      ],
+      const SizedBox(height: 24),
+      const Align(alignment: Alignment.centerLeft, child: Text('Do you want to add other equipment?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111111)))),
+      const SizedBox(height: 14),
+      _buildYesNoRow(value: _equipmentNeeded, onChanged: (value) => setState(() => _equipmentNeeded = value)),
+      if (_equipmentNeeded) ...[
+        const SizedBox(height: 16),
+        _buildEquipmentSelection(),
+      ],
+      const SizedBox(height: 24),
+      const Align(alignment: Alignment.centerLeft, child: Text('Any extra request?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111111)))),
+      const SizedBox(height: 14),
+      _buildYesNoRow(value: _miscNeeded, onChanged: (value) => setState(() => _miscNeeded = value)),
+      if (_miscNeeded) ...[
+        const SizedBox(height: 16),
+        _ReservationInputField(label: 'Miscellaneous details', controller: _miscController, hintText: 'Describe the item'),
+      ],
+    ]);
+  }
+
+  Widget _buildYesNoRow({required bool value, required ValueChanged<bool> onChanged}) {
+    return Row(
+      children: [
+        Expanded(child: _buildSelectionOption('Yes, I want to add', value, () => onChanged(true))),
+        const SizedBox(width: 12),
+        Expanded(child: _buildSelectionOption('No need', !value, () => onChanged(false))),
+      ],
+    );
+  }
+
+  Widget _buildSelectionOption(String label, bool isSelected, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? const Color(0xFFF6C914) : const Color(0xFFD9DCE8),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Container(
+              width: 22,
+              height: 22,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: isSelected ? const Color(0xFFF6C914) : Colors.transparent,
+                border: Border.all(
+                  color: isSelected ? const Color(0xFFF6C914) : const Color(0xFF9A9A9A),
+                  width: 2,
+                ),
+              ),
+              child: isSelected
+                  ? const Center(child: Icon(Icons.circle, size: 12, color: Colors.white))
+                  : null,
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                label,
+                style: TextStyle(
+                  color: const Color(0xFF111111),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepThree() {
+    return _buildFormCard(children: [
+      const Align(alignment: Alignment.centerLeft, child: Text('Choose Available Room', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111111)))),
+      const SizedBox(height: 8),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: Text(
+          _selectedRoomType == 'Classroom'
+              ? 'Showing rooms with ${_selectedRoomTableType ?? 'selected'} layout and no active reservations.'
+              : 'Showing available ${_selectedRoomType ?? 'rooms'} with no active reservations.',
+          style: const TextStyle(fontSize: 14, color: Color(0xFF6A6F86)),
+        ),
+      ),
+      const SizedBox(height: 16),
+      if (_isLoadingRooms) ...[
+        const Center(child: CircularProgressIndicator()),
+      ] else if (_loadError != null) ...[
+        Text(_loadError!, style: const TextStyle(color: Colors.red)),
+      ] else if (_availableRooms.isEmpty) ...[
+        const SizedBox(height: 24),
+        const Text('No rooms are available for your scheduled time. Try another time or room type.', style: TextStyle(color: Color(0xFF6A6F86))),
+      ] else ..._availableRooms.map(_buildRoomCard).toList(),
+    ]);
+  }
+
+  Widget _buildRoomCard(Room room) {
+    final selected = _selectedRoom?.roomId == room.roomId;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedRoom = room),
+      child: Container(
+        width: double.infinity,
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+        decoration: BoxDecoration(
+          color: selected ? const Color(0xFFF6C914) : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: selected ? const Color(0xFFF6C914) : const Color(0xFFD9DCE8)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: selected ? Colors.white24 : const Color(0xFFE4E7FB),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: const Icon(Icons.meeting_room, color: Color(0xFF35489A)),
+            ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(room.roomNumber, style: TextStyle(color: selected ? Colors.white : const Color(0xFF111111), fontSize: 16, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 4),
+                  Text(
+                    room.roomTableType != null ? room.roomTableType! : room.roomType,
+                    style: TextStyle(color: selected ? Colors.white70 : const Color(0xFF6A6F86), fontSize: 13),
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: selected ? Colors.white24 : const Color(0xFFE9F7EF),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Text('Available', style: TextStyle(color: selected ? Colors.white : const Color(0xFF27A35F), fontSize: 12, fontWeight: FontWeight.w700)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStepFour() {
+    return _buildFormCard(children: [
+      Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+        decoration: BoxDecoration(
+          color: const Color(0xFF35489A),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Row(
+          children: const [
+            Icon(Icons.check_circle_outline, color: Colors.white, size: 24),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Confirmation',
+                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ],
+        ),
+      ),
+      const SizedBox(height: 18),
+      const Align(
+        alignment: Alignment.centerLeft,
+        child: Text('Review and confirm details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111111))),
+      ),
+      const SizedBox(height: 20),
+      _buildReviewRow(Icons.meeting_room, 'Room', _selectedRoom?.roomNumber ?? 'Not selected'),
+      _buildReviewRow(Icons.description, 'Purpose', _activityController.text.trim()),
+      _buildReviewRow(Icons.watch_later_outlined, 'Time', '${_timeLabel(_selectedStartTime)} - ${_timeLabel(_selectedEndTime)}'),
+      _buildReviewRow(Icons.calendar_today, 'Date', _selectedDate == null ? 'Not selected' : '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}'),
+      _buildReviewRow(Icons.people_alt_outlined, 'Capacity', _selectedAttendance ?? 'Not selected'),
+      _buildReviewRow(Icons.chair_alt, 'Chair', _chairsNeeded ? '${_selectedChairs ?? 'Requested'}' : 'None'),
+      _buildReviewRow(Icons.tv, 'Equipment', _equipmentNeeded ? '${_selectedItemIds.length} selected' : 'None'),
+      _buildReviewRow(Icons.miscellaneous_services, 'Miscellaneous', _miscNeeded ? _miscController.text.trim() : 'None'),
+    ]);
+  }
+
+  Widget _buildReviewRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: const Color(0xFFE4E7FB),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: const Color(0xFF35489A), size: 20),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: const TextStyle(color: Color(0xFF6A6F86), fontSize: 13)),
+                const SizedBox(height: 4),
+                Text(value, style: const TextStyle(color: Color(0xFF111111), fontSize: 15, fontWeight: FontWeight.w700)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStepFive() {
+    return _buildFormCard(children: [
+      const Text('Terms and Conditions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111111))),
+      const SizedBox(height: 12),
+      Container(
+        height: 240,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(color: const Color(0xFFF7F8FC), borderRadius: BorderRadius.circular(18)),
+        child: SingleChildScrollView(
+          child: const Text(
+            'By proceeding, you agree to the room and equipment rental policies. You must maintain cleanliness, return any borrowed equipment on time, and report any damage immediately. Rooms must be vacated on or before the approved end time. Unauthorized materials, disruptive behavior, or damage to facilities are not permitted.',
+            style: TextStyle(color: Color(0xFF6A6F86), fontSize: 14, height: 1.5),
+          ),
+        ),
+      ),
+      const SizedBox(height: 16),
+      CheckboxListTile(
+        value: _agreedToTerms,
+        onChanged: (value) => setState(() => _agreedToTerms = value ?? false),
+        title: const Text('I agree to the terms and conditions.', style: TextStyle(fontWeight: FontWeight.w700)),
+        controlAffinity: ListTileControlAffinity.leading,
+      ),
+    ]);
   }
 
   @override
@@ -567,1049 +1180,93 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   GestureDetector(
-                    onTap: _goBack,
-                    child: const Icon(
-                      Icons.arrow_back_rounded,
-                      color: Colors.white,
-                      size: 28,
-                    ),
+                    onTap: () => Navigator.of(context).pop(),
+                    child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 22),
                   ),
-                  const Text(
-                    'Venue Reservation',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 28),
+                  const Text('Room Reservation', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
+                  const SizedBox(width: 40),
                 ],
               ),
             ),
             Expanded(
-              child: Padding(
+              child: ListView(
                 padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (!_submitted) ...[
-                      Text(
-                        'Step ${_currentStep + 1} out of 5',
-                        style: const TextStyle(
-                          color: Color(0xFF35489A),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
+                children: [
+                  _buildStepHeader(),
+                  const SizedBox(height: 22),
+                  if (_currentStep == 1) _buildStepOne() else if (_currentStep == 2) _buildStepTwo() else if (_currentStep == 3) _buildStepThree() else if (_currentStep == 4) _buildStepFour() else _buildStepFive(),
+                  const SizedBox(height: 28),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _goToPreviousStep,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.white,
+                            foregroundColor: const Color(0xFF35489A),
+                            side: const BorderSide(color: Color(0xFF35489A)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: const Text('Back', style: TextStyle(fontWeight: FontWeight.w700)),
                         ),
                       ),
-                      const SizedBox(height: 10),
-                      _buildProgressBar(),
-                      const SizedBox(height: 24),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: _currentStep == 5 ? _submitReservation : _goToNextStep,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFFF6C914),
+                            foregroundColor: const Color(0xFF35489A),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                          child: Text(_currentStep == 5 ? 'Submit' : 'Next', style: const TextStyle(fontWeight: FontWeight.w700)),
+                        ),
+                      ),
                     ],
-                    Expanded(
-                      child: _submitted
-                          ? _buildSuccessCard()
-                          : _buildRequestCard(),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildDetailsStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Room Type',
-          style: TextStyle(
-            color: Color(0xFF111111),
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 10),
-        DropdownButtonFormField<String>(
-          value: _selectedRoomType,
-          decoration: _fieldDecoration(hintText: 'Select Room Type'),
-          items: _roomTypes
-              .map((type) => DropdownMenuItem(value: type, child: Text(type)))
-              .toList(),
-          onChanged: (value) => setState(() => _selectedRoomType = value),
-        ),
-        const SizedBox(height: 18),
-        const Text(
-          'Title of Activity',
-          style: TextStyle(
-            color: Color(0xFF111111),
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _activityTitleController,
-          decoration: _fieldDecoration(hintText: 'Enter title of activity'),
-        ),
-        const SizedBox(height: 18),
-        const Text(
-          'Time of Activity',
-          style: TextStyle(
-            color: Color(0xFF111111),
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _fromTimeController,
-                readOnly: true,
-                onTap: () => _pickTime(_fromTimeController),
-                decoration: _fieldDecoration(hintText: 'From').copyWith(
-                  suffixIcon: const Icon(
-                    Icons.access_time_rounded,
-                    color: Color(0xFF35489A),
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: TextField(
-                controller: _toTimeController,
-                readOnly: true,
-                onTap: () => _pickTime(_toTimeController),
-                decoration: _fieldDecoration(hintText: 'To').copyWith(
-                  suffixIcon: const Icon(
-                    Icons.access_time_rounded,
-                    color: Color(0xFF35489A),
-                  ),
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 18),
-        const Text(
-          'Date of Activity',
-          style: TextStyle(
-            color: Color(0xFF111111),
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 10),
-        TextField(
-          controller: _dateController,
-          readOnly: true,
-          onTap: _pickDate,
-          decoration: _fieldDecoration(hintText: 'MM / DD / YYYY').copyWith(
-            suffixIcon: const Icon(
-              Icons.calendar_today_rounded,
-              color: Color(0xFF35489A),
-            ),
-          ),
-        ),
-        const SizedBox(height: 18),
-        const Text(
-          'Expected Attendance',
-          style: TextStyle(
-            color: Color(0xFF111111),
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 10),
-        DropdownButtonFormField<String>(
-          value: _selectedAttendance,
-          decoration: _fieldDecoration(hintText: 'Select expected attendees'),
-          items: _attendanceOptions
-              .map(
-                (count) => DropdownMenuItem(value: count, child: Text(count)),
-              )
-              .toList(),
-          onChanged: (value) => setState(() => _selectedAttendance = value),
-        ),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-
-  Widget _buildStepCard() {
-    switch (_currentStep) {
-      case 1:
-        return _buildOptionsStep();
-      case 2:
-        return _buildRecommendationsStep();
-      case 3:
-        return _buildReviewStep();
-      case 4:
-        return _buildTermsStep();
-      default:
-        return _buildDetailsStep();
-    }
-  }
-
-  Widget _buildStickyHeader() {
-    if (_currentStep == 2) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: const [
-            Text(
-              'Top Picks for You',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF111111),
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            SizedBox(height: 6),
-            Text(
-              'Recommended classrooms based on your preferences',
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Color(0xFF6A6F86), fontSize: 12),
-            ),
-            SizedBox(height: 18),
-          ],
-        ),
-      );
-    }
-
-    if (_currentStep == 4) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: const [
-            Text(
-              'Terms and Conditions',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF111111),
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            SizedBox(height: 14),
-            Text(
-              'By proceeding, you agree to the room and equipment rental policies. You must accept the terms before submitting your request.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Color(0xFF6A6F86),
-                fontSize: 12,
-                height: 1.4,
-              ),
-            ),
-            SizedBox(height: 18),
-          ],
-        ),
-      );
-    }
-
-    return const SizedBox.shrink();
-  }
-
-  Widget _buildRequestCard() {
-    final bool isFinal = _currentStep == 4;
-    final bool hasStickyHeader = _currentStep == 2 || _currentStep == 4;
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-      ),
-      child: Column(
-        children: [
-          if (hasStickyHeader) _buildStickyHeader(),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(18, 18, 18, 18),
-              child: Column(
-                children: [
-                  _buildStepCard(),
-                  const SizedBox(height: 18),
-                  _buildStepButtons(isFinal: isFinal),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOptionsStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        _buildOptionGroup(
-          title: 'Do you want to add chairs?',
-          value: _addChairs,
-          onChanged: (value) => setState(() => _addChairs = value),
-          selectionBuilder: _addChairs
-              ? _buildSelectionList(
-                  items: _chairTypes,
-                  selectedValue: _selectedChairType,
-                  onChanged: (value) =>
-                      setState(() => _selectedChairType = value),
-                )
-              : null,
-        ),
-        const SizedBox(height: 18),
-        _buildOptionGroup(
-          title: 'Do you want to add other equipment?',
-          value: _addEquipment,
-          onChanged: (value) => setState(() => _addEquipment = value),
-          selectionBuilder: _addEquipment
-              ? _buildSelectionList(
-                  items: _equipmentTypes,
-                  selectedValue: _selectedEquipmentType,
-                  onChanged: (value) =>
-                      setState(() => _selectedEquipmentType = value),
-                )
-              : null,
-        ),
-        const SizedBox(height: 18),
-        _buildOptionGroup(
-          title: 'Do you want to add miscellaneous item?',
-          value: _addMisc,
-          onChanged: (value) => setState(() => _addMisc = value),
-          selectionBuilder: _addMisc
-              ? _buildSelectionList(
-                  items: _miscTypes,
-                  selectedValue: _selectedMiscType,
-                  onChanged: (value) =>
-                      setState(() => _selectedMiscType = value),
-                )
-              : null,
-        ),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-
-  Widget _buildRecommendationsStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        ..._roomRecommendations.map((room) {
-          final bool selected = room['room'] == _selectedRoomRecommendation;
-          return _buildRecommendationCard(
-            room['room']! as String,
-            room['capacity']! as String,
-            room['floor']! as String,
-            room['features']! as String,
-            room['status']! as String,
-            selected,
-          );
-        }).toList(),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-
-  Widget _buildReviewStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          width: double.infinity,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFF35489A), width: 1),
-          ),
-          child: Column(
-            children: [
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.symmetric(
-                  vertical: 12,
-                  horizontal: 14,
-                ),
-                decoration: const BoxDecoration(
-                  color: Color(0xFF5B7CFF),
-                  borderRadius: BorderRadius.only(
-                    topLeft: Radius.circular(18),
-                    topRight: Radius.circular(18),
-                  ),
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: const [
-                    Icon(
-                      Icons.check_circle_rounded,
-                      color: Colors.white,
-                      size: 20,
-                    ),
-                    SizedBox(width: 10),
-                    Text(
-                      'CONFIRMATION',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Center(
-                      child: Text(
-                        'Review and Confirm Details',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Color(0xFF1C2A5A),
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildReviewDetailRow(
-                      icon: Icons.meeting_room_rounded,
-                      label: 'Room',
-                      value: _selectedRoomRecommendation ?? 'Not selected',
-                    ),
-                    _buildReviewDetailRow(
-                      icon: Icons.note_alt_rounded,
-                      label: 'Purpose',
-                      value: _activityTitleController.text.isEmpty
-                          ? 'Not specified'
-                          : _activityTitleController.text,
-                    ),
-                    _buildReviewDetailRow(
-                      icon: Icons.access_time_rounded,
-                      label: 'Time',
-                      value:
-                          _fromTimeController.text.isEmpty ||
-                              _toTimeController.text.isEmpty
-                          ? 'Not specified'
-                          : '${_fromTimeController.text} - ${_toTimeController.text}',
-                    ),
-                    _buildReviewDetailRow(
-                      icon: Icons.calendar_today_rounded,
-                      label: 'Date',
-                      value: _dateController.text.isEmpty
-                          ? 'Not specified'
-                          : _dateController.text,
-                    ),
-                    _buildReviewDetailRow(
-                      icon: Icons.people_rounded,
-                      label: 'Capacity',
-                      value: _selectedAttendance ?? 'Not selected',
-                    ),
-                    _buildReviewDetailRow(
-                      icon: Icons.event_seat_rounded,
-                      label: 'Chair',
-                      value: _addChairs
-                          ? (_selectedChairType ?? 'Selected')
-                          : 'No Need',
-                    ),
-                    _buildReviewDetailRow(
-                      icon: Icons.devices_rounded,
-                      label: 'Equipment',
-                      value: _addEquipment
-                          ? (_selectedEquipmentType ?? 'Selected')
-                          : 'No Need',
-                    ),
-                    _buildReviewDetailRow(
-                      icon: Icons.category_rounded,
-                      label: 'Miscellaneous',
-                      value: _addMisc
-                          ? (_selectedMiscType ?? 'Selected')
-                          : 'No Need',
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-        const Text(
-          'By clicking the \u2018Next\u2019, you confirm that the details are correct.',
-          style: TextStyle(color: Color(0xFF6A6F86), fontSize: 12, height: 1.4),
-        ),
-        const SizedBox(height: 18),
-      ],
-    );
-  }
-
-  Widget _buildReviewDetailRow({
-    required IconData icon,
-    required String label,
-    required String value,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              color: const Color(0xFFF1F4FF),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: const Color(0xFF5B7CFF), size: 18),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: const TextStyle(
-                    color: Color(0xFF6A6F86),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    color: Color(0xFF111111),
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTermsStep() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.center,
-      children: [
-        const Text(
-          '''Terms and Conditions for Room & Equipment Rental
-1. Proper Use and Cleanliness
-
-- The borrowed room/equipment must be used strictly for its declared purpose (e.g., meetings, classes, workshops).
-- Users are required to maintain cleanliness. Please turn off lights, air conditioning, and projectors after use, and ensure all trash is properly disposed of.
-
-2. Liability for Damage or Loss
-
-- The borrower assumes full responsibility for the room and all borrowed items/equipment during the approved duration.
-- Any loss, malfunction, or damage caused by negligence or misuse must be reported immediately and will be subject to repair or replacement costs.
-
-3. Punctuality and Extensions
-
-- Rooms and equipment must be vacated/returned strictly on or before the end of the approved reservation time.
-- If an extension is needed, a new request must be submitted through the app, subject to availability.
-
-4. Prohibited Activities
-
-- Bringing hazardous materials, unauthorized food/drinks (for specific labs/tech rooms), or engaging in disruptive behavior inside the reserved spaces is strictly prohibited.
-
-5. Cancellation & Revocation
-
-- Cancellations should be made at least 1 hour before the schedule.
-- The administration reserves the right to cancel or revoke any approved booking in case of institutional emergencies or violation of university/company policies.''',
-          style: TextStyle(color: Color(0xFF4F566A), fontSize: 12, height: 1.5),
-        ),
-        const SizedBox(height: 18),
-        CheckboxListTile(
-          contentPadding: EdgeInsets.zero,
-          value: _acceptedTerms,
-          onChanged: (value) => setState(() {
-            _acceptedTerms = value ?? false;
-          }),
-          title: const Text(
-            'I accept the Terms and Conditions',
-            style: TextStyle(
-              color: Color(0xFF111111),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-          controlAffinity: ListTileControlAffinity.leading,
-        ),
-        const SizedBox(height: 6),
-      ],
-    );
-  }
-
-  Widget _buildRecommendationCard(
-    String room,
-    String capacity,
-    String floor,
-    String features,
-    String status,
-    bool selected,
-  ) {
-    return GestureDetector(
-      onTap: () => setState(() => _selectedRoomRecommendation = room),
-      child: Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 14),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: selected ? const Color(0xFFF6C914) : Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: selected ? const Color(0xFFF6C914) : const Color(0xFFE6EAF9),
-            width: 1.5,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  room,
-                  style: TextStyle(
-                    color: selected ? Colors.white : const Color(0xFF111111),
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: selected ? Colors.white : const Color(0xFFE6F5E8),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                  child: Text(
-                    status,
-                    style: TextStyle(
-                      color: selected
-                          ? const Color(0xFF35489A)
-                          : const Color(0xFF2F8F40),
-                      fontSize: 10,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Cap: $capacity | $floor',
-              style: TextStyle(
-                color: selected ? Colors.white70 : const Color(0xFF6A6F86),
-                fontSize: 12,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              features,
-              style: TextStyle(
-                color: selected ? Colors.white70 : const Color(0xFF6A6F86),
-                fontSize: 12,
-              ),
-            ),
           ],
         ),
       ),
     );
   }
-
-  Widget _buildOptionGroup({
-    required String title,
-    required bool value,
-    required ValueChanged<bool> onChanged,
-    Widget? selectionBuilder,
-  }) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(
-            color: Color(0xFF111111),
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 10),
-        Row(
-          children: [
-            Expanded(
-              child: RadioListTile<bool>(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                value: true,
-                groupValue: value,
-                title: const Text('Yes, I want to add'),
-                onChanged: (value) => onChanged(true),
-              ),
-            ),
-            Expanded(
-              child: RadioListTile<bool>(
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-                value: false,
-                groupValue: value,
-                title: const Text('No need'),
-                onChanged: (value) => onChanged(false),
-              ),
-            ),
-          ],
-        ),
-        if (selectionBuilder != null) ...[
-          const SizedBox(height: 12),
-          selectionBuilder,
-        ],
-      ],
-    );
-  }
-
-  Widget _buildSelectionList({
-    required List<String> items,
-    required String? selectedValue,
-    required ValueChanged<String?> onChanged,
-  }) {
-    return Column(
-      children: items.map((item) {
-        final bool selected = selectedValue == item;
-        return Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(bottom: 8),
-          decoration: BoxDecoration(
-            color: selected ? const Color(0xFFEAF1FF) : const Color(0xFFF8F8FA),
-            borderRadius: BorderRadius.circular(10),
-            border: Border.all(
-              color: selected
-                  ? const Color(0xFF35489A)
-                  : const Color(0xFFD9DCE4),
-            ),
-          ),
-          child: RadioListTile<String>(
-            value: item,
-            groupValue: selectedValue,
-            onChanged: onChanged,
-            title: Text(item),
-          ),
-        );
-      }).toList(),
-    );
-  }
-
-  Widget _buildStepButtons({required bool isFinal}) {
-    final String buttonLabel = isFinal ? 'Submit' : 'Next';
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: _goBack,
-            style: OutlinedButton.styleFrom(
-              foregroundColor: const Color(0xFF35489A),
-              side: const BorderSide(color: Color(0xFF94A0D1)),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 14),
-              child: Text('Back'),
-            ),
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ElevatedButton(
-            onPressed: _goNext,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFFF6C914),
-              foregroundColor: const Color(0xFF1A2254),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 14),
-              child: Text(
-                buttonLabel,
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildSuccessCard() {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: const Color(0xFF35489A), width: 1),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.celebration_rounded,
-                size: 86,
-                color: Color(0xFFF6C914),
-              ),
-              const SizedBox(height: 24),
-              const Text(
-                'Congratulations!',
-                style: TextStyle(
-                  color: Color(0xFF111111),
-                  fontSize: 22,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: 12),
-              const Text(
-                'Your venue reservation request has been submitted successfully.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Color(0xFF6A6F86),
-                  fontSize: 14,
-                  height: 1.5,
-                ),
-              ),
-              const SizedBox(height: 24),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    final reservation = ReservationRecord(
-                      reservationTitle: _activityTitleController.text.isEmpty
-                          ? 'Venue Reservation'
-                          : _activityTitleController.text,
-                      roomName:
-                          _selectedRoomRecommendation ??
-                          _selectedRoomType ??
-                          'Venue Reservation',
-                      reservationType: 'Venue Reservation',
-                      reservationStatus: 'Pending Approval',
-                      date: _selectedDate ?? DateTime.now(),
-                      reservationTime:
-                          '${_fromTimeController.text} - ${_toTimeController.text}',
-                    );
-                    ReservationActivityStore.upsert(reservation);
-
-                    Navigator.of(context).pop({
-                      'room':
-                          _selectedRoomRecommendation ??
-                          _selectedRoomType ??
-                          'Venue Reservation',
-                      'subtitle': 'Venue Reservation',
-                      'status': 'Pending Approval',
-                      'date': _dateController.text,
-                      'time':
-                          '${_fromTimeController.text} - ${_toTimeController.text}',
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFF6C914),
-                    foregroundColor: const Color(0xFF1A2254),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 14),
-                    child: Text(
-                      'Finish',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildProgressBar() {
-    const int totalSteps = 5;
-    final double progress = (_currentStep + 1) / totalSteps;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Container(
-          height: 6,
-          decoration: BoxDecoration(
-            color: const Color(0xFFDEE1E6),
-            borderRadius: BorderRadius.circular(6),
-          ),
-          child: FractionallySizedBox(
-            widthFactor: progress,
-            alignment: Alignment.centerLeft,
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFFF6C914),
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: List.generate(totalSteps, (stepIndex) {
-            final bool isCompleted = stepIndex <= _currentStep;
-            return Container(
-              width: 12,
-              height: 12,
-              decoration: BoxDecoration(
-                color: isCompleted
-                    ? const Color(0xFFF6C914)
-                    : const Color(0xFFB5B9C1),
-                shape: BoxShape.circle,
-              ),
-            );
-          }),
-        ),
-      ],
-    );
-  }
 }
 
-InputDecoration _fieldDecoration({
-  required String hintText,
-  Widget? prefix,
-  Widget? suffixIcon,
-}) {
-  return InputDecoration(
-    hintText: hintText,
-    hintStyle: const TextStyle(
-      color: Color(0xFFB9B9B9),
-      fontStyle: FontStyle.italic,
-    ),
-    prefixIcon: prefix == null
-        ? null
-        : Padding(
-            padding: const EdgeInsets.only(left: 12, right: 8),
-            child: prefix,
-          ),
-    prefixIconConstraints: const BoxConstraints(minWidth: 0, minHeight: 0),
-    suffixIcon: suffixIcon,
-    filled: true,
-    fillColor: const Color(0xFFF8F8FA),
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-    border: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide(color: const Color(0xFFF6C914), width: 1.5),
-    ),
-    enabledBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
-      borderSide: BorderSide(color: const Color(0xFFF6C914), width: 1.5),
-    ),
-    focusedBorder: OutlineInputBorder(
-      borderRadius: BorderRadius.circular(8),
-      borderSide: const BorderSide(color: Color(0xFF35489A), width: 1.5),
-    ),
-  );
-}
-
-class _ReservationCard extends StatelessWidget {
-  const _ReservationCard({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
+class ItemReservationPage extends StatefulWidget {
+  const ItemReservationPage({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(18, 22, 18, 22),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFF6C914), width: 1.5),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x14000000),
-              blurRadius: 20,
-              offset: Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Column(
-          children: [
-            Container(
-              width: 66,
-              height: 66,
-              decoration: const BoxDecoration(
-                color: Color(0xFFF6C914),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: Colors.white, size: 32),
-            ),
-            const SizedBox(height: 18),
-            Text(
-              title,
-              style: const TextStyle(
-                color: Color(0xFF111111),
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              subtitle,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Color(0xFF6A6F86), fontSize: 13),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
+  State<ItemReservationPage> createState() => _ItemReservationPageState();
 }
 
-class UserPage extends StatelessWidget {
-  const UserPage({super.key});
+class _ItemReservationPageState extends State<ItemReservationPage> {
+  final TextEditingController _itemController = TextEditingController();
+  final TextEditingController _quantityController = TextEditingController();
+  final TextEditingController _dateController = TextEditingController();
+
+  @override
+  void dispose() {
+    _itemController.dispose();
+    _quantityController.dispose();
+    _dateController.dispose();
+    super.dispose();
+  }
+
+  void _submitRequest() {
+    if (_itemController.text.isEmpty || _quantityController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter the item and quantity.')),
+      );
+      return;
+    }
+
+    Navigator.of(context).pop();
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Item reservation request submitted.')),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1618,270 +1275,87 @@ class UserPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            const AppHeader(title: 'NUtilize'),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(18),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: Color(0x14000000),
-                            blurRadius: 16,
-                            offset: Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 56,
-                            height: 56,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFE6EAF9),
-                              borderRadius: BorderRadius.circular(16),
-                            ),
-                            child: const Icon(
-                              Icons.person_outline_rounded,
-                              color: Color(0xFF35489A),
-                              size: 30,
-                            ),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: const [
-                                Text(
-                                  'Juan Agoncillo Dela Cruz',
-                                  style: TextStyle(
-                                    color: Color(0xFF111111),
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w800,
-                                  ),
-                                ),
-                                SizedBox(height: 6),
-                                Text(
-                                  'BSIT - 3rd Year',
-                                  style: TextStyle(
-                                    color: Color(0xFF6A6F86),
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                SizedBox(height: 4),
-                                Text(
-                                  'delacruzja@nu-lipa.edu.ph',
-                                  style: TextStyle(
-                                    color: Color(0xFF6A6F86),
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatusCard(
-                            color: const Color(0xFFE6EAF9),
-                            icon: Icons.event_note_rounded,
-                            value: '1',
-                            label: 'Active Reservations',
-                          ),
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: _buildStatusCard(
-                            color: const Color(0xFFFFF7D8),
-                            icon: Icons.check_circle_outline,
-                            value: '0',
-                            label: 'Completed Requests',
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 24),
-                    const Text(
-                      'ACCOUNT',
-                      style: TextStyle(
-                        color: Color(0xFF0F2B68),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildMenuCard(
-                      items: [
-                        _MenuItem(
-                          icon: Icons.person_outline_rounded,
-                          label: 'Personal Details',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const PersonalDetailsPage(),
-                              ),
-                            );
-                          },
-                        ),
-                        _MenuItem(
-                          icon: Icons.edit_outlined,
-                          label: 'Edit Profile',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const EditProfilePage(),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    const Text(
-                      'ACTIVITY',
-                      style: TextStyle(
-                        color: Color(0xFF0F2B68),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildMenuCard(
-                      items: [
-                        _MenuItem(
-                          icon: Icons.history_rounded,
-                          label: 'Reservation History',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const ReservationHistoryPage(),
-                              ),
-                            );
-                          },
-                        ),
-                        _MenuItem(
-                          icon: Icons.description_outlined,
-                          label: 'Request History',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const RequestHistoryPage(),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    const Text(
-                      'SUPPORT',
-                      style: TextStyle(
-                        color: Color(0xFF0F2B68),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildMenuCard(
-                      items: [
-                        _MenuItem(
-                          icon: Icons.report_problem_outlined,
-                          label: 'Report an Issue',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const ReportIssuePage(),
-                              ),
-                            );
-                          },
-                        ),
-                        _MenuItem(
-                          icon: Icons.help_outline,
-                          label: 'Help & FAQ',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const HelpFaqPage(),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    const Text(
-                      'ABOUT',
-                      style: TextStyle(
-                        color: Color(0xFF0F2B68),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _buildMenuCard(
-                      items: [
-                        _MenuItem(
-                          icon: Icons.info_outline,
-                          label: 'About NUtilize',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const AboutNutilizePage(),
-                              ),
-                            );
-                          },
-                        ),
-                        _MenuItem(
-                          icon: Icons.group_outlined,
-                          label: 'About the Developers',
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) => const AboutDevelopersPage(),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 22),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton(
-                        onPressed: () {},
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFD22828),
-                          side: const BorderSide(color: Color(0xFFD22828)),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(vertical: 14),
-                          child: Text(
-                            'Log Out',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                  ],
+            Container(
+              width: double.infinity,
+              height: 92,
+              decoration: const BoxDecoration(
+                color: Color(0xFF35489A),
+                border: Border(
+                  bottom: BorderSide(color: Color(0xFFF2C94C), width: 4),
                 ),
+              ),
+              padding: const EdgeInsets.symmetric(horizontal: 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.of(context).pop(),
+                    child: const Icon(
+                      Icons.arrow_back_ios_new_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                  const Text(
+                    'Item Reservation',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(width: 40),
+                ],
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
+                children: [
+                  const Text(
+                    'Reserve equipment for your event.',
+                    style: TextStyle(
+                      color: Color(0xFF111111),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 22),
+                  _ReservationInputField(
+                    label: 'Item',
+                    controller: _itemController,
+                    hintText: 'Enter item name',
+                  ),
+                  const SizedBox(height: 16),
+                  _ReservationInputField(
+                    label: 'Quantity',
+                    controller: _quantityController,
+                    hintText: 'Enter quantity',
+                  ),
+                  const SizedBox(height: 16),
+                  _ReservationInputField(
+                    label: 'Date',
+                    controller: _dateController,
+                    hintText: 'MM / DD / YYYY',
+                  ),
+                  const SizedBox(height: 28),
+                  SizedBox(
+                    height: 48,
+                    child: ElevatedButton(
+                      onPressed: _submitRequest,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF35489A),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Submit Reservation',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -1889,120 +1363,50 @@ class UserPage extends StatelessWidget {
       ),
     );
   }
-
-  Widget _buildStatusCard({
-    required Color color,
-    required IconData icon,
-    required String value,
-    required String label,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: color,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x10000000),
-            blurRadius: 16,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(icon, color: const Color(0xFF35489A), size: 24),
-          ),
-          const SizedBox(height: 18),
-          Text(
-            value,
-            style: const TextStyle(
-              color: Color(0xFF111111),
-              fontSize: 30,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            label,
-            style: const TextStyle(color: Color(0xFF6A6F86), fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMenuCard({required List<_MenuItem> items}) {
-    return Container(
-      width: double.infinity,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1A000000),
-            blurRadius: 16,
-            offset: Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Column(
-        children: items
-            .map(
-              (item) => Column(
-                children: [
-                  ListTile(
-                    leading: Container(
-                      width: 38,
-                      height: 38,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF5F6FB),
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      child: Icon(
-                        item.icon,
-                        color: const Color(0xFF35489A),
-                        size: 20,
-                      ),
-                    ),
-                    title: Text(
-                      item.label,
-                      style: const TextStyle(
-                        color: Color(0xFF111111),
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    trailing: const Icon(
-                      Icons.chevron_right_rounded,
-                      color: Color(0xFF6A6F86),
-                      size: 22,
-                    ),
-                    onTap: item.onTap ?? () {},
-                  ),
-                  if (item != items.last)
-                    const Divider(height: 1, indent: 78, endIndent: 18),
-                ],
-              ),
-            )
-            .toList(),
-      ),
-    );
-  }
 }
 
-class _MenuItem {
-  const _MenuItem({required this.icon, required this.label, this.onTap});
+class _ReservationInputField extends StatelessWidget {
+  const _ReservationInputField({
+    required this.label,
+    required this.controller,
+    required this.hintText,
+    this.keyboardType,
+  });
 
-  final IconData icon;
   final String label;
-  final VoidCallback? onTap;
+  final TextEditingController controller;
+  final String hintText;
+  final TextInputType? keyboardType;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF4053A7),
+            fontSize: 12,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          decoration: InputDecoration(
+            hintText: hintText,
+            hintStyle: const TextStyle(color: Color(0xFF8A90A8)),
+            filled: true,
+            fillColor: Colors.white,
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: Color(0xFFD9DCE8)),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
