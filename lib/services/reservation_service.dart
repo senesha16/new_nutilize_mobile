@@ -176,6 +176,8 @@ class ReservationService {
   }
 
   /// Check if a specific room has time conflicts
+  /// Excludes: Cancelled, Rejected, Denied, Returned statuses
+  /// Includes: Pending, Approved, Completed (blocks availability)
   Future<bool> hasTimeConflict({
     required int roomId,
     required DateTime startTime,
@@ -190,12 +192,13 @@ class ReservationService {
       );
       final dayEnd = dayStart.add(const Duration(days: 1));
 
+      // Only check reservations with blocking statuses: Pending, Approved, Completed
       final response = await _client
           .from('reservations')
-          .select('reservation_id, Date_of_Activity, Start_of_activity, End_of_Activity')
+          .select('reservation_id, Date_of_Activity, Start_of_activity, End_of_Activity, overall_status')
           .gte('Date_of_Activity', dayStart.toIso8601String())
           .lt('Date_of_Activity', dayEnd.toIso8601String())
-          .neq('overall_status', 'Cancelled');
+          .in_('overall_status', ['Pending Approval', 'Approved', 'Completed']);
 
       print('DEBUG hasTimeConflict: Room $roomId - Found ${response.length} reservations on date ${reservationDate.toIso8601String()}');
 
