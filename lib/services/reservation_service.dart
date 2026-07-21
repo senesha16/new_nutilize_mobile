@@ -113,7 +113,7 @@ class ReservationService {
 
   ReservationService._internal();
 
-  final _client = Supabase.instance.client;
+  SupabaseClient get _client => Supabase.instance.client;
 
   // MARK: - Room Operations
 
@@ -139,15 +139,34 @@ class ReservationService {
   /// Get rooms filtered by type and table type (for classrooms)
   Future<List<Room>> getClassroomsByTableType(String tableType) async {
     try {
+      // Fetch all classrooms and filter by table type (case-insensitive in memory)
       final response = await _client
           .from('rooms')
           .select()
           .eq('room_type', 'Classroom')
-          .eq('room_table_type', tableType)
           .eq('maintenance_status', false)
           .eq('availability_status', true);
 
-      return (response as List)
+      print('DEBUG: Total classrooms fetched: ${response.length}');
+      print('DEBUG: Looking for table type: "$tableType"');
+      
+      // Normalize for comparison: remove spaces and convert to lowercase
+      final normalizedTableType = tableType.replaceAll(' ', '').toLowerCase();
+      
+      // Filter results by table type (case-insensitive, space-insensitive)
+      final filteredRooms = (response as List)
+          .where((room) {
+            final roomTableType = room['room_table_type'] as String?;
+            final normalizedRoomType = roomTableType?.replaceAll(' ', '').toLowerCase() ?? '';
+            final matches = normalizedRoomType == normalizedTableType;
+            print('DEBUG: Room ${room['room_id']} - ${room['room_number']} - table_type: "$roomTableType" (normalized: "$normalizedRoomType" vs "$normalizedTableType") (matches: $matches)');
+            return matches;
+          })
+          .toList();
+
+      print('DEBUG: Filtered rooms for "$tableType": ${filteredRooms.length}');
+
+      return filteredRooms
           .map((room) => Room.fromJson(room as Map<String, dynamic>))
           .toList();
     } catch (e) {
@@ -178,7 +197,10 @@ class ReservationService {
           .lt('Date_of_Activity', dayEnd.toIso8601String())
           .neq('overall_status', 'Cancelled');
 
+      print('DEBUG hasTimeConflict: Room $roomId - Found ${response.length} reservations on date ${reservationDate.toIso8601String()}');
+
       if (response.isEmpty) {
+        print('DEBUG hasTimeConflict: Room $roomId - No conflicts (no reservations)');
         return false;
       }
 
@@ -212,12 +234,14 @@ class ReservationService {
                 .maybeSingle();
 
             if (roomSelection != null && roomSelection['room_id'] == roomId) {
+              print('DEBUG hasTimeConflict: Room $roomId - HAS CONFLICT');
               return true;
             }
           }
         }
       }
 
+      print('DEBUG hasTimeConflict: Room $roomId - No conflicts');
       return false;
     } catch (e) {
       print('Error checking time conflict: $e');
@@ -425,6 +449,57 @@ class ReservationService {
     return '${date.month}/${date.day}/${date.year} $hour:$minute $period';
   }
 
+  DateTime buildApprovalTimestampForStep(int step, {DateTime? baseTime}) {
+    final base = (baseTime ?? DateTime.now()).toUtc();
+    return base.add(Duration(milliseconds: step));
+  }
+
+  static List<Map<String, dynamic>> sortApprovalEntriesForTimeline(
+    List<Map<String, dynamic>> approvals,
+  ) {
+    final ordered = List<Map<String, dynamic>>.from(approvals);
+    ordered.sort((a, b) {
+      final aName = (a['office_name'] as String? ?? '').trim().toLowerCase();
+      final bName = (b['office_name'] as String? ?? '').trim().toLowerCase();
+      final aRank = _approvalWorkflowRank(aName);
+      final bRank = _approvalWorkflowRank(bName);
+
+      if (aRank != bRank) {
+        return aRank.compareTo(bRank);
+      }
+
+      final aTime = (a['created_at'] as String? ?? '').toLowerCase();
+      final bTime = (b['created_at'] as String? ?? '').toLowerCase();
+      return aTime.compareTo(bTime);
+    });
+    return ordered;
+  }
+
+  static int _approvalWorkflowRank(String officeName) {
+    if (officeName.contains('general education')) {
+      return 0;
+    }
+    if (officeName.contains('program chair')) {
+      return 1;
+    }
+    if (officeName.contains('item owner')) {
+      return 2;
+    }
+    if (officeName.contains('sdao')) {
+      return 3;
+    }
+    if (officeName.contains('do')) {
+      return 4;
+    }
+    if (officeName.contains('security')) {
+      return 5;
+    }
+    if (officeName.contains('physical facilities')) {
+      return 6;
+    }
+    return 1;
+  }
+
   // MARK: - Approval Workflow
 
   /// Calculate the approval chain based on room type and items reserved
@@ -590,6 +665,7 @@ class ReservationService {
         description: 'Your reservation request was submitted successfully.',
       ));
 
+      final approvalEntries = <Map<String, dynamic>>[];
       for (final approval in approvalsResponse as List) {
         final officeId = approval['office_id'] as int?;
         final status = (approval['status'] as String?)?.trim() ?? 'Pending';
@@ -618,6 +694,22 @@ class ReservationService {
             : entryStatus == 'Rejected'
                 ? 'Your reservation was rejected by $officeName.'
                 : 'Waiting for approval from $officeName.';
+
+        approvalEntries.add({
+          'office_name': officeName,
+          'status': entryStatus,
+          'timestamp': timestamp,
+          'description': description,
+          'created_at': createdAt ?? updatedAt ?? DateTime.now().toIso8601String(),
+        });
+      }
+
+      final sortedApprovals = sortApprovalEntriesForTimeline(approvalEntries);
+      for (final approvalEntry in sortedApprovals) {
+        final officeName = approvalEntry['office_name'] as String;
+        final entryStatus = approvalEntry['status'] as String;
+        final timestamp = approvalEntry['timestamp'] as String;
+        final description = approvalEntry['description'] as String;
 
         entries.add(ReservationTimelineEntry(
           title: officeName,
@@ -735,13 +827,19 @@ class ReservationService {
         }
       }
 
-      for (int officeId in approvalChain) {
+      final approvalBaseTime = DateTime.now().toUtc();
+      for (var index = 0; index < approvalChain.length; index++) {
+        final officeId = approvalChain[index];
+        final approvalTimestamp = buildApprovalTimestampForStep(
+          index,
+          baseTime: approvalBaseTime,
+        );
         await _client.from('reservation_approvals').insert({
           'reservation_id': reservationId,
           'office_id': officeId,
           'status': 'Pending',
-          'created_at': DateTime.now().toIso8601String(),
-          'updated_at': DateTime.now().toIso8601String(),
+          'created_at': approvalTimestamp.toIso8601String(),
+          'updated_at': approvalTimestamp.toIso8601String(),
         });
       }
 

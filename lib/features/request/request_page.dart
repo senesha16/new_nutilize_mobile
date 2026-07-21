@@ -449,9 +449,13 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
     });
 
     try {
-      final rooms = _selectedRoomType == 'Classroom'
-          ? await _reservationService.getRoomsByType('Classroom')
+      // Fetch rooms directly by type, using table type filter for classrooms
+      final rooms = _selectedRoomType == 'Classroom' && _selectedRoomTableType != null
+          ? await _reservationService.getClassroomsByTableType(_selectedRoomTableType!)
           : await _reservationService.getRoomsByType(_selectedRoomType!);
+      
+      print('DEBUG _loadAvailableRooms: Fetched ${rooms.length} rooms');
+      
       final available = <Room>[];
       for (final room in rooms) {
         final hasConflict = await _reservationService.hasTimeConflict(
@@ -472,16 +476,15 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
             _selectedEndTime!.minute,
           ),
         );
+        // Only add room if no time conflict and attendance matches
         if (!hasConflict && _matchesAttendance(room)) {
-          if (_selectedRoomType == 'Classroom' && _selectedRoomTableType != null) {
-            if (room.roomTableType?.toLowerCase() == _selectedRoomTableType!.toLowerCase()) {
-              available.add(room);
-            }
-          } else {
-            available.add(room);
-          }
+          print('DEBUG _loadAvailableRooms: Adding room ${room.roomNumber}');
+          available.add(room);
+        } else {
+          print('DEBUG _loadAvailableRooms: Filtering out room ${room.roomNumber} (conflict: $hasConflict, matches attendance: ${_matchesAttendance(room)})');
         }
       }
+      print('DEBUG _loadAvailableRooms: Final available rooms: ${available.length}');
       setState(() {
         _availableRooms = available;
       });

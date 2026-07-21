@@ -23,6 +23,23 @@ class _ReservationHistoryPageState extends State<ReservationHistoryPage> {
     super.dispose();
   }
 
+  /// Map database status to filter button status
+  String _mapStatusToFilter(String dbStatus) {
+    final status = dbStatus.toLowerCase();
+    if (status.contains('pending') || status.contains('waiting')) {
+      return 'Pending';
+    } else if (status.contains('completed')) {
+      return 'Completed';
+    } else if (status.contains('approved')) {
+      return 'Approved';
+    } else if (status.contains('rejected') || status.contains('denied')) {
+      return 'Cancelled';
+    } else if (status.contains('cancelled')) {
+      return 'Cancelled';
+    }
+    return 'Pending';
+  }
+
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
       context: context,
@@ -60,9 +77,10 @@ class _ReservationHistoryPageState extends State<ReservationHistoryPage> {
               query.isEmpty ||
               reservation.reservationTitle.toLowerCase().contains(query) ||
               reservation.roomName.toLowerCase().contains(query);
+          final mappedStatus = _mapStatusToFilter(reservation.reservationStatus);
           final matchesStatus =
               _selectedStatus == 'All' ||
-              reservation.reservationStatus == _selectedStatus;
+              mappedStatus == _selectedStatus;
           final matchesDate =
               _selectedDate == null ||
               DateUtils.isSameDay(reservation.date, _selectedDate);
@@ -262,9 +280,10 @@ class _ReservationHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = switch (reservation.reservationStatus) {
-      'Approved' || 'Completed' => const Color(0xFF2E9D50),
-      'Cancelled' => const Color(0xFFD22828),
+    final status = reservation.reservationStatus.toLowerCase();
+    final statusColor = switch (status) {
+      _ when status.contains('approved') || status.contains('completed') => const Color(0xFF2E9D50),
+      _ when status.contains('rejected') || status.contains('denied') || status.contains('cancelled') => const Color(0xFFD22828),
       _ => const Color(0xFFD79700),
     };
 

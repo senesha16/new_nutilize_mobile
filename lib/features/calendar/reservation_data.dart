@@ -516,6 +516,29 @@ class NotificationActivityStore {
   static List<NotificationRecord> get notifications =>
       List.unmodifiable(listenable.value);
 
+  static List<String> getNewNotificationIds(
+    List<NotificationRecord> previous,
+    List<NotificationRecord> current,
+  ) {
+    final previousSnapshots = <String>{
+      for (final notification in previous)
+        _notificationSnapshot(notification),
+    };
+
+    return current
+        .where(
+          (notification) =>
+              !previousSnapshots.contains(_notificationSnapshot(notification)),
+        )
+        .map((notification) => notification.id)
+        .toList();
+  }
+
+  static String _notificationSnapshot(NotificationRecord notification) {
+    final reservationStatus = notification.reservation?.reservationStatus ?? '';
+    return '${notification.id}|${notification.title}|${notification.description}|${notification.category.name}|${notification.targetKind.name}|$reservationStatus';
+  }
+
   static void ensureSeeded([DateTime? now]) {
     if (!_seeded || listenable.value.isEmpty) {
       syncFromReservations(now);
