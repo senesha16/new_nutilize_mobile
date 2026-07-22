@@ -1,4 +1,6 @@
 ﻿import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/features/request/reservation_history_page.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
@@ -285,6 +287,9 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   bool _isLoadingRooms = false;
   bool _isLoadingItems = false;
   String? _loadError;
+  File? _proofOfConsentFile;
+  String? _proofOfConsentUrl;
+  bool _isUploadingProof = false;
 
   static const _roomTypes = [
     'Classroom',
@@ -337,6 +342,64 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         _equipmentItems = items;
         _isLoadingItems = false;
       });
+    }
+  }
+
+  Future<void> _pickProofOfConsent() async {
+    final picker = ImagePicker();
+    try {
+      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+      if (pickedFile != null) {
+        setState(() {
+          _proofOfConsentFile = File(pickedFile.path);
+        });
+        // Upload immediately after selection
+        await _uploadProofOfConsent();
+      }
+    } catch (e) {
+      _showError('Error picking image: $e');
+    }
+  }
+
+  Future<void> _uploadProofOfConsent() async {
+    if (_proofOfConsentFile == null) {
+      _showError('No file selected');
+      return;
+    }
+
+    setState(() {
+      _isUploadingProof = true;
+    });
+
+    try {
+      final user = AuthService.currentUser;
+      final userId = user?['user_id'].toString();
+      if (userId == null) {
+        _showError('User not authenticated');
+        return;
+      }
+
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final fileName = 'proof_of_consent_${timestamp}.jpg';
+      final filePath = 'proof_of_consent/$userId/$fileName';
+
+      // Upload to Supabase Storage
+      await _reservationService.uploadProofOfConsent(_proofOfConsentFile!, filePath);
+
+      // Get the public URL
+      final publicUrl = _reservationService.getProofOfConsentUrl(filePath);
+
+      setState(() {
+        _proofOfConsentUrl = publicUrl;
+        _isUploadingProof = false;
+      });
+
+      _showError('Proof of consent uploaded successfully!');
+    } catch (e) {
+      setState(() {
+        _isUploadingProof = false;
+      });
+      _showError('Error uploading proof of consent: $e');
     }
   }
 
@@ -531,6 +594,14 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         _showError('Select a classroom table type.');
         return;
       }
+      // Check proof of consent for students
+      final user = AuthService.currentUser;
+      final role = user?['role'] as String?;
+      final isStudent = role?.toLowerCase() == 'student';
+      if (isStudent && _proofOfConsentUrl == null) {
+        _showError('Please upload proof of consent.');
+        return;
+      }
       setState(() {
         _currentStep = 2;
       });
@@ -638,6 +709,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       chairsQuantity: _selectedChairs != null ? [_selectedChairs!] : null,
       itemIds: _selectedItemIds.isEmpty ? null : _selectedItemIds.toList(),
       approvalChain: approvalChain.officeIds,
+      proofOfConsentUrl: _proofOfConsentUrl,
     );
 
     if (reservationId != null) {
@@ -733,6 +805,10 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   }
 
   Widget _buildStepOne() {
+    final user = AuthService.currentUser;
+    final role = user?['role'] as String?;
+    final isStudent = role?.toLowerCase() == 'student';
+
     return _buildFormCard(children: [
       _buildDropdownField(
         label: 'Room Type',
@@ -780,7 +856,127 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
           onChanged: (value) => setState(() => _selectedRoomTableType = value),
         ),
       ],
+      if (isStudent) ...[
+        const SizedBox(height: 16),
+        _buildProofOfConsentUpload(),
+      ],
     ]);
+  }
+
+  Widget _buildProofOfConsentUpload() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Attach Your Proof of Consent',
+          style: TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700),
+        ),
+        const SizedBox(height: 12),
+        if (_proofOfConsentFile != null) ...[
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: const Color(0xFFE8F5E9),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFF2E9D50), width: 2),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Color(0xFF2E9D50), size: 24),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text(
+                        'File Selected',
+                        style: TextStyle(
+                          color: Color(0xFF2E9D50),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        _proofOfConsentFile!.path.split('/').last,
+                        style: const TextStyle(
+                          color: Color(0xFF2E9D50),
+                          fontSize: 11,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          GestureDetector(
+            onTap: _isUploadingProof ? null : _pickProofOfConsent,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFD79700), width: 1),
+              ),
+              child: Center(
+                child: Text(
+                  _isUploadingProof ? 'Uploading...' : 'Change Photo',
+                  style: const TextStyle(
+                    color: Color(0xFFD79700),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ] else ...[
+          GestureDetector(
+            onTap: _isUploadingProof ? null : _pickProofOfConsent,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFF6C914), width: 2),
+              ),
+              child: Column(
+                children: [
+                  Icon(
+                    _isUploadingProof ? Icons.hourglass_top : Icons.image_outlined,
+                    color: const Color(0xFFF6C914),
+                    size: 32,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    _isUploadingProof ? 'Uploading...' : 'Tap to Upload Photo',
+                    style: const TextStyle(
+                      color: Color(0xFF111111),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Choose from gallery',
+                    style: TextStyle(
+                      color: Color(0xFFB0B6D7),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
   }
 
   Widget _buildTimeBox(String label, TimeOfDay? value, VoidCallback onTap) {

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 
@@ -758,9 +759,10 @@ class ReservationService {
     required List<int>? chairsQuantity,
     required List<int>? itemIds,
     required List<int> approvalChain,
+    String? proofOfConsentUrl,
   }) async {
     try {
-      final resResponse = await _client.from('reservations').insert({
+      final reservationData = {
         'user_id': userId,
         'activity_name': activityName,
         'overall_status': 'Pending Approval',
@@ -769,7 +771,14 @@ class ReservationService {
         'End_of_Activity': endTime.toIso8601String(),
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
-      }).select();
+      };
+
+      // Add proof of consent URL if provided (for students)
+      if (proofOfConsentUrl != null) {
+        reservationData['proof_of_consent_url'] = proofOfConsentUrl;
+      }
+
+      final resResponse = await _client.from('reservations').insert(reservationData).select();
 
       if (resResponse.isEmpty) {
         return null;
@@ -874,6 +883,37 @@ class ReservationService {
     } catch (e) {
       print('Error fetching conflicted dates: $e');
       return {};
+    }
+  }
+
+  // MARK: - File Operations
+
+  /// Upload proof of consent file to Supabase Storage
+  Future<void> uploadProofOfConsent(File file, String filePath) async {
+    try {
+      await _client.storage.from('proof_of_consent').upload(
+            filePath,
+            file,
+            fileOptions: const FileOptions(
+              cacheControl: '3600',
+              upsert: false,
+            ),
+          );
+      print('Successfully uploaded proof of consent to: $filePath');
+    } catch (e) {
+      print('Error uploading proof of consent: $e');
+      rethrow;
+    }
+  }
+
+  /// Get public URL for uploaded proof of consent file
+  String getProofOfConsentUrl(String filePath) {
+    try {
+      final url = _client.storage.from('proof_of_consent').getPublicUrl(filePath);
+      return url;
+    } catch (e) {
+      print('Error getting proof of consent URL: $e');
+      rethrow;
     }
   }
 }
