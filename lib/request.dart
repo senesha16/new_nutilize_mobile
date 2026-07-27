@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 
 import 'home.dart';
 import 'calendar.dart';
+import 'features/request/request_page.dart' as features_request;
+import 'features/request/item_reservation_page.dart' as features_item;
+import 'features/request/reservation_history_page.dart' as features_history;
 
 class RequestPage extends StatelessWidget {
   const RequestPage({super.key});
@@ -87,14 +90,22 @@ class RequestPage extends StatelessWidget {
                       icon: Icons.home_work_rounded,
                       title: 'Room Reservation',
                       subtitle: 'Classrooms, gymnasium, AMP',
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const features_request.RoomReservationPage()),
+                        );
+                      },
                     ),
                     const SizedBox(height: 16),
                     _ReservationCard(
                       icon: Icons.devices_outlined,
                       title: 'Item Reservation',
                       subtitle: 'TV, Tables, Chairs, etc.',
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const features_item.ItemReservationPage()),
+                        );
+                      },
                     ),
                     const SizedBox(height: 32),
                     const Text(
@@ -117,61 +128,17 @@ class RequestPage extends StatelessWidget {
                       icon: Icons.history_rounded,
                       title: 'View History of Reservation',
                       subtitle: '',
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute(builder: (_) => const features_history.ReservationHistoryPage()),
+                        );
+                      },
                     ),
                   ],
                 ),
               ),
             ),
-            Container(
-              height: 84,
-              decoration: const BoxDecoration(
-                color: Color(0xFF35489A),
-                boxShadow: [
-                  BoxShadow(
-                    color: Color(0x22000000),
-                    blurRadius: 10,
-                    offset: Offset(0, -2),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: [
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const HomePage()),
-                      );
-                    },
-                    child: const _BottomNavItem(
-                      icon: Icons.home_rounded,
-                      label: 'Home',
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () {
-                      Navigator.of(context).pushReplacement(
-                        MaterialPageRoute(builder: (_) => const CalendarPage()),
-                      );
-                    },
-                    child: const _BottomNavItem(
-                      icon: Icons.calendar_month_outlined,
-                      label: 'Calendar',
-                    ),
-                  ),
-                  const _BottomNavItem(
-                    icon: Icons.post_add_outlined,
-                    label: 'Request',
-                    selected: true,
-                  ),
-                  const _BottomNavItem(
-                    icon: Icons.person_outline_rounded,
-                    label: 'User',
-                  ),
-                ],
-              ),
-            ),
+            const SizedBox(height: 0),
           ],
         ),
       ),

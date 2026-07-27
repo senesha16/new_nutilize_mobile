@@ -3,115 +3,10 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:io';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/features/request/reservation_history_page.dart';
+import 'package:new_nutilize_mobile/features/request/item_reservation_page.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/services/reservation_service.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
-
-class RequestPage extends StatelessWidget {
-  const RequestPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F5FB),
-      body: SafeArea(
-        child: Column(
-          children: [
-            const AppHeader(title: 'NUtilize'),
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Select a new reservation',
-                      style: TextStyle(
-                        color: Color(0xFF111111),
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 24),
-                    _ReservationCard(
-                      icon: Icons.home_work_rounded,
-                      title: 'Room Reservation',
-                      subtitle: 'Classrooms, gymnasium, AMP',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const RoomReservationPage(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    _ReservationCard(
-                      icon: Icons.devices_outlined,
-                      title: 'Item Reservation',
-                      subtitle: 'TVs, tables, chairs, and equipment',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const ItemReservationPage(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 32),
-                    const Text(
-                      'More Actions',
-                      style: TextStyle(
-                        color: Color(0xFF111111),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-                      child: Divider(
-                        color: Color(0xFFD0D0D6),
-                        thickness: 1,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    _ReservationCard(
-                      icon: Icons.history_rounded,
-                      title: 'View History of Reservation',
-                      subtitle: '',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => const ReservationHistoryPage(),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 22),
-                    const Text(
-                      'Today’s reservations',
-                      style: TextStyle(
-                        color: Color(0xFF4053A7),
-                        fontSize: 16,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    _SmallInfoCard(
-                      icon: Icons.info_outline,
-                      title: 'Need help?',
-                      subtitle: 'Tap a reservation card to continue.',
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _ReservationCard extends StatelessWidget {
   const _ReservationCard({
@@ -735,6 +630,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         reservationStatus: 'Pending Approval',
         date: _selectedDate!,
         reservationTime: reservationTime,
+        reservedItems: _equipmentItems.where((e) => _selectedItemIds.contains(e.itemId)).map((e) => e.itemName).toList(),
         timeline: [
           ReservationTimelineEntry(
             title: 'Request Submitted',
@@ -1433,136 +1329,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   }
 }
 
-class ItemReservationPage extends StatefulWidget {
-  const ItemReservationPage({super.key});
 
-  @override
-  State<ItemReservationPage> createState() => _ItemReservationPageState();
-}
-
-class _ItemReservationPageState extends State<ItemReservationPage> {
-  final TextEditingController _itemController = TextEditingController();
-  final TextEditingController _quantityController = TextEditingController();
-  final TextEditingController _dateController = TextEditingController();
-
-  @override
-  void dispose() {
-    _itemController.dispose();
-    _quantityController.dispose();
-    _dateController.dispose();
-    super.dispose();
-  }
-
-  void _submitRequest() {
-    if (_itemController.text.isEmpty || _quantityController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter the item and quantity.')),
-      );
-      return;
-    }
-
-    Navigator.of(context).pop();
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Item reservation request submitted.')),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFFF3F5FB),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Container(
-              width: double.infinity,
-              height: 92,
-              decoration: const BoxDecoration(
-                color: Color(0xFF35489A),
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFFF2C94C), width: 4),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: const Icon(
-                      Icons.arrow_back_ios_new_rounded,
-                      color: Colors.white,
-                      size: 22,
-                    ),
-                  ),
-                  const Text(
-                    'Item Reservation',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const SizedBox(width: 40),
-                ],
-              ),
-            ),
-            Expanded(
-              child: ListView(
-                padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
-                children: [
-                  const Text(
-                    'Reserve equipment for your event.',
-                    style: TextStyle(
-                      color: Color(0xFF111111),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 22),
-                  _ReservationInputField(
-                    label: 'Item',
-                    controller: _itemController,
-                    hintText: 'Enter item name',
-                  ),
-                  const SizedBox(height: 16),
-                  _ReservationInputField(
-                    label: 'Quantity',
-                    controller: _quantityController,
-                    hintText: 'Enter quantity',
-                  ),
-                  const SizedBox(height: 16),
-                  _ReservationInputField(
-                    label: 'Date',
-                    controller: _dateController,
-                    hintText: 'MM / DD / YYYY',
-                  ),
-                  const SizedBox(height: 28),
-                  SizedBox(
-                    height: 48,
-                    child: ElevatedButton(
-                      onPressed: _submitRequest,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF35489A),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Submit Reservation',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
 
 class _ReservationInputField extends StatelessWidget {
   const _ReservationInputField({
@@ -1570,12 +1337,16 @@ class _ReservationInputField extends StatelessWidget {
     required this.controller,
     required this.hintText,
     this.keyboardType,
+    this.onTap,
+    this.readOnly = false,
   });
 
   final String label;
   final TextEditingController controller;
   final String hintText;
   final TextInputType? keyboardType;
+  final VoidCallback? onTap;
+  final bool readOnly;
 
   @override
   Widget build(BuildContext context) {
@@ -1594,6 +1365,8 @@ class _ReservationInputField extends StatelessWidget {
         TextField(
           controller: controller,
           keyboardType: keyboardType,
+          readOnly: readOnly,
+          onTap: onTap,
           decoration: InputDecoration(
             hintText: hintText,
             hintStyle: const TextStyle(color: Color(0xFF8A90A8)),

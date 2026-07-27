@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:new_nutilize_mobile/features/calendar/calendar_page.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/features/home/home_page.dart';
-import 'package:new_nutilize_mobile/features/request/request_page.dart';
 import 'package:new_nutilize_mobile/features/user/profile_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/secondary_header.dart';
@@ -236,21 +235,7 @@ class _RequestHistoryPageState extends State<RequestHistoryPage> {
   }
 
   List<ReservationRecord> _buildRequestList() {
-    final storeReservations = ReservationActivityStore.listenable.value;
-    final fallbackReservations = ReservationRepository.sample(
-      DateTime.now(),
-    ).reservations;
-    final combined = <ReservationRecord>[];
-    final seenIds = <String>{};
-
-    for (final reservation in [...storeReservations, ...fallbackReservations]) {
-      if (seenIds.add(reservation.stableId)) {
-        combined.add(reservation);
-      }
-    }
-
-    combined.sort((a, b) => b.date.compareTo(a.date));
-    return combined;
+    return collectReservations(DateTime.now());
   }
 
   String _statusBucket(String value) {

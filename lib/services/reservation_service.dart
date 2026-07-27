@@ -148,8 +148,7 @@ class ReservationService {
           .eq('maintenance_status', false)
           .eq('availability_status', true);
 
-      print('DEBUG: Total classrooms fetched: ${response.length}');
-      print('DEBUG: Looking for table type: "$tableType"');
+
       
       // Normalize for comparison: remove spaces and convert to lowercase
       final normalizedTableType = tableType.replaceAll(' ', '').toLowerCase();
@@ -160,12 +159,12 @@ class ReservationService {
             final roomTableType = room['room_table_type'] as String?;
             final normalizedRoomType = roomTableType?.replaceAll(' ', '').toLowerCase() ?? '';
             final matches = normalizedRoomType == normalizedTableType;
-            print('DEBUG: Room ${room['room_id']} - ${room['room_number']} - table_type: "$roomTableType" (normalized: "$normalizedRoomType" vs "$normalizedTableType") (matches: $matches)');
+
             return matches;
           })
           .toList();
 
-      print('DEBUG: Filtered rooms for "$tableType": ${filteredRooms.length}');
+
 
       return filteredRooms
           .map((room) => Room.fromJson(room as Map<String, dynamic>))
@@ -201,10 +200,10 @@ class ReservationService {
           .lt('Date_of_Activity', dayEnd.toIso8601String())
           .in_('overall_status', ['Pending Approval', 'Approved', 'Completed']);
 
-      print('DEBUG hasTimeConflict: Room $roomId - Found ${response.length} reservations on date ${reservationDate.toIso8601String()}');
+
 
       if (response.isEmpty) {
-        print('DEBUG hasTimeConflict: Room $roomId - No conflicts (no reservations)');
+
         return false;
       }
 
@@ -238,14 +237,14 @@ class ReservationService {
                 .maybeSingle();
 
             if (roomSelection != null && roomSelection['room_id'] == roomId) {
-              print('DEBUG hasTimeConflict: Room $roomId - HAS CONFLICT');
+
               return true;
             }
           }
         }
       }
 
-      print('DEBUG hasTimeConflict: Room $roomId - No conflicts');
+
       return false;
     } catch (e) {
       print('Error checking time conflict: $e');
@@ -360,29 +359,65 @@ class ReservationService {
         return [];
       }
 
-      final List<ReservationRecord> records = [];
-      for (final res in reservationsResponse as List) {
-        final reservationId = res['reservation_id'] as int;
-        final roomName = await _fetchReservationRoomName(reservationId) ?? 'Reserved Room';
-        final date = DateTime.parse(res['Date_of_Activity'] as String);
-        final startTime = DateTime.parse(res['Start_of_activity'] as String);
-        final endTime = DateTime.parse(res['End_of_Activity'] as String);
-        final reservationTime = '${_formatDateTime(startTime)} - ${_formatDateTime(endTime)}';
-      final timeline = await _buildApprovalTimeline(reservationId, date);
+      // Process each reservation concurrently to reduce total network latency.
+      final resList = reservationsResponse as List;
+      final futures = resList.map((res) async {
+        try {
+          final reservationId = res['reservation_id'] as int;
+          final date = DateTime.parse(res['Date_of_Activity'] as String);
+          final startTime = DateTime.parse(res['Start_of_activity'] as String);
+          final endTime = DateTime.parse(res['End_of_Activity'] as String);
+          final reservationTime = '${_formatDateTime(startTime)} - ${_formatDateTime(endTime)}';
 
-        records.add(ReservationRecord(
-          id: reservationId.toString(),
-          userId: userId,
-          reservationTitle: res['activity_name'] as String? ?? 'Reservation Request',
-          roomName: roomName,
-          reservationType: 'Venue Reservation',
-          reservationStatus: res['overall_status'] as String? ?? 'Pending Approval',
-          date: date,
-          reservationTime: reservationTime,
-          timeline: timeline,
-        ));
-      }
+          // Kick off independent async work in parallel
+          final roomNameFuture = _fetchReservationRoomName(reservationId);
+          final timelineFuture = _buildApprovalTimeline(reservationId, date);
+          final reservedItemsFuture = _fetchReservationItemNames(reservationId);
+          final detailCheckFuture = _client
+              .from('reservation_details')
+              .select('reservation_items_id')
+              .eq('reservation_id', reservationId)
+              .limit(1)
+              .maybeSingle();
 
+          final results = await Future.wait([
+            roomNameFuture,
+            timelineFuture,
+            reservedItemsFuture,
+            detailCheckFuture,
+          ]);
+
+          final roomName = results[0] as String? ?? 'Reserved Room';
+          final timeline = results[1] as List<ReservationTimelineEntry>? ?? [];
+          final reservedItems = results[2] as List<String>? ?? [];
+          final detailCheck = results[3] as Map<String, dynamic>?;
+
+          var reservationType = 'Venue Reservation';
+          if (detailCheck != null && detailCheck['reservation_items_id'] != null) {
+            reservationType = 'Item Reservation';
+          }
+
+          return ReservationRecord(
+            id: reservationId.toString(),
+            userId: userId,
+            reservationTitle: res['activity_name'] as String? ?? 'Reservation Request',
+            roomName: roomName,
+            reservationType: reservationType,
+            reservationStatus: res['overall_status'] as String? ?? 'Pending Approval',
+            date: date,
+            reservationTime: reservationTime,
+            timeline: timeline,
+            reservedItems: reservedItems,
+          );
+        } catch (e) {
+          // If one reservation fails to parse, skip it but don't fail the whole fetch.
+          print('Error processing reservation entry: $e');
+          return null;
+        }
+      }).toList();
+
+      final results = await Future.wait(futures);
+      final records = results.whereType<ReservationRecord>().toList();
       return records;
     } catch (e) {
       print('Error fetching user reservations: $e');
@@ -401,6 +436,16 @@ class ReservationService {
 
       final roomReservationId = detailResponse?['reservation_rooms_id'] as int?;
       if (roomReservationId == null) {
+        // Might be an item reservation — check for reservation_items_id
+        final itemDetail = await _client
+            .from('reservation_details')
+            .select('reservation_items_id')
+            .eq('reservation_id', reservationId)
+            .limit(1)
+            .maybeSingle();
+        if (itemDetail != null && itemDetail['reservation_items_id'] != null) {
+          return 'Item Reservation';
+        }
         return 'Room Reservation';
       }
 
@@ -437,6 +482,43 @@ class ReservationService {
     } catch (_) {
       return 'Room Reservation';
     }
+  }
+
+  /// Fetch item names reserved under a reservation (if any)
+  Future<List<String>> _fetchReservationItemNames(int reservationId) async {
+    final names = <String>[];
+    try {
+      final details = await _client
+          .from('reservation_details')
+          .select('reservation_items_id')
+          .eq('reservation_id', reservationId);
+      if (details == null) return names;
+      for (final det in details as List) {
+        final reservationItemsId = det['reservation_items_id'] as int?;
+        if (reservationItemsId == null) continue;
+
+        final itemLink = await _client
+            .from('reservation_items')
+            .select('item_id')
+            .eq('reservation_items_id', reservationItemsId)
+            .maybeSingle();
+        final itemId = itemLink?['item_id'] as int?;
+        if (itemId == null) continue;
+
+        final itemRow = await _client
+            .from('items')
+            .select('item_name')
+            .eq('item_id', itemId)
+            .maybeSingle();
+        final itemName = itemRow?['item_name'] as String?;
+        if (itemName != null && itemName.isNotEmpty) {
+          names.add(itemName);
+        }
+      }
+    } catch (e) {
+      print('Error fetching reservation item names: $e');
+    }
+    return names;
   }
 
   String _formatDateTime(DateTime dateTime) {
@@ -480,28 +562,28 @@ class ReservationService {
   }
 
   static int _approvalWorkflowRank(String officeName) {
-    if (officeName.contains('general education')) {
-      return 0;
-    }
-    if (officeName.contains('program chair')) {
+    if (officeName.contains('item owner')) {
       return 1;
     }
-    if (officeName.contains('item owner')) {
+    if (officeName.contains('program chair')) {
       return 2;
     }
-    if (officeName.contains('sdao')) {
+    if (officeName.contains('general education')) {
       return 3;
     }
-    if (officeName.contains('do')) {
+    if (officeName.contains('sdao')) {
       return 4;
     }
-    if (officeName.contains('security')) {
+    if (officeName.contains('do')) {
       return 5;
     }
-    if (officeName.contains('physical facilities')) {
+    if (officeName.contains('security')) {
       return 6;
     }
-    return 1;
+    if (officeName.contains('physical facilities')) {
+      return 7;
+    }
+    return 2;
   }
 
   // MARK: - Approval Workflow
@@ -531,8 +613,29 @@ class ReservationService {
           }
         }
       }
-
-      if (roomType == 'Classroom') {
+      // If this is an item-only reservation (items present), build approval chain
+      // with item owners first (if any), then the standard offices.
+      if (itemIds != null && itemIds.isNotEmpty) {
+        if (itemOwners.isNotEmpty) {
+          offices.addAll(itemOwners);
+          offices.addAll([
+            'Program Chair',
+            'SDAO',
+            'DO',
+            'Security',
+            'Physical Facilities',
+          ]);
+        } else {
+          // No specific item owners; standard approval chain
+          offices.addAll([
+            'Program Chair',
+            'SDAO',
+            'DO',
+            'Security',
+            'Physical Facilities',
+          ]);
+        }
+      } else if (roomType == 'Classroom') {
         if (itemOwners.isNotEmpty) {
           offices.addAll(itemOwners);
         }
@@ -762,6 +865,18 @@ class ReservationService {
     String? proofOfConsentUrl,
   }) async {
     try {
+      // Prevent overlapping reservations for the same room/time
+      final conflict = await _hasRoomTimeConflict(
+        roomId,
+        dateOfActivity,
+        startTime,
+        endTime,
+      );
+      if (conflict) {
+        print('Cannot create reservation: time conflict for room $roomId on $dateOfActivity');
+        return null;
+      }
+
       final reservationData = {
         'user_id': userId,
         'activity_name': activityName,
@@ -862,6 +977,83 @@ class ReservationService {
     }
   }
 
+  /// Check whether the given room has any reservation on the same date that
+  /// overlaps the requested time range. Returns true if a conflict exists.
+  Future<bool> _hasRoomTimeConflict(
+    int roomId,
+    DateTime dateOfActivity,
+    DateTime startTime,
+    DateTime endTime,
+  ) async {
+    try {
+      // Find reservation_rooms entries for this room
+      final roomResp = await _client
+          .from('reservation_rooms')
+          .select('reservation_rooms_id')
+          .eq('room_id', roomId);
+
+      if (roomResp == null) return false;
+
+      final roomIds = <int>[];
+      for (final r in roomResp as List) {
+        final id = r['reservation_rooms_id'] as int?;
+        if (id != null) roomIds.add(id);
+      }
+
+      if (roomIds.isEmpty) return false;
+
+      // Find reservation_details that reference those reservation_rooms_ids
+      final detailsResp = await _client
+          .from('reservation_details')
+          .select('reservation_id')
+          .in_('reservation_rooms_id', roomIds);
+
+      if (detailsResp == null) return false;
+
+      final reservationIds = <int>{};
+      for (final d in detailsResp as List) {
+        final rid = d['reservation_id'] as int?;
+        if (rid != null) reservationIds.add(rid);
+      }
+
+      if (reservationIds.isEmpty) return false;
+
+      // Fetch reservations by id and check date/time overlap
+        final reservationsResp = await _client
+          .from('reservations')
+          .select('reservation_id, Date_of_Activity, Start_of_activity, End_of_Activity, overall_status')
+          .in_('reservation_id', reservationIds.toList())
+          .neq('overall_status', 'Cancelled');
+
+      if (reservationsResp == null) return false;
+
+      for (final res in reservationsResp as List) {
+        final dateStr = res['Date_of_Activity'] as String?;
+        final startStr = res['Start_of_activity'] as String?;
+        final endStr = res['End_of_Activity'] as String?;
+        if (dateStr == null || startStr == null || endStr == null) continue;
+
+        final existingDate = DateTime.parse(dateStr);
+        if (existingDate.year == dateOfActivity.year &&
+            existingDate.month == dateOfActivity.month &&
+            existingDate.day == dateOfActivity.day) {
+          final existingStart = DateTime.parse(startStr);
+          final existingEnd = DateTime.parse(endStr);
+
+          if (startTime.isBefore(existingEnd) && endTime.isAfter(existingStart)) {
+            return true;
+          }
+        }
+      }
+
+      return false;
+    } catch (e) {
+      print('Error checking room time conflicts: $e');
+      // Fail-safe: assume no conflict so we don't block valid reservations
+      return false;
+    }
+  }
+
   /// Get dates with conflicts for a specific room
   Future<Set<DateTime>> getConflictedDatesForRoom(int roomId) async {
     try {
@@ -914,6 +1106,210 @@ class ReservationService {
     } catch (e) {
       print('Error getting proof of consent URL: $e');
       rethrow;
+    }
+  }
+
+  // MARK: - Item Reservation
+
+  /// Create a new item reservation
+  Future<int?> createItemReservation({
+    required String activityName,
+    required int userId,
+    required DateTime dateOfActivity,
+    required DateTime startTime,
+    required DateTime endTime,
+    required Map<int, int> itemQuantities, // item_id -> quantity
+    String? proofOfConsentUrl,
+  }) async {
+    try {
+      final reservationData = {
+        'user_id': userId,
+        'activity_name': activityName,
+        'overall_status': 'Pending Approval',
+        'Date_of_Activity': dateOfActivity.toIso8601String(),
+        'Start_of_activity': startTime.toIso8601String(),
+        'End_of_Activity': endTime.toIso8601String(),
+        'created_at': DateTime.now().toIso8601String(),
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      if (proofOfConsentUrl != null) {
+        reservationData['proof_of_consent_url'] = proofOfConsentUrl;
+      }
+
+      final resResponse = await _client.from('reservations').insert(reservationData).select();
+
+      if (resResponse.isEmpty) {
+        return null;
+      }
+
+      final reservationId = resResponse[0]['reservation_id'] as int;
+
+      // Add each item to reservation_details
+      for (final itemId in itemQuantities.keys) {
+        final quantity = itemQuantities[itemId]!;
+
+        // Create a reservation_items entry and link via reservation_items_id
+        final itemResponse = await _client.from('reservation_items').insert({
+          'item_id': itemId,
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        }).select();
+
+        final reservationItemsId = itemResponse[0]['reservation_items_id'] as int;
+
+        await _client.from('reservation_details').insert({
+          'reservation_id': reservationId,
+          'reservation_items_id': reservationItemsId,
+          'quantity': quantity,
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        });
+
+        // Update the item's in-use quantity
+        final currentItem = await getItemDetails(itemId);
+        if (currentItem != null) {
+          await _client.from('items').update({
+            'quantity_in_use': currentItem.quantityInUse + quantity,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('item_id', itemId);
+        }
+      }
+
+      print('Item reservation created: $reservationId');
+
+      // Build and insert the approval chain for this item reservation
+      final approvalChain = await calculateApprovalChain(roomType: '', itemIds: itemQuantities.keys.toList());
+      final approvalBaseTime = DateTime.now().toUtc();
+      for (var index = 0; index < approvalChain.officeIds.length; index++) {
+        final officeId = approvalChain.officeIds[index];
+        final approvalTimestamp = buildApprovalTimestampForStep(
+          index,
+          baseTime: approvalBaseTime,
+        );
+        await _client.from('reservation_approvals').insert({
+          'reservation_id': reservationId,
+          'office_id': officeId,
+          'status': 'Pending',
+          'created_at': approvalTimestamp.toIso8601String(),
+          'updated_at': approvalTimestamp.toIso8601String(),
+        });
+      }
+
+      // Add a local ReservationRecord for immediate UI feedback
+      try {
+        final timeline = <ReservationTimelineEntry>[];
+        timeline.add(ReservationTimelineEntry(
+          title: 'Request Submitted',
+          status: 'Completed',
+          date: dateOfActivity,
+          timestamp: _formatTimestamp(dateOfActivity),
+          description: 'Your reservation request was submitted successfully.',
+        ));
+
+        for (final office in approvalChain.offices) {
+          timeline.add(ReservationTimelineEntry(
+            title: office,
+            status: 'Pending',
+            date: dateOfActivity,
+            timestamp: 'Pending',
+            description: 'Waiting for approval from $office.',
+          ));
+        }
+
+        final reservedItemNames = <String>[];
+        for (final itemId in itemQuantities.keys) {
+          final item = await getItemDetails(itemId);
+          if (item != null) reservedItemNames.add(item.itemName);
+        }
+
+        final newRecord = ReservationRecord(
+          id: reservationId.toString(),
+          userId: userId,
+          reservationTitle: activityName.isEmpty ? 'Item Reservation' : activityName,
+          roomName: 'Item Reservation',
+          reservationType: 'Item Reservation',
+          reservationStatus: 'Pending Approval',
+          date: dateOfActivity,
+          reservationTime: '${_formatDateTime(startTime)} - ${_formatDateTime(endTime)}',
+          timeline: timeline,
+          reservedItems: reservedItemNames,
+        );
+
+        ReservationActivityStore.add(newRecord);
+      } catch (_) {
+        // Non-fatal; UI will refresh from backend later
+      }
+
+      return reservationId;
+    } catch (e) {
+      print('Error creating item reservation: $e');
+      return null;
+    }
+  }
+
+  /// Cancel an existing reservation request.
+  Future<bool> cancelReservation(int reservationId) async {
+    try {
+      final updateResult = await _client
+          .from('reservations')
+          .update({
+            'overall_status': 'Cancelled',
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('reservation_id', reservationId)
+          .select();
+
+      if (updateResult == null || (updateResult as List).isEmpty) {
+        return false;
+      }
+
+      await _client
+          .from('reservation_approvals')
+          .update({
+            'status': 'Cancelled',
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('reservation_id', reservationId);
+
+      final reservationDetails = await _client
+          .from('reservation_details')
+          .select('reservation_items_id, quantity')
+          .eq('reservation_id', reservationId);
+
+      if (reservationDetails != null) {
+        for (final detail in reservationDetails as List) {
+          final reservationItemsId = detail['reservation_items_id'] as int?;
+          final quantity = detail['quantity'] as int? ?? 0;
+          if (reservationItemsId == null || quantity <= 0) {
+            continue;
+          }
+
+          final itemLink = await _client
+              .from('reservation_items')
+              .select('item_id')
+              .eq('reservation_items_id', reservationItemsId)
+              .maybeSingle();
+          final itemId = itemLink?['item_id'] as int?;
+          if (itemId == null) {
+            continue;
+          }
+
+          final currentItem = await getItemDetails(itemId);
+          if (currentItem != null) {
+            final safeQuantity = (currentItem.quantityInUse - quantity).clamp(0, currentItem.quantityInUse) as int;
+            await _client.from('items').update({
+              'quantity_in_use': safeQuantity,
+              'updated_at': DateTime.now().toIso8601String(),
+            }).eq('item_id', itemId);
+          }
+        }
+      }
+
+      return true;
+    } catch (e) {
+      print('Error cancelling reservation: $e');
+      return false;
     }
   }
 }

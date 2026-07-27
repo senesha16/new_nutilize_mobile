@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
 
@@ -43,6 +42,7 @@ class ReservationRecord {
     required this.date,
     required this.reservationTime,
     this.timeline = const [],
+    this.reservedItems = const [],
   });
 
   final String? id;
@@ -54,6 +54,7 @@ class ReservationRecord {
   final DateTime date;
   final String reservationTime;
   final List<ReservationTimelineEntry> timeline;
+  final List<String> reservedItems;
 
   String get stableId =>
       id ??
@@ -155,6 +156,7 @@ class ReservationRepository {
         reservationStatus: 'Pending Approval',
         date: DateTime(now.year, now.month, now.day + 6),
         reservationTime: '9:00 AM - 12:00 PM',
+        reservedItems: [],
       ),
       ReservationRecord(
         id: 'sample-conference-room',
@@ -164,6 +166,7 @@ class ReservationRepository {
         reservationStatus: 'Approved',
         date: DateTime(now.year, now.month, now.day - 3),
         reservationTime: '1:00 PM - 3:00 PM',
+        reservedItems: [],
       ),
       ReservationRecord(
         id: 'sample-studio-2',
@@ -173,6 +176,7 @@ class ReservationRepository {
         reservationStatus: 'Rejected',
         date: DateTime(now.year, now.month, now.day - 8),
         reservationTime: '9:30 AM - 11:30 AM',
+        reservedItems: [],
       ),
     ]);
   }
@@ -185,8 +189,24 @@ class ReservationActivityStore {
   static List<ReservationRecord> get reservations =>
       List.unmodifiable(listenable.value);
 
+  static List<ReservationRecord> _dedupeReservations(
+    List<ReservationRecord> reservations,
+  ) {
+    final seen = <String>{};
+    final deduped = <ReservationRecord>[];
+
+    for (final reservation in reservations) {
+      if (seen.add(reservation.stableId)) {
+        deduped.add(reservation);
+      }
+    }
+
+    return deduped;
+  }
+
   static void add(ReservationRecord reservation) {
-    listenable.value = [reservation, ...listenable.value];
+    final updated = [reservation, ...listenable.value];
+    listenable.value = _dedupeReservations(updated);
     NotificationActivityStore.syncFromReservations();
   }
 
@@ -200,12 +220,14 @@ class ReservationActivityStore {
     } else {
       updated[index] = reservation;
     }
-    listenable.value = updated;
+    listenable.value = _dedupeReservations(updated);
     NotificationActivityStore.syncFromReservations();
   }
 
   static void replaceAll(List<ReservationRecord> reservations) {
-    listenable.value = List<ReservationRecord>.from(reservations);
+    listenable.value = _dedupeReservations(
+      List<ReservationRecord>.from(reservations),
+    );
     NotificationActivityStore.syncFromReservations();
   }
 
@@ -246,10 +268,44 @@ List<ReservationRecord> collectReservations(DateTime now) {
 
 List<ReservationRecord> recentReservations(DateTime now, {int limit = 3}) {
   final allReservations = collectReservations(now);
-  if (allReservations.length <= limit) {
-    return allReservations;
+
+  bool isUpcoming(ReservationRecord reservation) {
+    final reservationDate = DateTime(
+      reservation.date.year,
+      reservation.date.month,
+      reservation.date.day,
+    );
+    final today = DateTime(now.year, now.month, now.day);
+    return !reservationDate.isBefore(today);
   }
-  return allReservations.take(limit).toList();
+
+  final upcomingReservations = allReservations.where(isUpcoming).toList();
+
+  final approvedReservations = upcomingReservations
+      .where((reservation) => reservation.reservationStatus
+          .toLowerCase()
+          .contains('approved'))
+      .toList()
+    ..sort((a, b) => a.date.compareTo(b.date));
+
+  final pendingReservations = upcomingReservations
+      .where((reservation) {
+        final status = reservation.reservationStatus.toLowerCase();
+        return status.contains('pending') || status.contains('processing');
+      })
+      .toList()
+    ..sort((a, b) => a.date.compareTo(b.date));
+
+  final result = <ReservationRecord>[];
+  result.addAll(approvedReservations);
+  for (final reservation in pendingReservations) {
+    if (result.length >= limit) {
+      break;
+    }
+    result.add(reservation);
+  }
+
+  return result.take(limit).toList();
 }
 
 Map<DateTime, int> reservationCountsByDate(

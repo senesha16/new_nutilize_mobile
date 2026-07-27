@@ -3,7 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
-import 'package:new_nutilize_mobile/features/request/request_page.dart';
+import 'package:new_nutilize_mobile/request.dart';
+import 'package:new_nutilize_mobile/services/reservation_service.dart';
 import 'package:new_nutilize_mobile/features/user/profile_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/secondary_header.dart';
@@ -69,11 +70,20 @@ class ReservationDetailsPage extends StatefulWidget {
 }
 
 class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
+  late ReservationRecord _reservation;
+  bool _isCancelling = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _reservation = widget.reservation;
+  }
+
   Future<void> _handleDownloadPermit() async {
     final sent = await _showReservationDialog<bool>(
       context,
       (dialogContext) => _DownloadPermitDialog(
-        reservation: widget.reservation,
+        reservation: _reservation,
         onSendPdf: _sendPermitPdf,
       ),
     );
@@ -122,6 +132,103 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
     await Future<void>.delayed(const Duration(seconds: 2));
   }
 
+  Future<void> _handleCancelRequest() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Cancel Reservation'),
+          content: const Text('Are you sure you want to cancel this reservation request?'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('No'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Yes, Cancel'),
+            ),
+          ],
+        );
+      },
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _isCancelling = true;
+    });
+
+    try {
+      final reservationId = int.tryParse(_reservation.id ?? '');
+      if (reservationId == null) {
+        throw Exception('Invalid reservation id');
+      }
+
+      final success = await ReservationService().cancelReservation(reservationId);
+      if (!mounted) {
+        return;
+      }
+
+      if (success) {
+        final updatedTimeline = List<ReservationTimelineEntry>.from(_reservation.timeline);
+        updatedTimeline.add(ReservationTimelineEntry(
+          title: 'Reservation Cancelled',
+          status: 'Completed',
+          date: DateTime.now(),
+          timestamp: _formatTimestamp(DateTime.now()),
+          description: 'This reservation has been cancelled.',
+        ));
+
+        setState(() {
+          _reservation = ReservationRecord(
+            id: _reservation.id,
+            userId: _reservation.userId,
+            reservationTitle: _reservation.reservationTitle,
+            roomName: _reservation.roomName,
+            reservationType: _reservation.reservationType,
+            reservationStatus: 'Cancelled',
+            date: _reservation.date,
+            reservationTime: _reservation.reservationTime,
+            timeline: updatedTimeline,
+            reservedItems: _reservation.reservedItems,
+          );
+          _isCancelling = false;
+        });
+
+        ReservationActivityStore.upsert(_reservation);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Reservation request cancelled.')),
+        );
+      } else {
+        setState(() {
+          _isCancelling = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to cancel the reservation.')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _isCancelling = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to cancel the reservation.')),
+      );
+    }
+  }
+
+  String _formatTimestamp(DateTime dateTime) {
+    final hour = dateTime.hour == 0 ? 12 : (dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour);
+    final minute = dateTime.minute.toString().padLeft(2, '0');
+    final period = dateTime.hour >= 12 ? 'PM' : 'AM';
+    return '${dateTime.month}/${dateTime.day}/${dateTime.year} $hour:$minute $period';
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -136,15 +243,15 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _ReservationSummaryCard(reservation: widget.reservation),
+                    _ReservationSummaryCard(reservation: _reservation),
                     const SizedBox(height: 14),
                     _ApprovalProcessCard(
                       currentStep:
-                          widget.reservation.approvalState.progressIndex,
-                      message: widget.reservation.approvalSummary,
+                          _reservation.approvalState.progressIndex,
+                      message: _reservation.approvalSummary,
                     ),
                     const SizedBox(height: 18),
-                    _ApprovalTimelineCard(reservation: widget.reservation),
+                    _ApprovalTimelineCard(reservation: _reservation),
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -196,6 +303,33 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                         ),
                       ],
                     ),
+                    const SizedBox(height: 12),
+                    if (!_reservation.reservationStatus.toLowerCase().contains('cancel') &&
+                        !_reservation.reservationStatus.toLowerCase().contains('completed') &&
+                        !_reservation.reservationStatus.toLowerCase().contains('rejected') &&
+                        !_reservation.reservationStatus.toLowerCase().contains('denied'))
+                      SizedBox(
+                        width: double.infinity,
+                        child: FilledButton(
+                          onPressed: _isCancelling ? null : _handleCancelRequest,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: _brandRed,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 13),
+                            child: Text(
+                              _isCancelling ? 'Cancelling...' : 'Cancel Request',
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -1036,6 +1170,24 @@ class _ReservationSummaryCard extends StatelessWidget {
               ),
             ],
           ),
+          if (reservation.reservedItems.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text('Borrowed Items', style: TextStyle(color: Color(0xFF6A6F86), fontSize: 12, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: reservation.reservedItems.map((it) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 6, offset: Offset(0,4))],
+                ),
+                child: Text(it, style: const TextStyle(color: Color(0xFF111111), fontSize: 12, fontWeight: FontWeight.w600)),
+              )).toList(),
+            ),
+          ],
         ],
       ),
     );

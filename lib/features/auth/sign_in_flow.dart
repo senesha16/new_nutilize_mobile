@@ -116,7 +116,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       'last_name': _lastNameController.text.trim(),
       'contact_number': _contactNumberController.text.trim(),
       'role': _selectedRole,
-      'department': _selectedDepartment,
+      'affiliation': _selectedDepartment,
     };
 
     final result = await AuthService.signUp(email: email, password: password, profile: profile);

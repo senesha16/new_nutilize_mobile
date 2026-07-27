@@ -360,6 +360,22 @@ class _ReservationHistoryCard extends StatelessWidget {
               const SizedBox(height: 14),
               const Divider(height: 1),
               const SizedBox(height: 12),
+              if (reservation.reservedItems.isNotEmpty) ...[
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: reservation.reservedItems.map((it) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF7F7FB),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFE6EAF9)),
+                    ),
+                    child: Text(it, style: const TextStyle(color: Color(0xFF464D6A), fontSize: 11, fontWeight: FontWeight.w700)),
+                  )).toList(),
+                ),
+                const SizedBox(height: 12),
+              ],
               Row(
                 children: [
                   const Icon(

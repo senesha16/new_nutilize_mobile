@@ -227,7 +227,7 @@ class _NotificationGroup extends StatelessWidget {
                 alignment: Alignment.centerRight,
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFD22828).withOpacity(0.12),
+                  color: const Color.fromRGBO(210, 40, 40, 0.12),
                   borderRadius: BorderRadius.circular(18),
                 ),
                 child: const Icon(
@@ -286,7 +286,7 @@ class _NotificationCard extends StatelessWidget {
                 width: 46,
                 height: 46,
                 decoration: BoxDecoration(
-                  color: accent.withOpacity(0.12),
+                  color: accent.withAlpha((0.12 * 255).round()),
                   shape: BoxShape.circle,
                 ),
                 child: Icon(notification.icon, color: accent, size: 24),
