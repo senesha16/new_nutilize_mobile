@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
+import 'package:new_nutilize_mobile/services/auth_service.dart';
+import 'package:new_nutilize_mobile/services/supabase_service.dart';
 
 // MARK: - Models
 
@@ -721,6 +723,40 @@ class ReservationService {
     }
   }
 
+  Future<bool> submitIssueReport({
+    required int reservationId,
+    required String description,
+    String? imageName,
+    String? imageBase64,
+  }) async {
+    try {
+      final userId = AuthService.currentUser?['user_id'] as int?;
+      final userEmail = AuthService.currentUser?['email'] as String?;
+
+      final payload = <String, dynamic>{
+        'reservation_id': reservationId,
+        'user_id': userId,
+        'reported_by': userEmail ?? 'unknown',
+        'description': description,
+        'status': 'Pending',
+        'created_at': DateTime.now().toIso8601String(),
+      };
+
+      if (imageName != null && imageName.isNotEmpty) {
+        payload['image_name'] = imageName;
+      }
+      if (imageBase64 != null && imageBase64.isNotEmpty) {
+        payload['image_base64'] = imageBase64;
+      }
+
+      final response = await _client.from('reservation_issues').insert(payload).select().maybeSingle();
+      return response != null;
+    } catch (e) {
+      print('Error submitting issue report: $e');
+      return false;
+    }
+  }
+
   Future<Map<String, dynamic>?> _getOfficeById(int officeId) async {
     try {
       final response = await _client
@@ -1094,7 +1130,30 @@ class ReservationService {
       print('Successfully uploaded proof of consent to: $filePath');
     } catch (e) {
       print('Error uploading proof of consent: $e');
-      rethrow;
+      try {
+        final serviceRoleKey = SupabaseService.serviceRoleKey;
+        if (serviceRoleKey.isEmpty) {
+          rethrow;
+        }
+
+        final storageClient = SupabaseClient(
+          _client.supabaseUrl,
+          serviceRoleKey,
+        );
+
+        await storageClient.storage.from('proof_of_consent').upload(
+          filePath,
+          file,
+          fileOptions: const FileOptions(
+            cacheControl: '3600',
+            upsert: false,
+          ),
+        );
+        print('Successfully uploaded proof of consent via service-role fallback: $filePath');
+      } catch (fallbackError) {
+        print('Service-role upload fallback failed: $fallbackError');
+        rethrow;
+      }
     }
   }
 

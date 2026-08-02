@@ -257,8 +257,23 @@ class _ReservationHistoryPageState extends State<ReservationHistoryPage> {
                 AppBottomNav(
                   selectedIndex:
                       AppShellScope.maybeOf(context)?.currentIndex ?? 3,
-                  onTap:
-                      AppShellScope.maybeOf(context)?.onTabSelected ?? (_) {},
+                  onTap: (index) {
+                    final scope = AppShellScope.maybeOf(context);
+                    if (scope != null) {
+                      scope.onTabSelected(index);
+                    } else {
+                      // If we're in a pushed route without AppShellScope,
+                      // pop back to shell and then select the tab
+                      Navigator.of(context).pop();
+                      // Schedule the tab selection for next frame so navigation completes
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        final shellScope = AppShellScope.maybeOf(context);
+                        if (shellScope != null) {
+                          shellScope.onTabSelected(index);
+                        }
+                      });
+                    }
+                  },
                 ),
               ],
             ),

@@ -186,6 +186,34 @@ class ReservationActivityStore {
   static final ValueNotifier<List<ReservationRecord>> listenable =
       ValueNotifier<List<ReservationRecord>>([]);
 
+  static bool _userIdsMatch(dynamic left, dynamic right) {
+    if (left == null || right == null) {
+      return false;
+    }
+    return left.toString() == right.toString();
+  }
+
+  static bool isVisibleOnCalendar(
+    ReservationRecord reservation, {
+    required int? currentUserId,
+  }) {
+    if (currentUserId != null && !_userIdsMatch(reservation.userId, currentUserId)) {
+      return false;
+    }
+
+    final normalizedStatus = reservation.reservationStatus.toLowerCase();
+    final isApprovedLike = normalizedStatus.contains('approved') ||
+        normalizedStatus.contains('completed') ||
+        normalizedStatus.contains('confirmed');
+    final isOwnPendingLike = currentUserId != null &&
+        _userIdsMatch(reservation.userId, currentUserId) &&
+        (normalizedStatus.contains('pending') ||
+            normalizedStatus.contains('processing') ||
+            normalizedStatus.contains('submitted'));
+
+    return isApprovedLike || isOwnPendingLike;
+  }
+
   static List<ReservationRecord> get reservations =>
       List.unmodifiable(listenable.value);
 
@@ -253,7 +281,10 @@ List<ReservationRecord> collectReservations(DateTime now) {
     ...ReservationActivityStore.listenable.value,
     ...ReservationRepository.sample(now).reservations,
   ]) {
-    if (currentUserId != null && reservation.userId != currentUserId) {
+    if (!ReservationActivityStore.isVisibleOnCalendar(
+      reservation,
+      currentUserId: currentUserId,
+    )) {
       continue;
     }
 

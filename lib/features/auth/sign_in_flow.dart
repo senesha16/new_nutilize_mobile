@@ -34,9 +34,41 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
   static const String backgroundAsset = 'assets/images/nutilize_bg.jpg';
   static const String logoAsset = 'assets/images/nutilize_logo.png';
 
+  static const List<_ProgramOption> _programOptions = [
+    _ProgramOption(id: 1, label: 'B Multimedia Arts'),
+    _ProgramOption(id: 2, label: 'BS Architecture'),
+    _ProgramOption(id: 3, label: 'BS Civil Engineering'),
+    _ProgramOption(id: 4, label: 'BS Computer Science'),
+    _ProgramOption(id: 5, label: 'BS Computer Engineering'),
+    _ProgramOption(id: 6, label: 'BS Information Technology with specialization in Mobile and Web Applications'),
+    _ProgramOption(id: 7, label: 'BS Accountancy'),
+    _ProgramOption(id: 8, label: 'BSBA Major in Financial Management'),
+    _ProgramOption(id: 9, label: 'BSBA Major in Marketing Management'),
+    _ProgramOption(id: 10, label: 'BS Management Accounting'),
+    _ProgramOption(id: 11, label: 'BS Tourism Management'),
+    _ProgramOption(id: 12, label: 'BS Psychology'),
+    _ProgramOption(id: 13, label: 'BS Medical Technology'),
+    _ProgramOption(id: 14, label: 'BS Nursing'),
+  ];
+
+  List<DropdownMenuItem<String?>> _buildProgramDropdownItems() {
+    return [
+      const DropdownMenuItem<String?>(
+        value: null,
+        child: Text('Select your department'),
+      ),
+      for (final option in _programOptions)
+        DropdownMenuItem<String?>(
+          value: option.label,
+          child: Text(option.label),
+        ),
+    ];
+  }
+
   SignInStep _step = SignInStep.login;
   String _selectedRole = 'Student';
   String? _selectedDepartment;
+  int? _selectedProgramId;
   File? _selectedImage;
 
   final TextEditingController _emailController = TextEditingController();
@@ -75,20 +107,30 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       return;
     }
 
-    final token = await AuthService.signIn(email: email, password: password);
-    if (token != null) {
-      final userId = AuthService.currentUser?['user_id'] as int?;
-      if (userId != null) {
-        final records = await ReservationService().getReservationRecordsForUser(userId);
-        ReservationActivityStore.replaceAll(records);
+    try {
+      final token = await AuthService.signIn(email: email, password: password);
+      if (token != null) {
+        final userId = AuthService.currentUser?['user_id'] as int?;
+        if (userId != null) {
+          final records = await ReservationService().getReservationRecordsForUser(userId);
+          ReservationActivityStore.replaceAll(records);
+        }
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const AppShell()),
+        );
+      } else {
+        final error = AuthService.lastAuthError ?? 'Login failed. Check credentials.';
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error)),
+        );
       }
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const AppShell()),
-      );
-    } else {
+    } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Login failed. Check credentials.')),
+        SnackBar(content: Text('Login failed: ${e.toString()}')),
       );
     }
   }
@@ -110,13 +152,30 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       return;
     }
 
+    final affiliation = _selectedDepartment?.trim();
+    if (affiliation == null || affiliation.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select your program before creating your account.')),
+      );
+      return;
+    }
+
+    final programId = _selectedProgramId ?? AuthService.programIdForAffiliation(affiliation);
+    if (programId == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a valid program before creating your account.')),
+      );
+      return;
+    }
+
     final profile = {
       'email': email,
       'first_name': _firstNameController.text.trim(),
       'last_name': _lastNameController.text.trim(),
       'contact_number': _contactNumberController.text.trim(),
       'role': _selectedRole,
-      'affiliation': _selectedDepartment,
+      'affiliation': affiliation,
+      'program_id': programId,
     };
 
     final result = await AuthService.signUp(email: email, password: password, profile: profile);
@@ -128,11 +187,12 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       final warning = result['warning'] as String?;
       if (warning != null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Registration: $warning')),
+          SnackBar(content: Text('✓ $warning')),
         );
       }
 
       if (accessToken != null) {
+        // Signup with auto-login succeeded
         final userId = AuthService.currentUser?['user_id'] as int?;
         if (userId != null) {
           final records = await ReservationService().getReservationRecordsForUser(userId);
@@ -145,25 +205,17 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         return;
       }
 
-      // If no token returned, try client sign-in as fallback.
-      final token = await AuthService.signIn(email: email, password: password);
-      if (token != null) {
-        final userId = AuthService.currentUser?['user_id'] as int?;
-        if (userId != null) {
-          final records = await ReservationService().getReservationRecordsForUser(userId);
-          ReservationActivityStore.replaceAll(records);
-        }
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AppShell()),
-        );
-        return;
-      }
-
+      // Signup succeeded but no auto-login token.
+      // Show success and go to login (skip slow signIn() attempt).
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registration successful. Check your email to confirm, then log in.')),
+        const SnackBar(content: Text('✓ Account created! Please log in with your credentials.')),
       );
       _goToStep(SignInStep.loginEmail);
+      _emailController.text = email;
+      _passwordController.clear();
+      _confirmPasswordController.clear();
+      return;
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Registration failed: $error')),
@@ -578,67 +630,14 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                   hintText: 'Select your department',
                   prefix: const Icon(Icons.apartment, color: Color(0xFFF6C914)),
                 ),
-                items: const [
-                  DropdownMenuItem<String?>(
-                    value: null,
-                    child: Text('Select your department'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'B Multimedia Arts',
-                    child: Text('B Multimedia Arts'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'BS Architecture',
-                    child: Text('BS Architecture'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'BS Civil Engineering',
-                    child: Text('BS Civil Engineering'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'BS Computer Science',
-                    child: Text('BS Computer Science'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'BS Information Technology',
-                    child: Text('BS Information Technology'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'BS Accountancy',
-                    child: Text('BS Accountancy'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'BSBA Major in Financial Management',
-                    child: Text('BSBA Major in Financial Management'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'BSBA Major in Marketing Management',
-                    child: Text('BSBA Major in Marketing Management'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'BS Management Accounting',
-                    child: Text('BS Management Accounting'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'BS Tourism Management',
-                    child: Text('BS Tourism Management'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'BS Psychology',
-                    child: Text('BS Psychology'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'BS Medical Technology',
-                    child: Text('BS Medical Technology'),
-                  ),
-                  DropdownMenuItem(
-                    value: 'BS Nursing',
-                    child: Text('BS Nursing'),
-                  ),
-                ],
+                items: _buildProgramDropdownItems(),
                 onChanged: (value) {
                   if (value != null) {
-                    setState(() => _selectedDepartment = value);
+                    final selected = _programOptions.firstWhere((option) => option.label == value);
+                    setState(() {
+                      _selectedDepartment = value;
+                      _selectedProgramId = selected.id;
+                    });
                   }
                 },
               ),
@@ -743,6 +742,13 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         );
     }
   }
+}
+
+class _ProgramOption {
+  const _ProgramOption({required this.id, required this.label});
+
+  final int id;
+  final String label;
 }
 
 class _AuthCard extends StatelessWidget {

@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -129,7 +130,25 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
   }
 
   Future<void> _submitReport(_ReportIssueDraft draft) async {
-    await Future<void>.delayed(const Duration(seconds: 2));
+    final reservationId = int.tryParse(_reservation.id ?? '');
+    if (reservationId == null) {
+      throw Exception('Invalid reservation id');
+    }
+
+    final imageBase64 = draft.imageBytes == null
+        ? null
+        : base64Encode(draft.imageBytes!);
+
+    final success = await ReservationService().submitIssueReport(
+      reservationId: reservationId,
+      description: draft.description,
+      imageName: draft.imageName,
+      imageBase64: imageBase64,
+    );
+
+    if (!success) {
+      throw Exception('Failed to submit report');
+    }
   }
 
   Future<void> _handleCancelRequest() async {

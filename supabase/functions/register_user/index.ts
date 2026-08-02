@@ -13,6 +13,105 @@ const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY") || Deno.env.get("SUPAB
 // a session token and return success with a warning instead of failing.
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || Deno.env.get("SUPABASE_PUBLISHABLE_KEYS") || Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || Deno.env.get("PUBLISHABLE_KEY");
 
+const PROGRAM_ID_BY_AFFILIATION: Record<string, number> = {
+  'b multimedia arts': 1,
+  'bs architecture': 2,
+  'bs civil engineering': 3,
+  'bs computer science': 4,
+  'bs computer engineering': 5,
+  'bs information technology': 6,
+  'bs information technology with specialization in mobile and web applications': 6,
+  'bs accountancy': 7,
+  'bsba major in financial management': 8,
+  'bsba major in marketing management': 9,
+  'bs management accounting': 10,
+  'bs tourism management': 11,
+  'bs psychology': 12,
+  'bs medical technology': 13,
+  'bs nursing': 14,
+};
+
+function normalizeAffiliation(value: unknown): string | null {
+  const normalized = String(value ?? '').trim().toLowerCase();
+  return normalized ? normalized : null;
+}
+
+function programIdForAffiliation(value: unknown): number | null {
+  const normalized = normalizeAffiliation(value);
+  if (!normalized) return null;
+  return PROGRAM_ID_BY_AFFILIATION[normalized] ?? null;
+}
+
+async function resolveProgramId(affiliation: unknown): Promise<number | null> {
+  const rawAffiliation = String(affiliation ?? '').trim();
+  const normalized = normalizeAffiliation(affiliation);
+  if (!rawAffiliation) return null;
+
+  const databaseLookups = [
+    `name=eq.${encodeURIComponent(rawAffiliation)}`,
+    `code=eq.${encodeURIComponent(rawAffiliation)}`,
+    `name=ilike.${encodeURIComponent(rawAffiliation)}`,
+    `code=ilike.${encodeURIComponent(rawAffiliation)}`,
+  ];
+
+  for (const query of databaseLookups) {
+    const resp = await fetch(`${SUPABASE_URL}/rest/v1/academic_programs?select=program_id&${query}&limit=1`, {
+      headers: {
+        'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+        'apikey': SERVICE_ROLE_KEY,
+        'Accept': 'application/json',
+      },
+    });
+
+    if (!resp.ok) {
+      continue;
+    }
+
+    const rows = await resp.json().catch(() => []);
+    if (Array.isArray(rows) && rows.length > 0 && rows[0]?.program_id) {
+      return Number(rows[0].program_id);
+    }
+  }
+
+  return programIdForAffiliation(normalized);
+}
+
+async function sleep(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function createSessionWithRetry(email: string, password: string, authKey: string) {
+  const attempts = [0, 500];
+
+  for (const delay of attempts) {
+    if (delay > 0) {
+      await sleep(delay);
+    }
+
+    const tokenResp = await fetch(`${SUPABASE_URL}/auth/v1/token`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Authorization': `Bearer ${authKey}`,
+        'apikey': authKey,
+      },
+      body: `grant_type=password&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
+    });
+
+    const tokenBody = await tokenResp.json().catch(() => null);
+    if (tokenResp.ok && tokenBody?.access_token) {
+      return { session: tokenBody, error: null };
+    }
+
+    const errorText = tokenBody?.msg || tokenBody?.message || tokenBody?.error_description || tokenBody?.error || `Status ${tokenResp.status}`;
+    if (delay === attempts[attempts.length - 1]) {
+      return { session: null, error: errorText };
+    }
+  }
+
+  return { session: null, error: 'Unable to create session' };
+}
+
 serve(async (req) => {
   if (!SERVICE_ROLE_KEY || !SUPABASE_URL) {
     return new Response(JSON.stringify({ error: 'Server misconfigured' }), { status: 500 });
@@ -22,7 +121,10 @@ serve(async (req) => {
     const body = await req.json();
     const email = (body.email || '').toString().trim();
     const password = (body.password || '').toString();
-    const profile = body.profile || {};
+    const profile = Object.assign({}, body.profile || {}, {
+      affiliation: body.affiliation ?? body.profile?.affiliation,
+      program_id: body.program_id ?? body.profile?.program_id,
+    });
 
     if (!email || !password) {
       return new Response(JSON.stringify({ error: 'Missing email or password' }), { status: 400 });
@@ -53,8 +155,7 @@ serve(async (req) => {
       // If the user already exists, try to fetch the existing user and proceed.
       if (errCode === 'email_exists' || msg.toString().toLowerCase().includes('already been registered') || msg.toString().toLowerCase().includes('already exists')) {
         // Fetch existing user and ensure the password is set to the provided
-        // value so registration results in a usable credential. We use the
-        // service role key to PATCH the admin user object.
+        // value so registration results in a usable credential.
         const listResp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(email)}`, {
           method: 'GET',
           headers: {
@@ -69,33 +170,28 @@ serve(async (req) => {
         } else if (listResp.ok && listBody && listBody.id) {
           user = listBody;
         } else {
-          // Fallback to a minimal user object
-          user = { email };
+          return new Response(JSON.stringify({ error: 'Existing auth user found but could not be resolved.' }), { status: 500 });
         }
 
-        // If we found an existing user id, attempt to set the password so
-        // the client can sign in immediately. This overwrites the password
-        // for that user id using the Admin API.
-        try {
-          const existingId = user?.id;
-          if (existingId) {
-            const upd = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${existingId}`, {
-              method: 'PUT',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-                'apikey': SERVICE_ROLE_KEY,
-              },
-              body: JSON.stringify({ password, email_confirm: true }),
-            });
-            const updBody = await upd.json().catch(() => null);
-            if (upd.ok && updBody) {
-              user = updBody;
-            }
-          }
-        } catch (e) {
-          // ignore update errors; we'll still return creation success
+        const existingId = user?.id;
+        if (!existingId) {
+          return new Response(JSON.stringify({ error: 'Existing auth user found but missing user id.' }), { status: 500 });
         }
+
+        const upd = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${existingId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+            'apikey': SERVICE_ROLE_KEY,
+          },
+          body: JSON.stringify({ password, email_confirm: true }),
+        });
+        const updBody = await upd.json().catch(() => null);
+        if (!upd.ok) {
+          return new Response(JSON.stringify({ error: 'Failed to update password for existing auth user.', details: updBody }), { status: upd.status || 500 });
+        }
+        user = updBody || user;
       } else {
         return new Response(JSON.stringify({ error: createBody?.message || createBody }), { status: createResp.status || 400 });
       }
@@ -107,7 +203,7 @@ serve(async (req) => {
     const payload: any = {};
     payload.email = incoming.email || email;
     payload.username = incoming.username || email;
-    payload.password = password;
+    payload.role = incoming.role || 'student';
     if (incoming.first_name) payload.first_name = incoming.first_name;
     if (incoming.last_name) payload.last_name = incoming.last_name;
     if (incoming.contact_number) payload.contact_number = incoming.contact_number;
@@ -115,18 +211,30 @@ serve(async (req) => {
     if (incoming.full_name) payload.full_name = incoming.full_name;
     if (incoming.middle_initial) payload.middle_initial = incoming.middle_initial;
     if (incoming.suffix) payload.suffix = incoming.suffix;
-    if (incoming.office_id) payload.office_id = incoming.office_id;
+    if (incoming.office_id) payload.office_id = Number(incoming.office_id);
     if (incoming.affiliation) payload.affiliation = incoming.affiliation;
     if (incoming.role) payload.role = incoming.role;
+    if (incoming.program_id) {
+      payload.program_id = Number(incoming.program_id);
+    } else {
+      const mappedProgramId = await resolveProgramId(incoming.affiliation);
+      if (mappedProgramId) {
+        payload.program_id = mappedProgramId;
+      }
+    }
+
+    if (!payload.program_id) {
+      payload.program_id = 1;
+    }
     // helper to POST profile
     async function postProfile(bodyObj: any) {
-      const r = await fetch(`${SUPABASE_URL}/rest/v1/users`, {
+      const r = await fetch(`${SUPABASE_URL}/rest/v1/users?on_conflict=email`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
           'apikey': SERVICE_ROLE_KEY,
-          'Prefer': 'return=representation',
+          'Prefer': 'resolution=merge-duplicates,return=representation',
         },
         body: JSON.stringify(bodyObj),
       });
@@ -134,87 +242,24 @@ serve(async (req) => {
       return { resp: r, body: jb };
     }
 
-    // Try initial insert
-    let insertAttempt = await postProfile(payload);
-    let insertBody: any = insertAttempt.body;
-    // If failed, inspect reason and try to fill sensible defaults then retry once
+    // Save or update the profile in one step using upsert semantics.
+    const insertAttempt = await postProfile(payload);
+    const insertBody: any = insertAttempt.body;
     if (!insertAttempt.resp.ok) {
-      const msg = (insertBody?.message || insertBody?.details || '').toString();
-      const m = msg.match(/column "(.*?)"/i);
-      if (m) {
-        const missing = m[1];
-        if (missing === 'password' && !payload.password) {
-          payload.password = crypto.randomUUID().slice(0, 16);
-        }
-        if (missing === 'role' && !payload.role) {
-          payload.role = 'user';
-        }
-        // retry
-        const second = await postProfile(payload);
-        insertAttempt = second;
-        insertBody = second.body;
-      }
+      return new Response(JSON.stringify({
+        error: 'Failed saving registration profile',
+        details: insertBody,
+      }), { status: insertAttempt.resp.status || 400 });
     }
 
-    if (!insertAttempt.resp.ok) {
-      // final fallback: try patch by email (upsert-like)
-      const patchResp = await fetch(`${SUPABASE_URL}/rest/v1/users?email=eq.${encodeURIComponent(email)}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-          'apikey': SERVICE_ROLE_KEY,
-          'Prefer': 'return=representation',
-        },
-        body: JSON.stringify(payload),
-      });
-      const patchBody = await patchResp.json().catch(() => ({}));
-      if (patchResp.ok) {
-        insertBody = patchBody;
-      } else {
-        // keep insertBody as last error details
-      }
-    }
-
-    // 3) Try to create a session token on behalf of the new user so the
-    // client can be logged in immediately. Prefer the configured anon key,
-    // but fall back to the public apikey sent by the client if needed.
-    let session = null;
-    try {
-      const authKey = ANON_KEY || req.headers.get('apikey') || req.headers.get('authorization')?.replace(/^Bearer\s+/i, '') || '';
-      if (!authKey) {
-        throw new Error('Missing anon key for session creation');
-      }
-      const tokenResp = await fetch(`${SUPABASE_URL}/auth/v1/token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-          'Authorization': `Bearer ${authKey}`,
-          'apikey': authKey,
-        },
-        body: `grant_type=password&email=${encodeURIComponent(email)}&password=${encodeURIComponent(password)}`,
-      });
-      const tokenBody = await tokenResp.json().catch(() => null);
-      if (tokenResp.ok && tokenBody) {
-        session = tokenBody;
-      } else {
-        // include token endpoint error in logs/response details for debugging
-        // but don't fail the user creation flow
-        // (we'll attach tokenBody to response below)
-        insertBody = insertBody || {};
-        insertBody.token_error = tokenBody;
-      }
-    } catch (e) {
-      // ignore session creation errors; we will return creation success below
-    }
-
-    const respBody: any = { ok: true, user, profile: insertBody };
-    if (session) {
-      respBody.session = session;
-      return new Response(JSON.stringify(respBody), { status: 201 });
-    }
-
-    respBody.warning = 'User created and profile inserted; no session created by function';
+    // 3) Skip the slow session/token creation step. The registration itself is
+    // already complete and the profile has been saved. Return success immediately.
+    const respBody: any = {
+      ok: true,
+      user,
+      profile: insertBody,
+      warning: 'User created and profile inserted. Please log in with your credentials.',
+    };
     return new Response(JSON.stringify(respBody), { status: 201 });
   } catch (err) {
     return new Response(JSON.stringify({ error: err?.message || String(err) }), { status: 500 });

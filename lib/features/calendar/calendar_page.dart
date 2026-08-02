@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_details_page.dart';
+import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
 
 class CalendarPage extends StatefulWidget {
@@ -113,6 +114,7 @@ class _CalendarPageState extends State<CalendarPage> {
   }
 
   List<ReservationRecord> _allReservations() {
+    final currentUserId = AuthService.currentUser?['user_id'] as int?;
     final combined = <ReservationRecord>[];
     final seenIds = <String>{};
 
@@ -120,6 +122,13 @@ class _CalendarPageState extends State<CalendarPage> {
       ...ReservationActivityStore.listenable.value,
       ..._reservationRepository.reservations,
     ]) {
+      if (!ReservationActivityStore.isVisibleOnCalendar(
+        reservation,
+        currentUserId: currentUserId,
+      )) {
+        continue;
+      }
+
       if (seenIds.add(reservation.stableId)) {
         combined.add(reservation);
       }
