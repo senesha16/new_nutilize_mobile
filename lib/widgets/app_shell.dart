@@ -31,6 +31,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   bool _isRefreshing = false;
   bool _hasSeenInitialNotifications = false;
   List<NotificationRecord> _lastNotifications = [];
+  String? _lastShownNotificationId;
 
   @override
   void initState() {
@@ -121,7 +122,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         (notification) => newIds.contains(notification.id),
         orElse: () => notifications.first,
       );
-      _showNotificationSnackBar(latest);
+
+      if (_lastShownNotificationId != latest.id) {
+        _lastShownNotificationId = latest.id;
+        _showNotificationSnackBar(latest);
+      }
     }
 
     _lastNotifications = List<NotificationRecord>.from(notifications);
@@ -133,12 +138,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     messenger.showSnackBar(
       SnackBar(
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 3),
+        duration: const Duration(milliseconds: 1400),
         content: Text(notification.title),
         action: SnackBarAction(
           label: 'View',
           onPressed: () {
             messenger.hideCurrentSnackBar();
+            _lastShownNotificationId = null;
             Navigator.of(
               context,
             ).push(MaterialPageRoute(builder: (_) => const NotificationPage()));
