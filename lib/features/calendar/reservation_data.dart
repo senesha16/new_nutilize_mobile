@@ -107,6 +107,14 @@ class ReservationRecord {
     return const ReservationApprovalState(0);
   }
 
+  List<String> get approvalSteps {
+    return timeline
+        .skip(1)
+        .where((entry) => entry.title != 'Request Processing' && entry.title != 'Request Approved')
+        .map((entry) => entry.title)
+        .toList();
+  }
+
   List<ReservationTimelineEntry> get approvalTimeline {
     if (timeline.isNotEmpty) return timeline;
 

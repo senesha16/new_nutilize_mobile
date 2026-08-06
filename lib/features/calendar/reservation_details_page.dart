@@ -265,9 +265,9 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                     _ReservationSummaryCard(reservation: _reservation),
                     const SizedBox(height: 14),
                     _ApprovalProcessCard(
-                      currentStep:
-                          _reservation.approvalState.progressIndex,
+                      currentStep: _reservation.approvalState.progressIndex,
                       message: _reservation.approvalSummary,
+                      approvalSteps: _reservation.approvalSteps,
                     ),
                     const SizedBox(height: 18),
                     _ApprovalTimelineCard(reservation: _reservation),
@@ -1214,10 +1214,15 @@ class _ReservationSummaryCard extends StatelessWidget {
 }
 
 class _ApprovalProcessCard extends StatelessWidget {
-  const _ApprovalProcessCard({required this.currentStep, required this.message});
+  const _ApprovalProcessCard({
+    required this.currentStep,
+    required this.message,
+    required this.approvalSteps,
+  });
 
   final int currentStep;
   final String message;
+  final List<String> approvalSteps;
 
   @override
   Widget build(BuildContext context) {
@@ -1257,6 +1262,44 @@ class _ApprovalProcessCard extends StatelessWidget {
               color: Color(0xFF6A6F86),
             ),
           ),
+          if (approvalSteps.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            const Text(
+              'Approval order:',
+              style: TextStyle(
+                fontSize: 12,
+                color: Color(0xFF111111),
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 6),
+            ...approvalSteps.map(
+              (step) => Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      '• ',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Color(0xFF6A6F86),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        step,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6A6F86),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
     );

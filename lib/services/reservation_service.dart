@@ -348,6 +348,23 @@ class ReservationService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> _getAvailableItemUnits(int itemId, int quantity) async {
+    try {
+      final response = await _client
+          .from('item_units')
+          .select('unit_id, unit_code')
+          .eq('item_id', itemId)
+          .eq('status', 'available')
+          .order('unit_id', ascending: true)
+          .limit(quantity);
+
+      return (response as List).cast<Map<String, dynamic>>();
+    } catch (e) {
+      print('Error fetching available item units: $e');
+      return [];
+    }
+  }
+
   /// Fetch reservations created by a specific user.
   Future<List<ReservationRecord>> getReservationRecordsForUser(int userId) async {
     try {
@@ -530,6 +547,45 @@ class ReservationService {
     return '$hour:$minute $period';
   }
 
+  Future<List<String>> _getReservationItemOwnerNames(int reservationId) async {
+    final itemOwners = <String>{};
+    try {
+      final details = await _client
+          .from('reservation_details')
+          .select('reservation_items_id')
+          .eq('reservation_id', reservationId);
+      if (details == null) return [];
+
+      for (final det in details as List) {
+        final reservationItemsId = det['reservation_items_id'] as int?;
+        if (reservationItemsId == null) continue;
+
+        final itemLink = await _client
+            .from('reservation_items')
+            .select('item_id')
+            .eq('reservation_items_id', reservationItemsId)
+            .maybeSingle();
+        final itemId = itemLink?['item_id'] as int?;
+        if (itemId == null) continue;
+
+        final item = await getItemDetails(itemId);
+        if (item != null && item.ownerId != null) {
+          final owner = await getItemOwner(item.ownerId!);
+          if (owner != null) {
+            final affiliation = (owner['department_affiliation'] as String?)?.trim().toUpperCase();
+            final ownerName = owner['owner_name'] as String?;
+            if (affiliation != 'PFO' && ownerName != null) {
+              itemOwners.add(ownerName);
+            }
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching reservation item owner names: $e');
+    }
+    return itemOwners.toList();
+  }
+
   String _formatTimestamp(DateTime date) {
     final hour = date.hour == 0 ? 12 : (date.hour > 12 ? date.hour - 12 : date.hour);
     final minute = date.minute.toString().padLeft(2, '0');
@@ -564,13 +620,13 @@ class ReservationService {
   }
 
   static int _approvalWorkflowRank(String officeName) {
-    if (officeName.contains('item owner')) {
+    if (officeName.contains('general education')) {
       return 1;
     }
-    if (officeName.contains('program chair')) {
+    if (officeName.contains('item owner')) {
       return 2;
     }
-    if (officeName.contains('general education')) {
+    if (officeName.contains('program chair')) {
       return 3;
     }
     if (officeName.contains('sdao')) {
@@ -585,7 +641,11 @@ class ReservationService {
     if (officeName.contains('physical facilities')) {
       return 7;
     }
-    return 2;
+    if (officeName.isNotEmpty) {
+      // Any dynamic owner name should be treated as an item owner approval step.
+      return 2;
+    }
+    return 8;
   }
 
   // MARK: - Approval Workflow
@@ -596,92 +656,117 @@ class ReservationService {
     required List<int>? itemIds,
   }) async {
     try {
-      final offices = <String>[];
-      final itemOwners = <String>[];
-      bool hasPhysicalFacilitiesOwner = false;
+      final officeTitles = <String>[];
+      final officeIds = <int>[];
+      final itemOwners = <String>{};
 
       if (itemIds != null && itemIds.isNotEmpty) {
         for (int itemId in itemIds) {
           final item = await getItemDetails(itemId);
           if (item != null && item.ownerId != null) {
-            final owner = await getItemOwnerName(item.ownerId!);
+            final owner = await getItemOwner(item.ownerId!);
             if (owner != null) {
-              if (owner == 'Physical Facilities') {
-                hasPhysicalFacilitiesOwner = true;
-              } else if (!itemOwners.contains(owner)) {
-                itemOwners.add(owner);
+              final affiliation =
+                  (owner['department_affiliation'] as String?)?.trim().toUpperCase();
+              final ownerName = owner['owner_name'] as String?;
+              if (ownerName != null && affiliation != 'PFO') {
+                itemOwners.add(ownerName);
               }
             }
           }
         }
       }
-      // If this is an item-only reservation (items present), build approval chain
-      // with item owners first (if any), then the standard offices.
-      if (itemIds != null && itemIds.isNotEmpty) {
+
+      final standardOffices = [
+        'Program Chair',
+        'SDAO',
+        'DO',
+        'Security',
+        'Physical Facilities',
+      ];
+      final itemOwnerOfficeId = await _getOfficeIdByName('Item Owner');
+      final hasItems = itemIds != null && itemIds.isNotEmpty;
+
+      if (roomType == 'Gym') {
+        officeTitles.add('General Education');
+        final generalEducationId = await _getOfficeIdByName('General Education');
+        if (generalEducationId != null) {
+          officeIds.add(generalEducationId);
+        }
         if (itemOwners.isNotEmpty) {
-          offices.addAll(itemOwners);
-          offices.addAll([
-            'Program Chair',
-            'SDAO',
-            'DO',
-            'Security',
-            'Physical Facilities',
-          ]);
-        } else {
-          // No specific item owners; standard approval chain
-          offices.addAll([
-            'Program Chair',
-            'SDAO',
-            'DO',
-            'Security',
-            'Physical Facilities',
-          ]);
+          for (final ownerName in itemOwners) {
+            officeTitles.add(ownerName);
+            if (itemOwnerOfficeId != null) {
+              officeIds.add(itemOwnerOfficeId);
+            }
+          }
+        }
+        for (final office in standardOffices) {
+          officeTitles.add(office);
+          final officeId = await _getOfficeIdByName(office);
+          if (officeId != null) {
+            officeIds.add(officeId);
+          }
         }
       } else if (roomType == 'Classroom') {
         if (itemOwners.isNotEmpty) {
-          offices.addAll(itemOwners);
+          for (final ownerName in itemOwners) {
+            officeTitles.add(ownerName);
+            if (itemOwnerOfficeId != null) {
+              officeIds.add(itemOwnerOfficeId);
+            }
+          }
         }
-        offices.addAll([
-          'Program Chair',
-          'SDAO',
-          'DO',
-          'Security',
-          'Physical Facilities',
-        ]);
-      } else if (roomType == 'Gym' ||
-          roomType == 'AVR' ||
-          roomType == 'Lobby' ||
-          roomType == 'Student Lounge') {
-        offices.add('General Education');
+        for (final office in standardOffices) {
+          officeTitles.add(office);
+          final officeId = await _getOfficeIdByName(office);
+          if (officeId != null) {
+            officeIds.add(officeId);
+          }
+        }
+      } else if (roomType == 'AVR' || roomType == 'Lobby' || roomType == 'Student Lounge') {
         if (itemOwners.isNotEmpty) {
-          offices.addAll(itemOwners);
+          for (final ownerName in itemOwners) {
+            officeTitles.add(ownerName);
+            if (itemOwnerOfficeId != null) {
+              officeIds.add(itemOwnerOfficeId);
+            }
+          }
         }
-        offices.addAll([
-          'Program Chair',
-          'SDAO',
-          'DO',
-          'Security',
-          'Physical Facilities',
-        ]);
+        for (final office in standardOffices) {
+          officeTitles.add(office);
+          final officeId = await _getOfficeIdByName(office);
+          if (officeId != null) {
+            officeIds.add(officeId);
+          }
+        }
+      } else if (hasItems) {
+        if (itemOwners.isNotEmpty) {
+          for (final ownerName in itemOwners) {
+            officeTitles.add(ownerName);
+            if (itemOwnerOfficeId != null) {
+              officeIds.add(itemOwnerOfficeId);
+            }
+          }
+        }
+        for (final office in standardOffices) {
+          officeTitles.add(office);
+          final officeId = await _getOfficeIdByName(office);
+          if (officeId != null) {
+            officeIds.add(officeId);
+          }
+        }
       } else {
-        offices.addAll([
-          'Program Chair',
-          'SDAO',
-          'DO',
-          'Security',
-          'Physical Facilities',
-        ]);
-      }
-
-      final officeIds = <int>[];
-      for (String office in offices) {
-        final officeData = await _getOfficeByName(office);
-        if (officeData != null) {
-          officeIds.add(officeData['office_id'] as int);
+        for (final office in standardOffices) {
+          officeTitles.add(office);
+          final officeId = await _getOfficeIdByName(office);
+          if (officeId != null) {
+            officeIds.add(officeId);
+          }
         }
       }
 
-      return ApprovalChain(offices: offices, officeIds: officeIds);
+      return ApprovalChain(offices: officeTitles, officeIds: officeIds);
     } catch (e) {
       print('Error calculating approval chain: $e');
       return ApprovalChain(offices: [], officeIds: []);
@@ -704,23 +789,31 @@ class ReservationService {
     }
   }
 
-  /// Get item owner name
-  Future<String?> getItemOwnerName(int ownerId) async {
+  Future<int?> _getOfficeIdByName(String departmentName) async {
+    final office = await _getOfficeByName(departmentName);
+    return office == null ? null : office['office_id'] as int?;
+  }
+
+  /// Get item owner record
+  Future<Map<String, dynamic>?> getItemOwner(int ownerId) async {
     try {
       final response = await _client
           .from('item_owners')
-          .select('owner_name')
+          .select('owner_name, department_affiliation')
           .eq('owner_id', ownerId)
           .maybeSingle();
 
-      if (response != null) {
-        return response['owner_name'] as String;
-      }
-      return null;
+      return response as Map<String, dynamic>?;
     } catch (e) {
       print('Error fetching item owner: $e');
       return null;
     }
+  }
+
+  /// Get only the item owner name
+  Future<String?> getItemOwnerName(int ownerId) async {
+    final owner = await getItemOwner(ownerId);
+    return owner?['owner_name'] as String?;
   }
 
   Future<bool> submitIssueReport({
@@ -774,6 +867,7 @@ class ReservationService {
   Future<List<ReservationTimelineEntry>> _buildApprovalTimeline(
       int reservationId, DateTime date) async {
     try {
+      final itemOwnerNames = await _getReservationItemOwnerNames(reservationId);
       final approvalsResponse = await _client
           .from('reservation_approvals')
           .select('office_id, status, created_at, updated_at')
@@ -818,10 +912,13 @@ class ReservationService {
             ? 'Pending'
             : _formatTimestamp(DateTime.parse(updatedAt ?? createdAt ?? DateTime.now().toIso8601String()));
 
-        final officeName = officeId == null
+        String officeName = officeId == null
             ? 'Approval Step'
             : (await _getOfficeById(officeId))?['department_name'] as String? ??
                 'Approval Step';
+        if (officeName.toLowerCase() == 'item owner' && itemOwnerNames.isNotEmpty) {
+          officeName = itemOwnerNames.join(', ');
+        }
 
         final normalizedStatus = status.toLowerCase();
         final entryStatus = normalizedStatus == 'approved' ||
@@ -979,6 +1076,20 @@ class ReservationService {
             'created_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
           });
+
+          final availableUnits = await _getAvailableItemUnits(itemId, 1);
+          for (final unit in availableUnits) {
+            await _client.from('reservation_item_units').insert({
+              'reservation_items_id': reservationItemsId,
+              'unit_id': unit['unit_id'],
+              'created_at': DateTime.now().toIso8601String(),
+              'updated_at': DateTime.now().toIso8601String(),
+            });
+            await _client.from('item_units').update({
+              'status': 'reserved',
+              'updated_at': DateTime.now().toIso8601String(),
+            }).eq('unit_id', unit['unit_id']);
+          }
 
           final currentItem = await getItemDetails(itemId);
           if (currentItem != null) {
@@ -1225,6 +1336,20 @@ class ReservationService {
           'updated_at': DateTime.now().toIso8601String(),
         });
 
+        final availableUnits = await _getAvailableItemUnits(itemId, quantity);
+        for (final unit in availableUnits) {
+          await _client.from('reservation_item_units').insert({
+            'reservation_items_id': reservationItemsId,
+            'unit_id': unit['unit_id'],
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          });
+          await _client.from('item_units').update({
+            'status': 'reserved',
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('unit_id', unit['unit_id']);
+        }
+
         // Update the item's in-use quantity
         final currentItem = await getItemDetails(itemId);
         if (currentItem != null) {
@@ -1352,6 +1477,23 @@ class ReservationService {
           final itemId = itemLink?['item_id'] as int?;
           if (itemId == null) {
             continue;
+          }
+
+          final reservationUnits = await _client
+              .from('reservation_item_units')
+              .select('unit_id')
+              .eq('reservation_items_id', reservationItemsId);
+
+          if (reservationUnits != null) {
+            for (final unit in reservationUnits as List) {
+              final unitId = unit['unit_id'] as int?;
+              if (unitId != null) {
+                await _client.from('item_units').update({
+                  'status': 'available',
+                  'updated_at': DateTime.now().toIso8601String(),
+                }).eq('unit_id', unitId);
+              }
+            }
           }
 
           final currentItem = await getItemDetails(itemId);

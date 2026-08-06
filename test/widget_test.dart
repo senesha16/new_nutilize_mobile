@@ -102,6 +102,34 @@ void main() {
     );
   });
 
+  test('sorts an approval timeline with a dynamic item owner name before Program Chair', () {
+    final ordered = ReservationService.sortApprovalEntriesForTimeline([
+      {'office_name': 'Physical Facilities', 'created_at': '2026-07-20T10:00:00Z'},
+      {'office_name': 'Maria Lerma', 'created_at': '2026-07-20T10:01:00Z'},
+      {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:02:00Z'},
+      {'office_name': 'Security', 'created_at': '2026-07-20T10:03:00Z'},
+    ]);
+
+    expect(
+      ordered.map((entry) => entry['office_name']),
+      ['Maria Lerma', 'Program Chair', 'Security', 'Physical Facilities'],
+    );
+  });
+
+  test('sorts an approval timeline for AVR with item owner before Program Chair', () {
+    final ordered = ReservationService.sortApprovalEntriesForTimeline([
+      {'office_name': 'Physical Facilities', 'created_at': '2026-07-20T10:00:00Z'},
+      {'office_name': 'Maria Lerma', 'created_at': '2026-07-20T10:01:00Z'},
+      {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:02:00Z'},
+      {'office_name': 'Security', 'created_at': '2026-07-20T10:03:00Z'},
+    ]);
+
+    expect(
+      ordered.map((entry) => entry['office_name']),
+      ['Maria Lerma', 'Program Chair', 'Security', 'Physical Facilities'],
+    );
+  });
+
   test('detects newly added or updated notifications', () {
     final previous = <NotificationRecord>[
       NotificationRecord(
