@@ -130,6 +130,26 @@ void main() {
     );
   });
 
+  test('keeps reservations visible while awaiting physical facilities approval', () {
+    final reservation = ReservationRecord(
+      reservationTitle: 'Party',
+      roomName: 'Room 101',
+      reservationType: 'Venue Reservation',
+      reservationStatus: 'Waiting for Physical Facilities Approval',
+      date: DateTime.now(),
+      reservationTime: '10:00 AM - 12:00 PM',
+      userId: 42,
+    );
+
+    expect(
+      ReservationActivityStore.isVisibleOnCalendar(
+        reservation,
+        currentUserId: 42,
+      ),
+      isTrue,
+    );
+  });
+
   test('detects newly added or updated notifications', () {
     final previous = <NotificationRecord>[
       NotificationRecord(

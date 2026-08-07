@@ -213,11 +213,15 @@ class ReservationActivityStore {
     final isApprovedLike = normalizedStatus.contains('approved') ||
         normalizedStatus.contains('completed') ||
         normalizedStatus.contains('confirmed');
+    final isInProgressLike = normalizedStatus.contains('pending') ||
+        normalizedStatus.contains('processing') ||
+        normalizedStatus.contains('submitted') ||
+        normalizedStatus.contains('waiting') ||
+        normalizedStatus.contains('review') ||
+        normalizedStatus.contains('approval');
     final isOwnPendingLike = currentUserId != null &&
         _userIdsMatch(reservation.userId, currentUserId) &&
-        (normalizedStatus.contains('pending') ||
-            normalizedStatus.contains('processing') ||
-            normalizedStatus.contains('submitted'));
+        isInProgressLike;
 
     return isApprovedLike || isOwnPendingLike;
   }
