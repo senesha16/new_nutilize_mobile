@@ -78,6 +78,13 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
   void initState() {
     super.initState();
     _reservation = widget.reservation;
+    // If developer provided a problematic reservation id, print debug approval order
+    try {
+      final rid = int.tryParse(_reservation.id ?? '');
+      if (rid != null && rid == 170) {
+        ReservationService().printDebugApprovalOrder(rid);
+      }
+    } catch (_) {}
   }
 
   Future<void> _handleDownloadPermit() async {

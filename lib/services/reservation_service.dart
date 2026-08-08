@@ -599,53 +599,78 @@ class ReservationService {
   }
 
   static List<Map<String, dynamic>> sortApprovalEntriesForTimeline(
-    List<Map<String, dynamic>> approvals,
-  ) {
-    final ordered = List<Map<String, dynamic>>.from(approvals);
-    ordered.sort((a, b) {
-      final aName = (a['office_name'] as String? ?? '').trim().toLowerCase();
-      final bName = (b['office_name'] as String? ?? '').trim().toLowerCase();
-      final aRank = _approvalWorkflowRank(aName);
-      final bRank = _approvalWorkflowRank(bName);
+    List<Map<String, dynamic>> approvals, {
+    int? itemOwnerOfficeId,
+  }) {
+    return approvals
+        .asMap()
+        .entries
+        .map((entry) {
+          final approval = Map<String, dynamic>.from(entry.value);
+          final officeId = approval['office_id'] as int?;
+          final officeName = (approval['office_name'] as String?)?.toLowerCase() ?? '';
 
-      if (aRank != bRank) {
-        return aRank.compareTo(bRank);
-      }
+          // Parse created_at if available; this reflects insertion order when
+          // approvals were created and should be the primary ordering key.
+          try {
+            final createdRaw = approval['created_at'] as String?;
+            if (createdRaw != null && createdRaw.isNotEmpty) {
+              final createdAt = DateTime.parse(createdRaw).toUtc();
+              approval['__created_at_ts'] = createdAt.millisecondsSinceEpoch;
+            } else {
+              approval['__created_at_ts'] = null;
+            }
+          } catch (_) {
+            approval['__created_at_ts'] = null;
+          }
 
-      final aTime = (a['created_at'] as String? ?? '').toLowerCase();
-      final bTime = (b['created_at'] as String? ?? '').toLowerCase();
-      return aTime.compareTo(bTime);
-    });
-    return ordered;
-  }
+          int rank;
+          if (officeName.contains('general education')) {
+            rank = -1;
+          } else if (officeId != null && itemOwnerOfficeId != null && officeId == itemOwnerOfficeId) {
+            rank = 0;
+          } else if (officeName.contains('item owner')) {
+            rank = 0;
+          } else if (officeName.contains('program chair')) {
+            rank = 1;
+          } else if (officeName.contains('sdao')) {
+            rank = 2;
+          } else if (officeName.contains('do')) {
+            rank = 3;
+          } else if (officeName.contains('security')) {
+            rank = 4;
+          } else if (officeName.contains('physical facilities')) {
+            rank = 5;
+          } else {
+            rank = 999;
+          }
 
-  static int _approvalWorkflowRank(String officeName) {
-    if (officeName.contains('general education')) {
-      return 1;
-    }
-    if (officeName.contains('item owner')) {
-      return 2;
-    }
-    if (officeName.contains('program chair')) {
-      return 3;
-    }
-    if (officeName.contains('sdao')) {
-      return 4;
-    }
-    if (officeName.contains('do')) {
-      return 5;
-    }
-    if (officeName.contains('security')) {
-      return 6;
-    }
-    if (officeName.contains('physical facilities')) {
-      return 7;
-    }
-    if (officeName.isNotEmpty) {
-      // Any dynamic owner name should be treated as an item owner approval step.
-      return 2;
-    }
-    return 8;
+          approval['__timeline_rank'] = rank;
+          approval['__original_index'] = entry.key;
+          return approval;
+        })
+        .toList()
+      ..sort((a, b) {
+        final aTs = a['__created_at_ts'] as int?;
+        final bTs = b['__created_at_ts'] as int?;
+        if (aTs != null && bTs != null) {
+          final cmp = aTs.compareTo(bTs);
+          if (cmp != 0) return cmp;
+        } else if (aTs != null) {
+          return -1;
+        } else if (bTs != null) {
+          return 1;
+        }
+
+        final rankA = a['__timeline_rank'] as int;
+        final rankB = b['__timeline_rank'] as int;
+        if (rankA != rankB) {
+          return rankA.compareTo(rankB);
+        }
+        final indexA = a['__original_index'] as int;
+        final indexB = b['__original_index'] as int;
+        return indexA.compareTo(indexB);
+      });
   }
 
   // MARK: - Approval Workflow
@@ -658,7 +683,7 @@ class ReservationService {
     try {
       final officeTitles = <String>[];
       final officeIds = <int>[];
-      final itemOwners = <String>{};
+      final itemOwners = <String>[];
 
       if (itemIds != null && itemIds.isNotEmpty) {
         for (int itemId in itemIds) {
@@ -669,8 +694,10 @@ class ReservationService {
               final affiliation =
                   (owner['department_affiliation'] as String?)?.trim().toUpperCase();
               final ownerName = owner['owner_name'] as String?;
-              if (ownerName != null && affiliation != 'PFO') {
-                itemOwners.add(ownerName);
+              if (ownerName != null && affiliation != 'PFO' && affiliation != 'PHYSICAL FACILITIES') {
+                if (!itemOwners.contains(ownerName)) {
+                  itemOwners.add(ownerName);
+                }
               }
             }
           }
@@ -687,82 +714,67 @@ class ReservationService {
       final itemOwnerOfficeId = await _getOfficeIdByName('Item Owner');
       final hasItems = itemIds != null && itemIds.isNotEmpty;
 
-      if (roomType == 'Gym') {
-        officeTitles.add('General Education');
-        final generalEducationId = await _getOfficeIdByName('General Education');
-        if (generalEducationId != null) {
-          officeIds.add(generalEducationId);
+      /// Helper to safely add an office with its ID to both lists
+      Future<void> addOfficeToChain(String officeName) async {
+        final officeId = await _getOfficeIdByName(officeName);
+        if (officeId != null) {
+          officeTitles.add(officeName);
+          officeIds.add(officeId);
+        } else {
+          // If office not found, log and skip to keep lists in sync
+          print('Warning: office not found: $officeName');
         }
-        if (itemOwners.isNotEmpty) {
+      }
+
+      /// Helper to add item owner to the chain
+      Future<void> addItemOwnersToChain() async {
+        if (itemOwners.isNotEmpty && itemOwnerOfficeId != null) {
           for (final ownerName in itemOwners) {
             officeTitles.add(ownerName);
-            if (itemOwnerOfficeId != null) {
-              officeIds.add(itemOwnerOfficeId);
-            }
+            officeIds.add(itemOwnerOfficeId);
           }
         }
-        for (final office in standardOffices) {
-          officeTitles.add(office);
-          final officeId = await _getOfficeIdByName(office);
-          if (officeId != null) {
-            officeIds.add(officeId);
-          }
+      }
+
+      if (roomType == 'Gym') {
+        // Gym: General Education → Program Chair → SDAO → DO → Security → Physical Facilities
+        await addOfficeToChain('General Education');
+        if (itemOwners.isNotEmpty) {
+          await addItemOwnersToChain();
+        }
+        await addOfficeToChain('Program Chair');
+        for (int i = 1; i < standardOffices.length; i++) {
+          await addOfficeToChain(standardOffices[i]);
         }
       } else if (roomType == 'Classroom') {
+        // Classroom: Item Owner? → Program Chair → SDAO → DO → Security → Physical Facilities
         if (itemOwners.isNotEmpty) {
-          for (final ownerName in itemOwners) {
-            officeTitles.add(ownerName);
-            if (itemOwnerOfficeId != null) {
-              officeIds.add(itemOwnerOfficeId);
-            }
-          }
+          await addItemOwnersToChain();
         }
-        for (final office in standardOffices) {
-          officeTitles.add(office);
-          final officeId = await _getOfficeIdByName(office);
-          if (officeId != null) {
-            officeIds.add(officeId);
-          }
+        await addOfficeToChain('Program Chair');
+        for (int i = 1; i < standardOffices.length; i++) {
+          await addOfficeToChain(standardOffices[i]);
         }
       } else if (roomType == 'AVR' || roomType == 'Lobby' || roomType == 'Student Lounge') {
+        // AVR/Lobby/Student Lounge: Item Owner? → Program Chair → SDAO → DO → Security → Physical Facilities
         if (itemOwners.isNotEmpty) {
-          for (final ownerName in itemOwners) {
-            officeTitles.add(ownerName);
-            if (itemOwnerOfficeId != null) {
-              officeIds.add(itemOwnerOfficeId);
-            }
-          }
+          await addItemOwnersToChain();
         }
-        for (final office in standardOffices) {
-          officeTitles.add(office);
-          final officeId = await _getOfficeIdByName(office);
-          if (officeId != null) {
-            officeIds.add(officeId);
-          }
+        await addOfficeToChain('Program Chair');
+        for (int i = 1; i < standardOffices.length; i++) {
+          await addOfficeToChain(standardOffices[i]);
         }
       } else if (hasItems) {
-        if (itemOwners.isNotEmpty) {
-          for (final ownerName in itemOwners) {
-            officeTitles.add(ownerName);
-            if (itemOwnerOfficeId != null) {
-              officeIds.add(itemOwnerOfficeId);
-            }
-          }
-        }
-        for (final office in standardOffices) {
-          officeTitles.add(office);
-          final officeId = await _getOfficeIdByName(office);
-          if (officeId != null) {
-            officeIds.add(officeId);
-          }
+        // Item only: Item Owner → Program Chair → SDAO → DO → Security → Physical Facilities
+        await addItemOwnersToChain();
+        await addOfficeToChain('Program Chair');
+        for (int i = 1; i < standardOffices.length; i++) {
+          await addOfficeToChain(standardOffices[i]);
         }
       } else {
+        // No items, default room: Program Chair → SDAO → DO → Security → Physical Facilities
         for (final office in standardOffices) {
-          officeTitles.add(office);
-          final officeId = await _getOfficeIdByName(office);
-          if (officeId != null) {
-            officeIds.add(officeId);
-          }
+          await addOfficeToChain(office);
         }
       }
 
@@ -867,31 +879,45 @@ class ReservationService {
   Future<List<ReservationTimelineEntry>> _buildApprovalTimeline(
       int reservationId, DateTime date) async {
     try {
+      // Use canonical chain to force UI order, but read DB rows for status/timestamps.
       final itemOwnerNames = await _getReservationItemOwnerNames(reservationId);
+
+      final roomType = await _getReservationRoomType(reservationId);
+      final itemIds = await _getReservationItemIds(reservationId);
+
+      final approvalChain = await calculateApprovalChain(
+        roomType: roomType ?? '',
+        itemIds: itemIds.isEmpty ? null : itemIds,
+      );
+
       final approvalsResponse = await _client
           .from('reservation_approvals')
           .select('office_id, status, created_at, updated_at')
           .eq('reservation_id', reservationId)
           .order('created_at', ascending: true);
 
-      if (approvalsResponse == null || (approvalsResponse as List).isEmpty) {
-        return [
-          ReservationTimelineEntry(
-            title: 'Request Submitted',
-            status: 'Completed',
-            date: date,
-            timestamp: _formatTimestamp(date),
-            description: 'Your reservation request was submitted successfully.',
-          ),
-          ReservationTimelineEntry(
-            title: 'Request Pending',
-            status: 'Pending',
-            date: date,
-            timestamp: 'Pending',
-            description: 'Waiting for your reservation to be reviewed.',
-          ),
-        ];
+      final rawApprovals = <Map<String, dynamic>>[];
+      if (approvalsResponse != null) {
+        for (final a in approvalsResponse as List) {
+          final row = Map<String, dynamic>.from(a as Map<String, dynamic>);
+          // Augment with office_name when possible for robust matching
+          final officeId = row['office_id'] as int?;
+          if (officeId != null) {
+            final office = await _getOfficeById(officeId);
+            row['office_name'] = office?['department_name'] as String?;
+          } else {
+            row['office_name'] = null;
+          }
+          rawApprovals.add(row);
+        }
       }
+
+      // Debug: print canonical approval chain and raw approval rows
+      try {
+        print('DEBUG: reservation $reservationId approvalChain offices: ${jsonEncode(approvalChain.offices)}');
+        print('DEBUG: reservation $reservationId approvalChain officeIds: ${jsonEncode(approvalChain.officeIds)}');
+        print('DEBUG: reservation $reservationId rawApprovals: ${jsonEncode(rawApprovals.map((r) => {'office_id': r['office_id'], 'status': r['status'], 'created_at': r['created_at'], 'updated_at': r['updated_at']}).toList())}');
+      } catch (_) {}
 
       final entries = <ReservationTimelineEntry>[];
       entries.add(ReservationTimelineEntry(
@@ -902,58 +928,140 @@ class ReservationService {
         description: 'Your reservation request was submitted successfully.',
       ));
 
-      final approvalEntries = <Map<String, dynamic>>[];
-      for (final approval in approvalsResponse as List) {
-        final officeId = approval['office_id'] as int?;
-        final status = (approval['status'] as String?)?.trim() ?? 'Pending';
-        final createdAt = approval['created_at'] as String?;
-        final updatedAt = approval['updated_at'] as String?;
-        final timestamp = status.toLowerCase() == 'pending'
-            ? 'Pending'
-            : _formatTimestamp(DateTime.parse(updatedAt ?? createdAt ?? DateTime.now().toIso8601String()));
+      final used = List<bool>.filled(rawApprovals.length, false);
+      final itemOwnerOfficeId = await _getOfficeIdByName('Item Owner');
 
-        String officeName = officeId == null
-            ? 'Approval Step'
-            : (await _getOfficeById(officeId))?['department_name'] as String? ??
-                'Approval Step';
-        if (officeName.toLowerCase() == 'item owner' && itemOwnerNames.isNotEmpty) {
-          officeName = itemOwnerNames.join(', ');
+      // First pass: attempt to match rows to canonical slots by office_id or office_name
+      final slots = <Map<String, dynamic>>[];
+      for (var i = 0; i < approvalChain.officeIds.length; i++) {
+        final expectedOfficeId = approvalChain.officeIds[i];
+        final displayName = approvalChain.offices[i];
+
+        int matchIndex = -1;
+        for (var j = 0; j < rawApprovals.length; j++) {
+          if (used[j]) continue;
+          final rowOfficeId = rawApprovals[j]['office_id'] as int?;
+          if (rowOfficeId != null && expectedOfficeId != null && rowOfficeId == expectedOfficeId) {
+            matchIndex = j;
+            break;
+          }
         }
 
-        final normalizedStatus = status.toLowerCase();
-        final entryStatus = normalizedStatus == 'approved' ||
-                normalizedStatus == 'completed' ||
-                normalizedStatus == 'accepted'
-            ? 'Approved'
-            : normalizedStatus == 'rejected' || normalizedStatus == 'denied'
-                ? 'Rejected'
-                : 'Pending';
+        // Fallback: match by office name (normalized contains) when ID matching failed
+        if (matchIndex == -1) {
+          final expectedNorm = displayName.toLowerCase().replaceAll(RegExp(r"\s+"), '');
+          for (var j = 0; j < rawApprovals.length; j++) {
+            if (used[j]) continue;
+            final rowName = (rawApprovals[j]['office_name'] as String?)?.toLowerCase();
+            if (rowName == null) continue;
+            final rowNorm = rowName.replaceAll(RegExp(r"\s+"), '');
+            if (rowNorm.contains(expectedNorm) || expectedNorm.contains(rowNorm)) {
+              matchIndex = j;
+              break;
+            }
+          }
+        }
 
-        final description = entryStatus == 'Approved'
-            ? 'Your reservation has been approved by $officeName.'
-            : entryStatus == 'Rejected'
-                ? 'Your reservation was rejected by $officeName.'
-                : 'Waiting for approval from $officeName.';
+        // Reserve if matched now
+        if (matchIndex != -1) used[matchIndex] = true;
 
-        approvalEntries.add({
-          'office_name': officeName,
-          'status': entryStatus,
-          'timestamp': timestamp,
-          'description': description,
-          'created_at': createdAt ?? updatedAt ?? DateTime.now().toIso8601String(),
+        slots.add({
+          'index': i,
+          'displayName': displayName,
+          'expectedOfficeId': expectedOfficeId,
+          'matchIndex': matchIndex,
         });
       }
 
-      final sortedApprovals = sortApprovalEntriesForTimeline(approvalEntries);
-      for (final approvalEntry in sortedApprovals) {
-        final officeName = approvalEntry['office_name'] as String;
-        final entryStatus = approvalEntry['status'] as String;
-        final timestamp = approvalEntry['timestamp'] as String;
-        final description = approvalEntry['description'] as String;
+      // Second pass: assign any remaining rows to unmatched slots using best-effort (prefer approved rows)
+      final remainingRowIndexes = <int>[];
+      for (var j = 0; j < rawApprovals.length; j++) {
+        if (!used[j]) remainingRowIndexes.add(j);
+      }
+
+      final unmatchedSlots = slots.where((s) => s['matchIndex'] == -1).toList();
+      for (final slot in unmatchedSlots) {
+        if (remainingRowIndexes.isEmpty) break;
+
+        int pick = -1;
+        // prefer an approved/completed/accepted row
+        for (var k = 0; k < remainingRowIndexes.length; k++) {
+          final ri = remainingRowIndexes[k];
+          final rs = (rawApprovals[ri]['status'] as String?)?.toLowerCase() ?? '';
+          if (rs.contains('approved') || rs.contains('completed') || rs.contains('accepted')) {
+            pick = ri;
+            remainingRowIndexes.removeAt(k);
+            break;
+          }
+        }
+
+        // otherwise pick the earliest by created_at
+        if (pick == -1) {
+          int earliestIdx = -1;
+          int? earliestTs;
+          for (var k = 0; k < remainingRowIndexes.length; k++) {
+            final ri = remainingRowIndexes[k];
+            final created = rawApprovals[ri]['created_at'] as String?;
+            int ts;
+            try {
+              ts = DateTime.parse(created ?? DateTime.now().toIso8601String()).millisecondsSinceEpoch;
+            } catch (_) {
+              ts = DateTime.now().millisecondsSinceEpoch;
+            }
+            if (earliestTs == null || ts < earliestTs) {
+              earliestTs = ts;
+              earliestIdx = k;
+            }
+          }
+          if (earliestIdx != -1) {
+            pick = remainingRowIndexes.removeAt(earliestIdx);
+          }
+        }
+
+        if (pick != -1) {
+          // Mark used and set matchIndex on slot
+          used[pick] = true;
+          slot['matchIndex'] = pick;
+          try {
+            print('DEBUG: reservation $reservationId second-pass assigned row $pick to slot ${slot['index']} (${slot['displayName']})');
+          } catch (_) {}
+        }
+      }
+
+      // Now build entries preserving slot order
+      for (final slot in slots) {
+        final displayName = slot['displayName'] as String;
+        final matchIndex = slot['matchIndex'] as int;
+
+        String status = 'Pending';
+        String timestamp = 'Pending';
+        String description = 'Waiting for approval from $displayName.';
+
+        if (matchIndex != -1) {
+          final row = rawApprovals[matchIndex];
+          final rowStatus = (row['status'] as String?)?.trim().toLowerCase() ?? 'pending';
+          final createdAt = row['created_at'] as String?;
+          final updatedAt = row['updated_at'] as String?;
+          status = rowStatus == 'approved' || rowStatus == 'completed' || rowStatus == 'accepted'
+              ? 'Approved'
+              : rowStatus == 'rejected' || rowStatus == 'denied'
+                  ? 'Rejected'
+                  : 'Pending';
+          if (status == 'Pending') {
+            timestamp = 'Pending';
+          } else {
+            timestamp = _formatTimestamp(DateTime.parse(updatedAt ?? createdAt ?? DateTime.now().toIso8601String()));
+          }
+          description = status == 'Approved'
+              ? 'Your reservation has been approved by $displayName.'
+              : status == 'Rejected'
+                  ? 'Your reservation was rejected by $displayName.'
+                  : 'Waiting for approval from $displayName.';
+        }
 
         entries.add(ReservationTimelineEntry(
-          title: officeName,
-          status: entryStatus,
+          title: displayName,
+          status: status,
           date: date,
           timestamp: timestamp,
           description: description,
@@ -980,6 +1088,112 @@ class ReservationService {
         ),
       ];
     }
+  }
+
+  /// Debug helper: print raw and sorted approval entries for a reservation.
+  Future<void> printDebugApprovalOrder(int reservationId) async {
+    try {
+      final itemOwnerNames = await _getReservationItemOwnerNames(reservationId);
+      final approvalsResponse = await _client
+          .from('reservation_approvals')
+          .select('office_id, status, created_at, updated_at')
+          .eq('reservation_id', reservationId)
+          .order('created_at', ascending: true);
+
+      if (approvalsResponse == null) {
+        print('DEBUG: reservation $reservationId no approvals found');
+        return;
+      }
+
+      final approvalEntries = <Map<String, dynamic>>[];
+      for (final approval in approvalsResponse as List) {
+        final officeId = approval['office_id'] as int?;
+        String officeName = officeId == null
+            ? 'Approval Step'
+            : (await _getOfficeById(officeId))?['department_name'] as String? ?? 'Approval Step';
+        if (officeName.toLowerCase() == 'item owner' && itemOwnerNames.isNotEmpty) {
+          officeName = itemOwnerNames.join(', ');
+        }
+        approvalEntries.add({
+          'office_name': officeName,
+          'status': approval['status'],
+          'created_at': approval['created_at'],
+          'office_id': officeId,
+        });
+      }
+
+      print('DEBUG: reservation $reservationId raw approvals: ${approvalEntries.map((e) => e['office_name']).toList()}');
+
+      final ordered = sortApprovalEntriesForTimeline(
+        approvalEntries,
+        itemOwnerOfficeId: await _getOfficeIdByName('Item Owner'),
+      );
+
+      print('DEBUG: reservation $reservationId ordered approvals: ${ordered.map((e) => e['office_name']).toList()}');
+    } catch (e) {
+      print('DEBUG: error printing approval order for $reservationId: $e');
+    }
+  }
+
+  Future<String?> _getReservationRoomType(int reservationId) async {
+    try {
+      final detailResponse = await _client
+          .from('reservation_details')
+          .select('reservation_rooms_id')
+          .eq('reservation_id', reservationId)
+          .limit(1)
+          .maybeSingle();
+
+      final roomReservationId = detailResponse?['reservation_rooms_id'] as int?;
+      if (roomReservationId == null) return null;
+
+      final roomReservation = await _client
+          .from('reservation_rooms')
+          .select('room_id')
+          .eq('reservation_rooms_id', roomReservationId)
+          .limit(1)
+          .maybeSingle();
+      final roomId = roomReservation?['room_id'] as int?;
+      if (roomId == null) return null;
+
+      final room = await _client
+          .from('rooms')
+          .select('room_type')
+          .eq('room_id', roomId)
+          .limit(1)
+          .maybeSingle();
+
+      return room?['room_type'] as String?;
+    } catch (e) {
+      print('Error fetching reservation room type: $e');
+      return null;
+    }
+  }
+
+  Future<List<int>> _getReservationItemIds(int reservationId) async {
+    final ids = <int>[];
+    try {
+      final details = await _client
+          .from('reservation_details')
+          .select('reservation_items_id')
+          .eq('reservation_id', reservationId);
+      if (details == null) return ids;
+      for (final det in details as List) {
+        final reservationItemsId = det['reservation_items_id'] as int?;
+        if (reservationItemsId == null) continue;
+
+        final itemLink = await _client
+            .from('reservation_items')
+            .select('item_id')
+            .eq('reservation_items_id', reservationItemsId)
+            .maybeSingle();
+        final itemId = itemLink?['item_id'] as int?;
+        if (itemId != null) ids.add(itemId);
+      }
+    } catch (e) {
+      print('Error fetching reservation item ids: $e');
+    }
+    return ids;
   }
 
   // MARK: - Reservation Creation

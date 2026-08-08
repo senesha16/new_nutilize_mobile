@@ -102,17 +102,17 @@ void main() {
     );
   });
 
-  test('sorts an approval timeline with a dynamic item owner name before Program Chair', () {
+  test('preserves the original approval order for the timeline UI', () {
     final ordered = ReservationService.sortApprovalEntriesForTimeline([
-      {'office_name': 'Physical Facilities', 'created_at': '2026-07-20T10:00:00Z'},
+      {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:00:00Z'},
       {'office_name': 'Maria Lerma', 'created_at': '2026-07-20T10:01:00Z'},
-      {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:02:00Z'},
-      {'office_name': 'Security', 'created_at': '2026-07-20T10:03:00Z'},
+      {'office_name': 'SDAO', 'created_at': '2026-07-20T10:02:00Z'},
+      {'office_name': 'Physical Facilities', 'created_at': '2026-07-20T10:03:00Z'},
     ]);
 
     expect(
       ordered.map((entry) => entry['office_name']),
-      ['Maria Lerma', 'Program Chair', 'Security', 'Physical Facilities'],
+      ['Program Chair', 'Maria Lerma', 'SDAO', 'Physical Facilities'],
     );
   });
 
