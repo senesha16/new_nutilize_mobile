@@ -833,25 +833,54 @@ class ReservationService {
     required String description,
     String? imageName,
     String? imageBase64,
+    List<String>? reportedItems,
   }) async {
     try {
+      // Prefer the active Supabase authenticated session values where possible
+      final sessionUser = _client.auth.currentUser;
+      final sessionEmail = sessionUser?.email;
+      final sessionUid = sessionUser?.id;
+
       final userId = AuthService.currentUser?['user_id'] as int?;
-      final userEmail = AuthService.currentUser?['email'] as String?;
 
       final payload = <String, dynamic>{
         'reservation_id': reservationId,
-        'user_id': userId,
-        'reported_by': userEmail ?? 'unknown',
         'description': description,
         'status': 'Pending',
         'created_at': DateTime.now().toIso8601String(),
       };
+
+      // Attach auth identifiers to satisfy common RLS policies
+      if (sessionEmail != null && sessionEmail.isNotEmpty) {
+        payload['reported_by'] = sessionEmail;
+      }
+      if (sessionUid != null && sessionUid.isNotEmpty) {
+        payload['auth_user_id'] = sessionUid;
+      }
+      // Preserve numeric user_id if we have it (legacy users table)
+      if (userId != null) {
+        payload['user_id'] = userId;
+      }
 
       if (imageName != null && imageName.isNotEmpty) {
         payload['image_name'] = imageName;
       }
       if (imageBase64 != null && imageBase64.isNotEmpty) {
         payload['image_base64'] = imageBase64;
+      }
+      if (reportedItems != null && reportedItems.isNotEmpty) {
+        // Only include the reported_items column if it exists in the DB schema.
+        try {
+          final hasColumn = await _tableHasColumn('reservation_issues', 'reported_items');
+          if (hasColumn) {
+            payload['reported_items'] = reportedItems;
+          } else {
+            // Fallback: append a short list of reported items to the description
+            payload['description'] = '$description\n\nReported items: ${reportedItems.join(', ')}';
+          }
+        } catch (_) {
+          payload['description'] = '$description\n\nReported items: ${reportedItems.join(', ')}';
+        }
       }
 
       final response = await _client.from('reservation_issues').insert(payload).select().maybeSingle();
@@ -873,6 +902,22 @@ class ReservationService {
     } catch (e) {
       print('Error fetching office by id: $e');
       return null;
+    }
+  }
+
+  /// Check whether a table has a specific column in the information_schema
+  Future<bool> _tableHasColumn(String tableName, String columnName) async {
+    try {
+      final response = await _client
+          .from('information_schema.columns')
+          .select('column_name')
+          .eq('table_name', tableName)
+          .eq('column_name', columnName)
+          .maybeSingle();
+      return response != null;
+    } catch (e) {
+      print('Error checking table column: $e');
+      return false;
     }
   }
 

@@ -32,6 +32,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   bool _hasSeenInitialNotifications = false;
   List<NotificationRecord> _lastNotifications = [];
   String? _lastShownNotificationId;
+  RealtimeChannel? _approvalsChannel;
+  RealtimeChannel? _reservationsChannel;
 
   @override
   void initState() {
@@ -42,6 +44,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     );
     _currentIndex = widget.initialIndex;
     _scheduleRefresh();
+    _initRealtimeSubscriptions();
     unawaited(_refreshReservations());
   }
 
@@ -49,6 +52,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
+    _approvalsChannel?.unsubscribe();
+    _reservationsChannel?.unsubscribe();
     NotificationActivityStore.listenable.removeListener(
       _handleNotificationStoreChange,
     );
@@ -101,6 +106,30 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     } finally {
       _isRefreshing = false;
     }
+  }
+
+  void _initRealtimeSubscriptions() {
+    final client = Supabase.instance.client;
+
+    _approvalsChannel = client.channel('public:reservation_approvals');
+    _approvalsChannel?.on(
+      RealtimeListenTypes.postgresChanges,
+      ChannelFilter(event: '*', schema: 'public', table: 'reservation_approvals'),
+      (payload, [_]) {
+        unawaited(_refreshReservations());
+      },
+    );
+    _approvalsChannel?.subscribe();
+
+    _reservationsChannel = client.channel('public:reservations');
+    _reservationsChannel?.on(
+      RealtimeListenTypes.postgresChanges,
+      ChannelFilter(event: '*', schema: 'public', table: 'reservations'),
+      (payload, [_]) {
+        unawaited(_refreshReservations());
+      },
+    );
+    _reservationsChannel?.subscribe();
   }
 
   void _handleNotificationStoreChange() {

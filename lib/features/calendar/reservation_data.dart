@@ -309,6 +309,29 @@ List<ReservationRecord> collectReservations(DateTime now) {
   return combined;
 }
 
+List<ReservationRecord> collectAllReservations(DateTime now) {
+  final combined = <ReservationRecord>[];
+  final seenIds = <String>{};
+  final currentUserId = AuthService.currentUser?['user_id'] as int?;
+
+  for (final reservation in [
+    ...ReservationActivityStore.reservations,
+    ...ReservationRepository.sample(now).reservations,
+  ]) {
+    if (currentUserId != null &&
+        !ReservationActivityStore._userIdsMatch(reservation.userId, currentUserId)) {
+      continue;
+    }
+
+    if (seenIds.add(reservation.stableId)) {
+      combined.add(reservation);
+    }
+  }
+
+  combined.sort((a, b) => b.date.compareTo(a.date));
+  return combined;
+}
+
 List<ReservationRecord> recentReservations(DateTime now, {int limit = 3}) {
   final allReservations = collectReservations(now);
 

@@ -85,6 +85,29 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
         ReservationService().printDebugApprovalOrder(rid);
       }
     } catch (_) {}
+    ReservationActivityStore.listenable.addListener(_syncReservationFromStore);
+  }
+
+  @override
+  void dispose() {
+    ReservationActivityStore.listenable.removeListener(_syncReservationFromStore);
+    super.dispose();
+  }
+
+  void _syncReservationFromStore() {
+    final updated = ReservationActivityStore.listenable.value;
+    if (_reservation.id == null) {
+      return;
+    }
+    final fresh = updated.firstWhere(
+      (record) => record.id == _reservation.id,
+      orElse: () => _reservation,
+    );
+    if (fresh != _reservation) {
+      setState(() {
+        _reservation = fresh;
+      });
+    }
   }
 
   Future<void> _handleDownloadPermit() async {
@@ -109,7 +132,7 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
   Future<void> _handleReportIssue() async {
     final draft = await _showReservationDialog<_ReportIssueDraft>(
       context,
-      (dialogContext) => const _ReportIssueDialog(),
+      (dialogContext) => _ReportIssueDialog(reservedItems: _reservation.reservedItems),
     );
 
     if (!mounted || draft == null) {
@@ -151,6 +174,7 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       description: draft.description,
       imageName: draft.imageName,
       imageBase64: imageBase64,
+      reportedItems: draft.reportedItems,
     );
 
     if (!success) {
@@ -541,7 +565,9 @@ class _PermitSuccessDialog extends StatelessWidget {
 }
 
 class _ReportIssueDialog extends StatefulWidget {
-  const _ReportIssueDialog();
+  const _ReportIssueDialog({required this.reservedItems});
+
+  final List<String> reservedItems;
 
   @override
   State<_ReportIssueDialog> createState() => _ReportIssueDialogState();
@@ -553,6 +579,7 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
   Uint8List? _imageBytes;
   String? _imageName;
   bool _isPickingImage = false;
+  final Set<String> _selectedItems = <String>{};
 
   @override
   void dispose() {
@@ -635,6 +662,7 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
         description: _descriptionController.text.trim(),
         imageBytes: _imageBytes,
         imageName: _imageName,
+        reportedItems: _selectedItems.toList(),
       ),
     );
   }
@@ -663,6 +691,45 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
                 ),
               ),
               const SizedBox(height: 14),
+              if (widget.reservedItems.isNotEmpty) ...[
+                Text(
+                  'Select borrowed items',
+                  style: TextStyle(
+                    color: onSurface,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F5FB),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: widget.reservedItems.map((it) {
+                      return CheckboxListTile(
+                        title: Text(it, style: TextStyle(color: onSurface)),
+                        value: _selectedItems.contains(it),
+                        onChanged: (v) {
+                          setState(() {
+                            if (v == true) {
+                              _selectedItems.add(it);
+                            } else {
+                              _selectedItems.remove(it);
+                            }
+                          });
+                        },
+                        controlAffinity: ListTileControlAffinity.leading,
+                        dense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                      );
+                    }).toList(),
+                  ),
+                ),
+                const SizedBox(height: 14),
+              ],
               Text(
                 'Upload Image',
                 style: TextStyle(
@@ -809,11 +876,13 @@ class _ReportIssueDraft {
     required this.description,
     required this.imageBytes,
     required this.imageName,
+    this.reportedItems = const [],
   });
 
   final String description;
   final Uint8List? imageBytes;
   final String? imageName;
+  final List<String> reportedItems;
 }
 
 class _ReportConfirmationDialog extends StatefulWidget {

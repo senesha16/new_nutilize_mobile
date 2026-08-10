@@ -26,10 +26,12 @@ class _ReservationHistoryPageState extends State<ReservationHistoryPage> {
   /// Map database status to filter button status
   String _mapStatusToFilter(String dbStatus) {
     final status = dbStatus.toLowerCase();
-    if (status.contains('pending') || status.contains('waiting')) {
-      return 'Pending';
+    if (status.contains('returned')) {
+      return 'Returned';
     } else if (status.contains('completed')) {
       return 'Completed';
+    } else if (status.contains('pending') || status.contains('waiting')) {
+      return 'Pending';
     } else if (status.contains('approved')) {
       return 'Approved';
     } else if (status.contains('rejected') || status.contains('denied')) {
@@ -71,7 +73,7 @@ class _ReservationHistoryPageState extends State<ReservationHistoryPage> {
       animation: ReservationActivityStore.listenable,
       builder: (context, _) {
         final query = _searchController.text.trim().toLowerCase();
-        final sourceReservations = collectReservations(DateTime.now());
+        final sourceReservations = collectAllReservations(DateTime.now());
         final filtered = sourceReservations.where((reservation) {
           final matchesQuery =
               query.isEmpty ||
@@ -122,47 +124,59 @@ class _ReservationHistoryPageState extends State<ReservationHistoryPage> {
                         ),
                       ),
                       const SizedBox(height: 14),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: Row(
-                          children:
-                              [
-                                'All',
-                                'Pending',
-                                'Approved',
-                                'Completed',
-                                'Cancelled',
-                              ].map((status) {
-                                final selected = status == _selectedStatus;
-                                return Padding(
-                                  padding: const EdgeInsets.only(right: 8),
-                                  child: ChoiceChip(
-                                    label: Text(status),
-                                    selected: selected,
-                                    showCheckmark: false,
-                                    selectedColor: const Color(0xFF35489A),
-                                    backgroundColor: Colors.white,
-                                    labelStyle: TextStyle(
-                                      color: selected
-                                          ? Colors.white
-                                          : const Color(0xFF464D6A),
-                                      fontWeight: FontWeight.w700,
-                                      fontSize: 12,
-                                    ),
-                                    side: BorderSide(
-                                      color: selected
-                                          ? const Color(0xFF35489A)
-                                          : const Color(0xFFD9DCE8),
-                                    ),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                    onSelected: (_) {
-                                      setState(() => _selectedStatus = status);
-                                    },
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 8,
+                          horizontal: 12,
+                        ),
+                        decoration: _cardDecoration(),
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Row(
+                            children: [
+                              'All',
+                              'Pending',
+                              'Approved',
+                              'Completed',
+                              'Cancelled',
+                              'Returned',
+                            ].map((status) {
+                              final selected = status == _selectedStatus;
+                              return Padding(
+                                padding: const EdgeInsets.only(right: 10),
+                                child: ChoiceChip(
+                                  label: Text(status),
+                                  selected: selected,
+                                  showCheckmark: false,
+                                  selectedColor: const Color(0xFF35489A),
+                                  backgroundColor: Colors.white,
+                                  labelPadding: const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 10,
                                   ),
-                                );
-                              }).toList(),
+                                  labelStyle: TextStyle(
+                                    color: selected
+                                        ? Colors.white
+                                        : const Color(0xFF464D6A),
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 12,
+                                  ),
+                                  side: BorderSide(
+                                    color: selected
+                                        ? const Color(0xFF35489A)
+                                        : const Color(0xFFD9DCE8),
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
+                                  onSelected: (_) {
+                                    setState(() => _selectedStatus = status);
+                                  },
+                                ),
+                              );
+                            }).toList(),
+                          ),
                         ),
                       ),
                       const SizedBox(height: 14),
