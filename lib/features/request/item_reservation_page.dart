@@ -41,9 +41,42 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
     super.dispose();
   }
 
+  DateTime? _getRequestStart() {
+    if (_selectedDate == null || _selectedStartTime == null || _selectedEndTime == null) {
+      return null;
+    }
+    return DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _selectedStartTime!.hour,
+      _selectedStartTime!.minute,
+    );
+  }
+
+  DateTime? _getRequestEnd() {
+    if (_selectedDate == null || _selectedStartTime == null || _selectedEndTime == null) {
+      return null;
+    }
+    return DateTime(
+      _selectedDate!.year,
+      _selectedDate!.month,
+      _selectedDate!.day,
+      _selectedEndTime!.hour,
+      _selectedEndTime!.minute,
+    );
+  }
+
   Future<void> _loadItems() async {
     setState(() => _isLoadingItems = true);
-    final items = await _reservationService.getAllItems();
+
+    final requestStart = _getRequestStart();
+    final requestEnd = _getRequestEnd();
+
+    final items = await _reservationService.getAllItems(
+      requestStart: requestStart,
+      requestEnd: requestEnd,
+    );
     if (mounted) {
       setState(() {
         _allItems = items;
@@ -120,6 +153,7 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
 
     if (picked != null) {
       setState(() => _selectedDate = picked);
+      await _loadItems();
     }
   }
 
@@ -152,6 +186,7 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
           _selectedEndTime = picked;
         }
       });
+      await _loadItems();
     }
   }
 
@@ -282,6 +317,31 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
     );
 
     try {
+      final requestStart = _getRequestStart();
+      final requestEnd = _getRequestEnd();
+
+      // Client-side availability check to avoid server rejection
+      final insufficient = <String>[];
+      for (final entry in _selectedItemQuantities.entries) {
+        final itemId = entry.key;
+        final requested = entry.value;
+        final details = await _reservationService.getItemDetails(
+          itemId,
+          requestStart: requestStart,
+          requestEnd: requestEnd,
+        );
+        final available = details?.availableQuantity ?? 0;
+        final localMatch = _allItems.where((i) => i.itemId == itemId).toList();
+        final name = details?.itemName ?? (localMatch.isNotEmpty ? localMatch.first.itemName : 'Item $itemId');
+        if (requested > available) {
+          insufficient.add('$name: requested $requested, available $available');
+        }
+      }
+      if (insufficient.isNotEmpty) {
+        _showError('Insufficient availability:\n${insufficient.join('\n')}');
+        return;
+      }
+
       // Create item reservation in database
       final reservationId = await _reservationService.createItemReservation(
         activityName: _activityController.text.trim(),
@@ -291,6 +351,8 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
         endTime: endDateTime,
         itemQuantities: _selectedItemQuantities,
         proofOfConsentUrl: _proofOfConsentUrl,
+        requestStart: requestStart,
+        requestEnd: requestEnd,
       );
 
       if (reservationId != null) {
@@ -298,6 +360,8 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) Navigator.of(context).pop();
         });
+      } else {
+        _showError('Reservation failed: no confirmation from server');
       }
     } catch (e) {
       _showError('Error submitting reservation: $e');
@@ -492,7 +556,7 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
             itemBuilder: (context, index) {
               final item = _allItems[index];
               final selectedQty = _selectedItemQuantities[item.itemId] ?? 0;
-              final remaining = item.quantityTotal - item.quantityInUse;
+              final remaining = item.availableQuantity;
 
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),

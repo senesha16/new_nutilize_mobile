@@ -55,7 +55,7 @@ class ItemModel {
   final bool maintenanceStatus;
   final bool availabilityStatus;
 
-  int get availableQuantity => quantityTotal - quantityInUse;
+  int get availableQuantity => (quantityTotal - quantityInUse).clamp(0, quantityTotal);
 
   ItemModel({
     required this.itemId,
@@ -103,6 +103,25 @@ class ApprovalChain {
   final List<int> officeIds;
 
   ApprovalChain({required this.offices, required this.officeIds});
+}
+
+bool _isUnitAvailableStatus(String? status) {
+  final normalized = (status ?? '').trim().toLowerCase();
+  return normalized == 'available' || normalized == 'free' || normalized == 'ready' || normalized == 'active' || normalized == 'new' || normalized == 'in_stock' || normalized == 'instock';
+}
+
+bool _isCancelledReservationStatus(String? status) {
+  final normalized = (status ?? '').trim().toLowerCase();
+  return normalized == 'cancelled' || normalized == 'canceled' || normalized == 'rejected' || normalized == 'denied' || normalized == 'returned' || normalized == 'void' || normalized == 'completed' || normalized == 'complete';
+}
+
+bool _reservationOverlapsWindow({
+  required DateTime reservationStart,
+  required DateTime reservationEnd,
+  required DateTime requestStart,
+  required DateTime requestEnd,
+}) {
+  return reservationStart.isBefore(requestEnd) && reservationEnd.isAfter(requestStart);
 }
 
 // MARK: - ReservationService
@@ -314,18 +333,183 @@ class ReservationService {
 
   // MARK: - Item Operations
 
+  Future<Map<int, Set<int>>> _getUnavailableUnitIdsForItems(
+    List<int> itemIds, {
+    DateTime? requestStart,
+    DateTime? requestEnd,
+  }) async {
+    final unavailableByItem = <int, Set<int>>{};
+    if (itemIds.isEmpty) return unavailableByItem;
+
+    final targetStart = requestStart ?? DateTime.now();
+    final targetEnd = requestEnd ?? targetStart.add(const Duration(hours: 1));
+
+    try {
+      final reservationItemsResponse = await _client
+          .from('reservation_items')
+          .select('reservation_items_id, item_id')
+          .in_('item_id', itemIds);
+
+      if (reservationItemsResponse == null) return unavailableByItem;
+
+      final reservationItems = (reservationItemsResponse as List).cast<Map<String, dynamic>>();
+      if (reservationItems.isEmpty) return unavailableByItem;
+
+      final reservationItemsIdToItemId = <int, int>{};
+      final reservationItemsIds = <int>[];
+      for (final row in reservationItems) {
+        final reservationItemsId = row['reservation_items_id'] as int?;
+        final itemId = row['item_id'] as int?;
+        if (reservationItemsId == null || itemId == null) continue;
+        reservationItemsIdToItemId[reservationItemsId] = itemId;
+        reservationItemsIds.add(reservationItemsId);
+      }
+
+      if (reservationItemsIds.isEmpty) return unavailableByItem;
+
+      final reservationDetailsResponse = await _client
+          .from('reservation_details')
+          .select('reservation_id, reservation_items_id')
+          .in_('reservation_items_id', reservationItemsIds);
+
+      if (reservationDetailsResponse == null) return unavailableByItem;
+
+      final reservationDetails = (reservationDetailsResponse as List).cast<Map<String, dynamic>>();
+      final reservationIds = <int>[];
+      final reservationIdToReservationItemsIds = <int, List<int>>{};
+
+      for (final row in reservationDetails) {
+        final reservationId = row['reservation_id'] as int?;
+        final reservationItemsId = row['reservation_items_id'] as int?;
+        if (reservationId == null || reservationItemsId == null) continue;
+        reservationIdToReservationItemsIds.putIfAbsent(reservationId, () => <int>[]).add(reservationItemsId);
+        reservationIds.add(reservationId);
+      }
+
+      if (reservationIds.isEmpty) return unavailableByItem;
+
+      final reservationsResponse = await _client
+          .from('reservations')
+          .select('reservation_id, overall_status, Date_of_Activity, Start_of_activity, End_of_Activity')
+          .in_('reservation_id', reservationIds);
+
+      if (reservationsResponse == null) return unavailableByItem;
+
+      final reservations = (reservationsResponse as List).cast<Map<String, dynamic>>();
+      final activeReservationItemIds = <int>{};
+      for (final row in reservations) {
+        final reservationId = row['reservation_id'] as int?;
+        final status = row['overall_status'] as String?;
+        if (reservationId == null || _isCancelledReservationStatus(status)) continue;
+
+        final reservationStartRaw = row['Start_of_activity'] as String?;
+        final reservationEndRaw = row['End_of_Activity'] as String?;
+        if (reservationStartRaw == null || reservationEndRaw == null) continue;
+
+        try {
+          final reservationStart = DateTime.parse(reservationStartRaw);
+          final reservationEnd = DateTime.parse(reservationEndRaw);
+          if (!_reservationOverlapsWindow(
+            reservationStart: reservationStart,
+            reservationEnd: reservationEnd,
+            requestStart: targetStart,
+            requestEnd: targetEnd,
+          )) {
+            continue;
+          }
+        } catch (_) {
+          continue;
+        }
+
+        for (final reservationItemsId in reservationIdToReservationItemsIds[reservationId] ?? const <int>[]) {
+          activeReservationItemIds.add(reservationItemsId);
+        }
+      }
+
+      if (activeReservationItemIds.isEmpty) return unavailableByItem;
+
+      final reservationUnitsResponse = await _client
+          .from('reservation_item_units')
+          .select('reservation_items_id, unit_id')
+          .in_('reservation_items_id', activeReservationItemIds.toList());
+
+      if (reservationUnitsResponse == null) return unavailableByItem;
+
+      for (final row in (reservationUnitsResponse as List).cast<Map<String, dynamic>>()) {
+        final reservationItemsId = row['reservation_items_id'] as int?;
+        final unitId = row['unit_id'] as int?;
+        final itemId = reservationItemsIdToItemId[reservationItemsId];
+        if (unitId == null || itemId == null) continue;
+        unavailableByItem.putIfAbsent(itemId, () => <int>{}).add(unitId);
+      }
+    } catch (e) {
+      print('Error resolving unavailable item units: $e');
+    }
+
+    return unavailableByItem;
+  }
+
   /// Fetch all available items from the database
-  Future<List<ItemModel>> getAllItems() async {
+  Future<List<ItemModel>> getAllItems({
+    DateTime? requestStart,
+    DateTime? requestEnd,
+  }) async {
     try {
       final response = await _client
           .from('items')
-          .select('*, item_owners(owner_name)')
-          .eq('maintenance_status', false)
-          .eq('availability_status', true);
+          .select('*, item_owners(owner_name)');
 
-      return (response as List)
-          .map((item) => ItemModel.fromJson(item as Map<String, dynamic>))
-          .toList();
+      if (response == null) return [];
+
+      final itemsList = (response as List).cast<Map<String, dynamic>>();
+
+      // Collect item ids then fetch units in bulk to compute totals and available counts.
+      final itemIds = itemsList.map((m) => m['item_id'] as int).toList();
+      final unitsResp = await _client
+          .from('item_units')
+          .select('unit_id, item_id, status')
+          .in_('item_id', itemIds);
+
+      final units = (unitsResp as List?)?.cast<Map<String, dynamic>>() ?? [];
+      final unavailableByItem = await _getUnavailableUnitIdsForItems(
+        itemIds,
+        requestStart: requestStart,
+        requestEnd: requestEnd,
+      );
+
+      final unitsByItem = <int, List<Map<String, dynamic>>>{};
+      for (final u in units) {
+        final iid = u['item_id'] as int?;
+        if (iid == null) continue;
+        unitsByItem.putIfAbsent(iid, () => <Map<String, dynamic>>[]).add(u);
+      }
+
+      return itemsList.map((item) {
+        final id = item['item_id'] as int;
+        final itemUnits = unitsByItem[id] ?? const <Map<String, dynamic>>[];
+        final total = itemUnits.isNotEmpty ? itemUnits.length : (item['quantity_total'] as int? ?? 0);
+        final unavailableUnitIds = unavailableByItem[id] ?? const <int>{};
+        final available = itemUnits.where((u) {
+          final unitId = u['unit_id'] as int?;
+          if (unitId != null && unavailableUnitIds.contains(unitId)) {
+            return false;
+          }
+          return _isUnitAvailableStatus(u['status'] as String?);
+        }).length;
+        final clampedAvailable = available.clamp(0, total);
+        final inUse = (total - clampedAvailable).clamp(0, total);
+
+        return ItemModel(
+          itemId: id,
+          itemName: item['item_name'] as String? ?? 'Unknown',
+          quantityTotal: total,
+          quantityInUse: inUse,
+          ownerId: item['owner_id'] as int?,
+          ownerName: item['item_owners']?['owner_name'] as String?,
+          maintenanceStatus: item['maintenance_status'] as bool? ?? false,
+          availabilityStatus: item['availability_status'] as bool? ?? true,
+        );
+      }).toList();
     } catch (e) {
       print('Error fetching items: $e');
       return [];
@@ -333,7 +517,11 @@ class ReservationService {
   }
 
   /// Get item details including current usage
-  Future<ItemModel?> getItemDetails(int itemId) async {
+  Future<ItemModel?> getItemDetails(
+    int itemId, {
+    DateTime? requestStart,
+    DateTime? requestEnd,
+  }) async {
     try {
       final response = await _client
           .from('items')
@@ -341,27 +529,168 @@ class ReservationService {
           .eq('item_id', itemId)
           .single();
 
-      return ItemModel.fromJson(response as Map<String, dynamic>);
+      if (response == null) return null;
+
+      final item = Map<String, dynamic>.from(response as Map);
+
+      final unitsResp = await _client
+          .from('item_units')
+          .select('unit_id, status')
+          .eq('item_id', itemId);
+
+      final units = (unitsResp as List?)?.cast<Map<String, dynamic>>() ?? [];
+      final unavailableUnitIds = await _getUnavailableUnitIdsForItems(
+        [itemId],
+        requestStart: requestStart,
+        requestEnd: requestEnd,
+      );
+      final total = units.length;
+      final available = units.where((u) {
+        final unitId = u['unit_id'] as int?;
+        if (unitId != null && (unavailableUnitIds[itemId] ?? const <int>{}).contains(unitId)) {
+          return false;
+        }
+        return _isUnitAvailableStatus(u['status'] as String?);
+      }).length;
+      final clampedAvailable = available.clamp(0, total);
+      final inUse = (total - clampedAvailable).clamp(0, total);
+
+      // Debug: if availability is unexpectedly zero, print unit details to help diagnose
+      if (available == 0) {
+        try {
+          print('Debug getItemDetails - item_id=$itemId total=$total available=$available units=');
+          for (final u in units) {
+            print('  unit: unit_id=${u['unit_id']}, unit_code=${u['unit_code'] ?? 'N/A'}, status=${u['status'] ?? 'N/A'}');
+          }
+        } catch (_) {}
+      }
+
+      return ItemModel(
+        itemId: item['item_id'] as int,
+        itemName: item['item_name'] as String? ?? 'Unknown',
+        quantityTotal: total,
+        quantityInUse: inUse,
+        ownerId: item['owner_id'] as int?,
+        ownerName: item['item_owners']?['owner_name'] as String?,
+        maintenanceStatus: item['maintenance_status'] as bool? ?? false,
+        availabilityStatus: item['availability_status'] as bool? ?? true,
+      );
     } catch (e) {
       print('Error fetching item details: $e');
       return null;
     }
   }
 
-  Future<List<Map<String, dynamic>>> _getAvailableItemUnits(int itemId, int quantity) async {
+  Future<List<Map<String, dynamic>>> _getAvailableItemUnits(
+    int itemId,
+    int quantity, {
+    DateTime? requestStart,
+    DateTime? requestEnd,
+  }) async {
     try {
       final response = await _client
           .from('item_units')
-          .select('unit_id, unit_code')
+          .select('unit_id, unit_code, status')
           .eq('item_id', itemId)
-          .eq('status', 'available')
-          .order('unit_id', ascending: true)
-          .limit(quantity);
+          .order('unit_id', ascending: true);
 
-      return (response as List).cast<Map<String, dynamic>>();
+      if (response == null) return [];
+
+      final units = (response as List).cast<Map<String, dynamic>>();
+      final unavailableUnitIds = await _getUnavailableUnitIdsForItems(
+        [itemId],
+        requestStart: requestStart,
+        requestEnd: requestEnd,
+      );
+
+      return units.where((unit) {
+        final unitId = unit['unit_id'] as int?;
+        if (unitId != null && (unavailableUnitIds[itemId] ?? const <int>{}).contains(unitId)) {
+          return false;
+        }
+        return _isUnitAvailableStatus(unit['status'] as String?);
+      }).take(quantity).toList();
     } catch (e) {
       print('Error fetching available item units: $e');
       return [];
+    }
+  }
+
+  Future<void> _reserveItemUnitsForReservation({
+    required int reservationItemsId,
+    required int itemId,
+    required int quantity,
+    DateTime? requestStart,
+    DateTime? requestEnd,
+  }) async {
+    final availableUnits = await _getAvailableItemUnits(
+      itemId,
+      quantity,
+      requestStart: requestStart,
+      requestEnd: requestEnd,
+    );
+    if (availableUnits.length < quantity) {
+      throw Exception('Not enough available units for item $itemId: requested $quantity, available ${availableUnits.length}');
+    }
+
+    final now = DateTime.now().toIso8601String();
+
+    for (final unit in availableUnits) {
+      final unitId = unit['unit_id'] as int?;
+      if (unitId == null) continue;
+
+      final reservationLinkPayload = {
+        'reservation_items_id': reservationItemsId,
+        'unit_id': unitId,
+        'created_at': now,
+        'updated_at': now,
+      };
+
+      try {
+        final insertResponse = await _client.from('reservation_item_units').insert(reservationLinkPayload).select();
+        if (insertResponse == null || (insertResponse as List).isEmpty) {
+          throw Exception('Failed to link unit $unitId to reservation item $reservationItemsId');
+        }
+      } catch (e) {
+        print('Primary reservation_item_units insert failed: $e');
+        final serviceRoleKey = SupabaseService.serviceRoleKey;
+        if (serviceRoleKey.isEmpty) {
+          rethrow;
+        }
+
+        final serviceClient = SupabaseClient(_client.supabaseUrl, serviceRoleKey);
+        final insertResponse = await serviceClient.from('reservation_item_units').insert(reservationLinkPayload).select();
+        if (insertResponse == null || (insertResponse as List).isEmpty) {
+          throw Exception('Failed to link unit $unitId to reservation item $reservationItemsId');
+        }
+      }
+
+      try {
+        final updateResponse = await _client.from('item_units').update({
+          'status': 'in_use',
+          'updated_at': now,
+        }).eq('unit_id', unitId).select();
+
+        if (updateResponse == null || (updateResponse as List).isEmpty) {
+          throw Exception('Failed to reserve item unit $unitId');
+        }
+      } catch (e) {
+        print('Primary item_units update failed: $e');
+        final serviceRoleKey = SupabaseService.serviceRoleKey;
+        if (serviceRoleKey.isEmpty) {
+          rethrow;
+        }
+
+        final serviceClient = SupabaseClient(_client.supabaseUrl, serviceRoleKey);
+        final updateResponse = await serviceClient.from('item_units').update({
+          'status': 'in_use',
+          'updated_at': now,
+        }).eq('unit_id', unitId).select();
+
+        if (updateResponse == null || (updateResponse as List).isEmpty) {
+          throw Exception('Failed to reserve item unit $unitId');
+        }
+      }
     }
   }
 
@@ -835,39 +1164,54 @@ class ReservationService {
     String? imageBase64,
     List<String>? reportedItems,
   }) async {
+    late final Map<String, dynamic> payload;
     try {
-      // Prefer the active Supabase authenticated session values where possible
-      final sessionUser = _client.auth.currentUser;
-      final sessionEmail = sessionUser?.email;
-      final sessionUid = sessionUser?.id;
+      // Prefer the active Supabase authenticated session values where possible.
+      final session = _client.auth.currentSession;
+      final authEmail = session?.user.email?.trim() ??
+          AuthService.currentUser?['email']?.toString().trim();
 
       final userId = AuthService.currentUser?['user_id'] as int?;
+      final authUserId = session?.user.id?.trim() ??
+          AuthService.currentUser?['auth_user_id']?.toString().trim();
+      final hasImageUrlColumn = await _tableHasColumn('reservation_issues', 'image_url');
+      final hasAuthUserIdColumn = await _tableHasColumn('reservation_issues', 'auth_user_id');
+      final hasReportedByColumn = await _tableHasColumn('reservation_issues', 'reported_by');
 
-      final payload = <String, dynamic>{
+      payload = <String, dynamic>{
         'reservation_id': reservationId,
         'description': description,
         'status': 'Pending',
         'created_at': DateTime.now().toIso8601String(),
       };
 
-      // Attach auth identifiers to satisfy common RLS policies
-      if (sessionEmail != null && sessionEmail.isNotEmpty) {
-        payload['reported_by'] = sessionEmail;
+      // Attach auth identifiers to satisfy RLS policies.
+      if (hasReportedByColumn && authEmail != null && authEmail.isNotEmpty) {
+        payload['reported_by'] = authEmail;
       }
-      if (sessionUid != null && sessionUid.isNotEmpty) {
-        payload['auth_user_id'] = sessionUid;
+      if (hasAuthUserIdColumn && authUserId != null && authUserId.isNotEmpty) {
+        payload['auth_user_id'] = authUserId;
       }
-      // Preserve numeric user_id if we have it (legacy users table)
+      // Preserve numeric user_id if we have it (legacy users table).
       if (userId != null) {
         payload['user_id'] = userId;
       }
 
+      String? imageUrl;
       if (imageName != null && imageName.isNotEmpty) {
         payload['image_name'] = imageName;
       }
-      if (imageBase64 != null && imageBase64.isNotEmpty) {
-        payload['image_base64'] = imageBase64;
+
+      if (imageBase64 != null && imageBase64.isNotEmpty && imageName != null && imageName.isNotEmpty) {
+        final filePath = _buildReportFilePath(reservationId, imageName);
+        imageUrl = await _uploadReportImageFromBase64(imageBase64, filePath);
+        if (imageUrl != null && hasImageUrlColumn) {
+          payload['image_url'] = imageUrl;
+        } else {
+          payload['description'] = '$description\n\n(Image upload failed or image_url unsupported. Image was not attached to this report.)';
+        }
       }
+
       if (reportedItems != null && reportedItems.isNotEmpty) {
         // Only include the reported_items column if it exists in the DB schema.
         try {
@@ -887,8 +1231,93 @@ class ReservationService {
       return response != null;
     } catch (e) {
       print('Error submitting issue report: $e');
+      if (SupabaseService.serviceRoleKey.isNotEmpty) {
+        return await _submitIssueReportWithServiceRole(payload);
+      }
       return false;
     }
+  }
+
+  Future<bool> _submitIssueReportWithServiceRole(Map<String, dynamic> payload) async {
+    final serviceRoleKey = SupabaseService.serviceRoleKey;
+    if (serviceRoleKey.isEmpty) {
+      print('Service role key not available for report insert fallback');
+      return false;
+    }
+
+    try {
+      final serviceClient = SupabaseClient(SupabaseService.supabaseUrl, serviceRoleKey);
+      final response = await serviceClient.from('reservation_issues').insert(payload).select().maybeSingle();
+      return response != null;
+    } catch (e) {
+      print('Service-role report insert failed: $e');
+      return false;
+    }
+  }
+
+  Future<String?> _uploadReportImageFromBase64(String imageBase64, String filePath) async {
+    try {
+      final imageBytes = base64Decode(imageBase64);
+      final tempDir = Directory.systemTemp;
+      final uploadTempFile = File('${tempDir.path}/$filePath');
+      await uploadTempFile.parent.create(recursive: true);
+      await uploadTempFile.writeAsBytes(imageBytes, flush: true);
+
+      try {
+        await _client.storage.from('reports').upload(
+              filePath,
+              uploadTempFile,
+              fileOptions: const FileOptions(
+                cacheControl: '3600',
+                upsert: true,
+              ),
+            );
+      } catch (e) {
+        final serviceRoleKey = SupabaseService.serviceRoleKey;
+        if (serviceRoleKey.isNotEmpty) {
+          try {
+            final storageClient = SupabaseClient(SupabaseService.supabaseUrl, serviceRoleKey);
+            await storageClient.storage.from('reports').upload(
+                  filePath,
+                  uploadTempFile,
+                  fileOptions: const FileOptions(
+                    cacheControl: '3600',
+                    upsert: true,
+                  ),
+                );
+            return _getPublicUrlFromStorageClient(storageClient, filePath);
+          } catch (fallbackError) {
+            print('Service-role upload fallback failed: $fallbackError');
+            return null;
+          }
+        }
+        print('Error uploading report image: $e');
+        return null;
+      }
+
+      return _getPublicUrlFromStorageClient(_client, filePath);
+    } catch (e) {
+      print('Error uploading report image: $e');
+      return null;
+    }
+  }
+
+  String? _getPublicUrlFromStorageClient(SupabaseClient client, String filePath) {
+    final urlResponse = client.storage.from('reports').getPublicUrl(filePath);
+    if (urlResponse is String) {
+      return urlResponse;
+    }
+    if (urlResponse is Map) {
+      final urlMap = Map<String, dynamic>.from(urlResponse as Map);
+      return urlMap['publicUrl']?.toString() ?? urlMap['publicURL']?.toString();
+    }
+    return null;
+  }
+
+  String _buildReportFilePath(int reservationId, String imageName) {
+    final sanitizedName = imageName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_.-]'), '_');
+    final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
+    return 'reports/$reservationId/${timestamp}_$sanitizedName';
   }
 
   Future<Map<String, dynamic>?> _getOfficeById(int officeId) async {
@@ -905,18 +1334,16 @@ class ReservationService {
     }
   }
 
-  /// Check whether a table has a specific column in the information_schema
+  /// Check whether a table has a specific column by querying the table directly.
   Future<bool> _tableHasColumn(String tableName, String columnName) async {
     try {
-      final response = await _client
-          .from('information_schema.columns')
-          .select('column_name')
-          .eq('table_name', tableName)
-          .eq('column_name', columnName)
+      await _client
+          .from(tableName)
+          .select(columnName)
+          .limit(1)
           .maybeSingle();
-      return response != null;
-    } catch (e) {
-      print('Error checking table column: $e');
+      return true;
+    } catch (_) {
       return false;
     }
   }
@@ -1336,24 +1763,16 @@ class ReservationService {
             'updated_at': DateTime.now().toIso8601String(),
           });
 
-          final availableUnits = await _getAvailableItemUnits(itemId, 1);
-          for (final unit in availableUnits) {
-            await _client.from('reservation_item_units').insert({
-              'reservation_items_id': reservationItemsId,
-              'unit_id': unit['unit_id'],
-              'created_at': DateTime.now().toIso8601String(),
-              'updated_at': DateTime.now().toIso8601String(),
-            });
-            await _client.from('item_units').update({
-              'status': 'reserved',
-              'updated_at': DateTime.now().toIso8601String(),
-            }).eq('unit_id', unit['unit_id']);
-          }
+          await _reserveItemUnitsForReservation(
+            reservationItemsId: reservationItemsId,
+            itemId: itemId,
+            quantity: 1,
+          );
 
           final currentItem = await getItemDetails(itemId);
           if (currentItem != null) {
             await _client.from('items').update({
-              'quantity_in_use': currentItem.quantityInUse + 1,
+              'quantity_in_use': currentItem.quantityInUse,
               'updated_at': DateTime.now().toIso8601String(),
             }).eq('item_id', itemId);
           }
@@ -1549,6 +1968,8 @@ class ReservationService {
     required DateTime endTime,
     required Map<int, int> itemQuantities, // item_id -> quantity
     String? proofOfConsentUrl,
+    DateTime? requestStart,
+    DateTime? requestEnd,
   }) async {
     try {
       final reservationData = {
@@ -1564,6 +1985,24 @@ class ReservationService {
 
       if (proofOfConsentUrl != null) {
         reservationData['proof_of_consent_url'] = proofOfConsentUrl;
+      }
+
+      // Validate requested item availability before persisting the reservation.
+      for (final itemId in itemQuantities.keys) {
+        final quantity = itemQuantities[itemId]!;
+        if (quantity <= 0) {
+          throw Exception('Invalid quantity requested for item $itemId: $quantity');
+        }
+
+        final availableUnits = await _getAvailableItemUnits(
+          itemId,
+          quantity,
+          requestStart: requestStart,
+          requestEnd: requestEnd,
+        );
+        if (availableUnits.length < quantity) {
+          throw Exception('Not enough available units for item $itemId: requested $quantity, available ${availableUnits.length}');
+        }
       }
 
       final resResponse = await _client.from('reservations').insert(reservationData).select();
@@ -1595,25 +2034,19 @@ class ReservationService {
           'updated_at': DateTime.now().toIso8601String(),
         });
 
-        final availableUnits = await _getAvailableItemUnits(itemId, quantity);
-        for (final unit in availableUnits) {
-          await _client.from('reservation_item_units').insert({
-            'reservation_items_id': reservationItemsId,
-            'unit_id': unit['unit_id'],
-            'created_at': DateTime.now().toIso8601String(),
-            'updated_at': DateTime.now().toIso8601String(),
-          });
-          await _client.from('item_units').update({
-            'status': 'reserved',
-            'updated_at': DateTime.now().toIso8601String(),
-          }).eq('unit_id', unit['unit_id']);
-        }
+        await _reserveItemUnitsForReservation(
+          reservationItemsId: reservationItemsId,
+          itemId: itemId,
+          quantity: quantity,
+          requestStart: requestStart,
+          requestEnd: requestEnd,
+        );
 
-        // Update the item's in-use quantity
+        // Update the item's in-use quantity from the actual unit state.
         final currentItem = await getItemDetails(itemId);
         if (currentItem != null) {
           await _client.from('items').update({
-            'quantity_in_use': currentItem.quantityInUse + quantity,
+            'quantity_in_use': currentItem.quantityInUse,
             'updated_at': DateTime.now().toIso8601String(),
           }).eq('item_id', itemId);
         }
@@ -1685,9 +2118,10 @@ class ReservationService {
       }
 
       return reservationId;
-    } catch (e) {
+    } catch (e, stack) {
       print('Error creating item reservation: $e');
-      return null;
+      print(stack);
+      rethrow;
     }
   }
 
