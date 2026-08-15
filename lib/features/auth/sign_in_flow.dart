@@ -82,6 +82,10 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     6,
     (_) => TextEditingController(),
   );
+  final List<FocusNode> _codeFocusNodes = List.generate(
+    6,
+    (_) => FocusNode(),
+  );
 
   @override
   void dispose() {
@@ -93,6 +97,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     _contactNumberController.dispose();
     for (final controller in _codeControllers) {
       controller.dispose();
+    }
+    for (final node in _codeFocusNodes) {
+      node.dispose();
     }
     super.dispose();
   }
@@ -135,6 +142,8 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     }
   }
 
+  bool _isSavingAccount = false;
+
   Future<void> _attemptSignUp() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -168,58 +177,54 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       return;
     }
 
-    final profile = {
-      'email': email,
-      'first_name': _firstNameController.text.trim(),
-      'last_name': _lastNameController.text.trim(),
-      'contact_number': _contactNumberController.text.trim(),
-      'role': _selectedRole,
-      'affiliation': affiliation,
-      'program_id': programId,
-    };
+    setState(() {
+      _isSavingAccount = true;
+    });
 
-    final result = await AuthService.signUp(email: email, password: password, profile: profile);
-    final error = result['error'] as String?;
-    final accessToken = result['access_token'] as String?;
+    try {
+      final profile = {
+        'email': email,
+        'first_name': _firstNameController.text.trim(),
+        'last_name': _lastNameController.text.trim(),
+        'contact_number': _contactNumberController.text.trim(),
+        'role': _selectedRole,
+        'affiliation': affiliation,
+        'program_id': programId,
+      };
 
-    if (error == null) {
-      // Show warning if present but do not treat it as failure.
-      final warning = result['warning'] as String?;
-      if (warning != null) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('✓ $warning')),
-        );
-      }
+      final result = await AuthService.signUp(email: email, password: password, profile: profile);
+      final error = result['error'] as String?;
 
-      if (accessToken != null) {
-        // Signup with auto-login succeeded
-        final userId = AuthService.currentUser?['user_id'] as int?;
-        if (userId != null) {
-          final records = await ReservationService().getReservationRecordsForUser(userId);
-          ReservationActivityStore.replaceAll(records);
+      if (error == null) {
+        final warning = result['warning'] as String?;
+        if (warning != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('✓ $warning')),
+          );
         }
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AppShell()),
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('✓ Account created. Please log in to continue.')),
         );
+
+        _goToStep(SignInStep.loginEmail);
+        _emailController.text = email;
+        _passwordController.clear();
+        _confirmPasswordController.clear();
         return;
       }
 
-      // Signup succeeded but no auto-login token.
-      // Show success and go to login (skip slow signIn() attempt).
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('✓ Account created! Please log in with your credentials.')),
-      );
-      _goToStep(SignInStep.loginEmail);
-      _emailController.text = email;
-      _passwordController.clear();
-      _confirmPasswordController.clear();
-      return;
-    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Registration failed: $error')),
       );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSavingAccount = false;
+        });
+      }
     }
   }
 
@@ -346,6 +351,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
           key: const ValueKey('loginEmail'),
           title: 'Log In',
           subtitle: 'Enter your email and password.',
+          onBack: () => _goToStep(SignInStep.login),
           child: Column(
             children: [
               _InputField(
@@ -384,6 +390,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         return _AuthCard(
           key: const ValueKey('email'),
           title: 'Enter your Microsoft Email',
+          onBack: () => _goToStep(SignInStep.login),
           child: Column(
             children: [
               _InputField(
@@ -424,14 +431,19 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
           key: const ValueKey('code'),
           title: 'Enter Code',
           subtitle: 'A 6-digit code was sent to your email. Please enter here.',
+          onBack: () => _goToStep(SignInStep.email),
           child: Column(
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: List.generate(
                   6,
-                  (index) =>
-                      _CodeDigitField(controller: _codeControllers[index]),
+                  (index) => _CodeDigitField(
+                    controller: _codeControllers[index],
+                    focusNode: _codeFocusNodes[index],
+                    nextFocusNode: index < 5 ? _codeFocusNodes[index + 1] : null,
+                    previousFocusNode: index > 0 ? _codeFocusNodes[index - 1] : null,
+                  ),
                 ),
               ),
               const SizedBox(height: 10),
@@ -490,14 +502,19 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
           key: const ValueKey('loginCode'),
           title: 'Verify Email',
           subtitle: 'Enter the 6-digit code sent to your email.',
+          onBack: () => _goToStep(SignInStep.loginEmail),
           child: Column(
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: List.generate(
                   6,
-                  (index) =>
-                      _CodeDigitField(controller: _codeControllers[index]),
+                  (index) => _CodeDigitField(
+                    controller: _codeControllers[index],
+                    focusNode: _codeFocusNodes[index],
+                    nextFocusNode: index < 5 ? _codeFocusNodes[index + 1] : null,
+                    previousFocusNode: index > 0 ? _codeFocusNodes[index - 1] : null,
+                  ),
                 ),
               ),
 
@@ -530,6 +547,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         return _AuthCard(
           key: const ValueKey('role'),
           title: 'Are you a?',
+          onBack: () => _goToStep(SignInStep.code),
           child: Column(
             children: [
               Row(
@@ -563,6 +581,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         return _AuthCard(
           key: const ValueKey('profile'),
           title: 'Complete Profile',
+          onBack: () => _goToStep(SignInStep.role),
           child: Column(
             children: [
               const Align(
@@ -624,6 +643,8 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               const SizedBox(height: 6),
               DropdownButtonFormField<String?>(
                 initialValue: _selectedDepartment,
+                isExpanded: true,
+                iconSize: 22,
                 dropdownColor: const Color(0xFFF8F8FA),
                 style: const TextStyle(color: Color(0xFF24304C)),
                 decoration: _fieldDecoration(
@@ -641,16 +662,6 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                   }
                 },
               ),
-              const SizedBox(height: 12),
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Profile Picture (Optional)',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                ),
-              ),
-              const SizedBox(height: 6),
-              _UploadBox(onTap: _pickImage, selectedImage: _selectedImage),
               const SizedBox(height: 18),
               _PrimaryButton(
                 label: 'PROCEED',
@@ -663,6 +674,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         return _AuthCard(
           key: const ValueKey('setPassword'),
           title: 'Set Password',
+          onBack: () => _goToStep(SignInStep.profile),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -733,10 +745,36 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                 ],
               ),
               const SizedBox(height: 18),
-              _PrimaryButton(
-                label: 'SAVE',
-                onPressed: _attemptSignUp,
-              ),
+              if (_isSavingAccount)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF6C914)),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Saving account...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                _PrimaryButton(
+                  label: 'SAVE',
+                  onPressed: _attemptSignUp,
+                ),
             ],
           ),
         );
@@ -752,10 +790,17 @@ class _ProgramOption {
 }
 
 class _AuthCard extends StatelessWidget {
-  const _AuthCard({super.key, this.title, this.subtitle, required this.child});
+  const _AuthCard({
+    super.key,
+    this.title,
+    this.subtitle,
+    this.onBack,
+    required this.child,
+  });
 
   final String? title;
   final String? subtitle;
+  final VoidCallback? onBack;
   final Widget child;
 
   @override
@@ -770,6 +815,17 @@ class _AuthCard extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (onBack != null)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: IconButton(
+                onPressed: onBack,
+                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                tooltip: 'Back',
+              ),
+            ),
           if (title != null) ...[
             Text(
               title!,
@@ -944,9 +1000,17 @@ class _InputField extends StatelessWidget {
 }
 
 class _CodeDigitField extends StatelessWidget {
-  const _CodeDigitField({required this.controller});
+  const _CodeDigitField({
+    required this.controller,
+    this.focusNode,
+    this.nextFocusNode,
+    this.previousFocusNode,
+  });
 
   final TextEditingController controller;
+  final FocusNode? focusNode;
+  final FocusNode? nextFocusNode;
+  final FocusNode? previousFocusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -954,9 +1018,31 @@ class _CodeDigitField extends StatelessWidget {
       width: 42,
       child: TextField(
         controller: controller,
+        focusNode: focusNode,
         textAlign: TextAlign.center,
         keyboardType: TextInputType.number,
         maxLength: 1,
+        textInputAction: nextFocusNode != null ? TextInputAction.next : TextInputAction.done,
+        onChanged: (value) {
+          if (value.isNotEmpty) {
+            if (value.length > 1) {
+              controller.text = value.substring(value.length - 1);
+              controller.selection = TextSelection.fromPosition(
+                const TextPosition(offset: 1),
+              );
+            }
+            if (nextFocusNode != null) {
+              FocusScope.of(context).requestFocus(nextFocusNode);
+            }
+          } else if (previousFocusNode != null) {
+            FocusScope.of(context).requestFocus(previousFocusNode);
+          }
+        },
+        onSubmitted: (_) {
+          if (nextFocusNode != null) {
+            FocusScope.of(context).requestFocus(nextFocusNode);
+          }
+        },
         style: const TextStyle(color: Color(0xFF24304C), fontSize: 18),
         decoration: InputDecoration(
           counterText: '',

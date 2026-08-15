@@ -16,6 +16,17 @@ function parseFromEmail(rawFrom: string): string {
   return rawFrom.trim();
 }
 
+function buildFromHeader(rawFrom: string): string {
+  const cleanFrom = parseFromEmail(rawFrom);
+  if (!cleanFrom) {
+    return 'NUtilize';
+  }
+  if (rawFrom.includes('<')) {
+    return rawFrom.trim();
+  }
+  return `NUtilize <${cleanFrom}>`;
+}
+
 function generateCode() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
@@ -122,7 +133,18 @@ async function sendSmtpMail(headerFrom: string, mailFrom: string, to: string, su
       throw new Error(`SMTP DATA command failed: ${response}`);
     }
 
-    const message = `From: ${headerFrom}\r\nTo: ${to}\r\nSubject: ${subject}\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n${body}\r\n.`;
+    const message = [
+      `From: ${headerFrom}`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/plain; charset=utf-8',
+      'Content-Transfer-Encoding: 7bit',
+      'X-Mailer: NUtilize',
+      '',
+      body,
+      '.',
+    ].join('\r\n');
     response = await writeLine(message);
     if (!response.startsWith('250')) {
       throw new Error(`SMTP message send failed: ${response}`);
@@ -189,12 +211,23 @@ serve(async (req) => {
 
     try {
       const fromEmail = parseFromEmail(SMTP_FROM ?? SMTP_USER ?? '');
+      const fromHeader = buildFromHeader(SMTP_FROM ?? SMTP_USER ?? fromEmail);
+      const emailBody = [
+        'Hello,',
+        '',
+        `Your NUtilize verification code is: ${code}`,
+        '',
+        'This code expires in 10 minutes.',
+        '',
+        'If you did not request this code, you can ignore this email.',
+      ].join('\n');
+
       await sendSmtpMail(
-        SMTP_FROM ?? fromEmail,
+        fromHeader,
         fromEmail,
         email,
         'Your NUtilize verification code',
-        `Your NUtilize verification code is: ${code}\n\nIt expires in 10 minutes.`,
+        emailBody,
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
