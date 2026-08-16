@@ -150,6 +150,10 @@ class _NotificationPageState extends State<NotificationPage> {
       }
     }
 
+    today.sort((a, b) => b.date.compareTo(a.date));
+    yesterday.sort((a, b) => b.date.compareTo(a.date));
+    earlier.sort((a, b) => b.date.compareTo(a.date));
+
     final widgets = <Widget>[];
     if (today.isNotEmpty) {
       widgets.add(

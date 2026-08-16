@@ -104,6 +104,8 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     super.dispose();
   }
 
+  bool _isLoggingIn = false;
+
   Future<void> _attemptLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -114,9 +116,14 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       return;
     }
 
+    setState(() {
+      _isLoggingIn = true;
+    });
+
     try {
       final token = await AuthService.signIn(email: email, password: password);
       if (token != null) {
+        await Future<void>.delayed(const Duration(milliseconds: 500));
         final userId = AuthService.currentUser?['user_id'] as int?;
         if (userId != null) {
           final records = await ReservationService().getReservationRecordsForUser(userId);
@@ -128,6 +135,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
           MaterialPageRoute(builder: (_) => const AppShell()),
         );
       } else {
+        await Future<void>.delayed(const Duration(milliseconds: 300));
         final error = AuthService.lastAuthError ?? 'Login failed. Check credentials.';
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -135,10 +143,17 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         );
       }
     } catch (e) {
+      await Future<void>.delayed(const Duration(milliseconds: 300));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Login failed: ${e.toString()}')),
       );
+    } finally {
+      if (mounted && _step == SignInStep.loginEmail) {
+        setState(() {
+          _isLoggingIn = false;
+        });
+      }
     }
   }
 
@@ -378,10 +393,36 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
 
               const SizedBox(height: 20),
 
-              _PrimaryButton(
-                label: 'LOG IN',
-                onPressed: _attemptLogin,
-              ),
+              if (_isLoggingIn)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 12),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 22,
+                        height: 22,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF6C914)),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Logging in...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                _PrimaryButton(
+                  label: 'LOG IN',
+                  onPressed: _attemptLogin,
+                ),
             ],
           ),
         );

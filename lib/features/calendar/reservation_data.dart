@@ -534,16 +534,19 @@ class NotificationRepository {
   final List<NotificationRecord> notifications;
 
   factory NotificationRepository.sample(DateTime now) {
-    final reservations = collectReservations(now);
+    final realReservations = collectReservations(now);
+    final fallbackReservations = ReservationRepository.sample(now).reservations;
+    final reservations = realReservations.isNotEmpty
+        ? realReservations
+        : fallbackReservations;
 
     final reservationNotifications = reservations.asMap().entries.map((entry) {
       final reservation = entry.value;
-      final date = now.subtract(Duration(minutes: entry.key * 12));
       final status = reservation.reservationStatus.toLowerCase();
       final category = switch (status) {
-        _ when status.contains('approved') =>
+        _ when status.contains('approved') || status.contains('completed') =>
           NotificationCategory.reservationApproved,
-        _ when status.contains('reject') =>
+        _ when status.contains('reject') || status.contains('denied') =>
           NotificationCategory.reservationRejected,
         _ when status.contains('cancel') =>
           NotificationCategory.reservationCancelled,
@@ -555,15 +558,23 @@ class NotificationRepository {
         NotificationCategory.reservationCancelled => 'Reservation Cancelled',
         _ => 'Reservation Submitted',
       };
+
+      final statusSummary = reservation.approvalSummary.trim();
       final description = switch (category) {
         NotificationCategory.reservationApproved =>
-          '${reservation.roomName} has been approved for ${reservation.reservationTime}.',
+          statusSummary.isNotEmpty
+              ? '$title — $statusSummary'
+              : '${reservation.roomName} has been approved for ${reservation.reservationTime}.',
         NotificationCategory.reservationRejected =>
-          '${reservation.roomName} was not approved. Review the details for more information.',
+          statusSummary.isNotEmpty
+              ? '$title — $statusSummary'
+              : '${reservation.roomName} was not approved. Review the details for more information.',
         NotificationCategory.reservationCancelled =>
           '${reservation.roomName} reservation has been cancelled.',
         _ =>
-          '${reservation.roomName} has been submitted and is pending review.',
+          statusSummary.isNotEmpty
+              ? '$title — $statusSummary'
+              : '${reservation.roomName} has been submitted and is pending review.',
       };
 
       return NotificationRecord(
@@ -571,10 +582,16 @@ class NotificationRepository {
         category: category,
         title: title,
         description: description,
-        date: date,
+        date: reservation.date.isAfter(now)
+            ? now.subtract(Duration(minutes: entry.key * 9 + 5))
+            : reservation.date,
         targetKind: NotificationTargetKind.reservation,
-        isRead: entry.key > 1,
+        isRead: false,
         reservation: reservation,
+        detailTitle: title,
+        detailBody: statusSummary.isNotEmpty
+            ? statusSummary
+            : description,
       );
     }).toList();
 
@@ -662,6 +679,12 @@ class NotificationActivityStore {
   }
 
   static void ensureSeeded([DateTime? now]) {
+    if (AuthService.currentUser == null) {
+      listenable.value = [];
+      _seeded = false;
+      return;
+    }
+
     if (!_seeded || listenable.value.isEmpty) {
       syncFromReservations(now);
       _seeded = true;
@@ -669,6 +692,11 @@ class NotificationActivityStore {
   }
 
   static void syncFromReservations([DateTime? now]) {
+    if (AuthService.currentUser == null) {
+      listenable.value = [];
+      return;
+    }
+
     final current = now ?? DateTime.now();
     final existing = {
       for (final notification in listenable.value)

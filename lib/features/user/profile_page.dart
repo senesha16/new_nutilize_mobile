@@ -12,6 +12,7 @@ class ProfilePage extends StatelessWidget {
     final userName = user?['username'] ?? 'Unknown';
     final email = user?['email'] ?? 'No email';
     final role = user?['role'] ?? 'No role';
+    final department = user?['affiliation']?.toString() ?? 'No department';
     final userId = user?['user_id'] ?? 'No ID';
 
     return Scaffold(
@@ -167,33 +168,8 @@ class ProfilePage extends StatelessWidget {
                     _InfoCard(label: 'Email Address', value: email),
                     const SizedBox(height: 10),
                     _InfoCard(label: 'Account Role', value: role),
-                    const SizedBox(height: 28),
-                    // Settings Section
-                    _SectionTitle(title: 'Settings & Support'),
-                    const SizedBox(height: 12),
-                    _SettingsTile(
-                      icon: Icons.edit_rounded,
-                      label: 'Edit Profile',
-                      onTap: () {},
-                    ),
                     const SizedBox(height: 10),
-                    _SettingsTile(
-                      icon: Icons.lock_rounded,
-                      label: 'Change Password',
-                      onTap: () {},
-                    ),
-                    const SizedBox(height: 10),
-                    _SettingsTile(
-                      icon: Icons.help_rounded,
-                      label: 'Help & FAQ',
-                      onTap: () {},
-                    ),
-                    const SizedBox(height: 10),
-                    _SettingsTile(
-                      icon: Icons.info_rounded,
-                      label: 'About NUtilize',
-                      onTap: () {},
-                    ),
+                    _InfoCard(label: 'Department', value: department),
                     const SizedBox(height: 28),
                     // Logout Button
                     SizedBox(
@@ -379,30 +355,36 @@ class _InfoCard extends StatelessWidget {
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF8A90A8),
-                  fontSize: 12,
-                  fontWeight: FontWeight.w500,
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF8A90A8),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                value,
-                style: const TextStyle(
-                  color: Color(0xFF111111),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                const SizedBox(height: 3),
+                Text(
+                  value,
+                  softWrap: true,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Color(0xFF111111),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
+          const SizedBox(width: 12),
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
@@ -421,65 +403,3 @@ class _InfoCard extends StatelessWidget {
   }
 }
 
-class _SettingsTile extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-
-  const _SettingsTile({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: const Color(0xFFE4E7FB),
-            width: 1,
-          ),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE4E7FB),
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: Icon(
-                icon,
-                color: const Color(0xFF35489A),
-                size: 19,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                label,
-                style: const TextStyle(
-                  color: Color(0xFF111111),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-            const Icon(
-              Icons.chevron_right_rounded,
-              color: Color(0xFFD9DCE8),
-              size: 20,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

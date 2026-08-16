@@ -1261,28 +1261,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       body: SafeArea(
         child: Column(
           children: [
-            Container(
-              width: double.infinity,
-              height: 92,
-              decoration: const BoxDecoration(
-                color: Color(0xFF35489A),
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFFF2C94C), width: 4),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 22),
-                  ),
-                  const Text('Room Reservation', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w700)),
-                  const SizedBox(width: 40),
-                ],
-              ),
-            ),
+            const AppHeader(title: 'NUtilize'),
             Expanded(
               child: ListView(
                 padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:new_nutilize_mobile/widgets/app_header.dart';
 
 import 'home.dart';
 import 'calendar.dart';
@@ -16,61 +17,7 @@ class RequestPage extends StatelessWidget {
       body: SafeArea(
         child: Column(
           children: [
-            Container(
-              width: double.infinity,
-              height: 92,
-              decoration: const BoxDecoration(
-                color: Color(0xFF35489A),
-                border: Border(
-                  bottom: BorderSide(color: Color(0xFFF2C94C), width: 4),
-                ),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'NUtilize',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                  Stack(
-                    clipBehavior: Clip.none,
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                        ),
-                        child: const Icon(
-                          Icons.notifications_none_rounded,
-                          color: Color(0xFF35489A),
-                          size: 25,
-                        ),
-                      ),
-                      Positioned(
-                        right: 2,
-                        top: 2,
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFE53935),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+            const AppHeader(title: 'NUtilize'),
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.fromLTRB(22, 24, 22, 16),
