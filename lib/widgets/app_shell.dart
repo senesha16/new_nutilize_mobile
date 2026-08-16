@@ -86,13 +86,18 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       return;
     }
 
-    final userId = AuthService.currentUser?['user_id'] as int?;
-    if (userId == null) {
-      return;
-    }
-
     _isRefreshing = true;
     try {
+      final profile = await AuthService.restoreCurrentUser();
+      final rawUserId = profile?['user_id'];
+      final userId = rawUserId is int
+          ? rawUserId
+          : int.tryParse(rawUserId?.toString() ?? '');
+
+      if (userId == null) {
+        return;
+      }
+
       final records = await ReservationService().getReservationRecordsForUser(
         userId,
       );
@@ -162,12 +167,19 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   void _showNotificationSnackBar(NotificationRecord notification) {
-    final messenger = ScaffoldMessenger.of(context);
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    if (messenger == null) {
+      return;
+    }
+
+    _lastShownNotificationId = null;
     messenger.hideCurrentSnackBar();
     messenger.showSnackBar(
       SnackBar(
+        key: ValueKey(notification.id),
         behavior: SnackBarBehavior.floating,
-        duration: const Duration(milliseconds: 1400),
+        duration: const Duration(seconds: 2),
+        dismissDirection: DismissDirection.horizontal,
         content: Text(notification.title),
         action: SnackBarAction(
           label: 'View',

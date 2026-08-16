@@ -55,7 +55,17 @@ class ItemModel {
   final bool maintenanceStatus;
   final bool availabilityStatus;
 
-  int get availableQuantity => (quantityTotal - quantityInUse).clamp(0, quantityTotal);
+  static int normalizeItemUsage(int total, int usage) {
+    final safeTotal = total < 0 ? 0 : total;
+    return usage.clamp(0, safeTotal);
+  }
+
+  static int normalizeAvailableQuantity(int total, int usage) {
+    final safeTotal = total < 0 ? 0 : total;
+    return (safeTotal - usage).clamp(0, safeTotal);
+  }
+
+  int get availableQuantity => normalizeAvailableQuantity(quantityTotal, quantityInUse);
 
   ItemModel({
     required this.itemId,
@@ -136,6 +146,39 @@ class ReservationService {
   ReservationService._internal();
 
   SupabaseClient get _client => Supabase.instance.client;
+
+  static int normalizeItemUsage(int total, int usage) {
+    return ItemModel.normalizeItemUsage(total, usage);
+  }
+
+  static int normalizeAvailableQuantity(int total, int usage) {
+    return ItemModel.normalizeAvailableQuantity(total, usage);
+  }
+
+  Future<void> _recalculateItemUsageFromUnits(int itemId) async {
+    try {
+      final unitsResp = await _client
+          .from('item_units')
+          .select('unit_id, status')
+          .eq('item_id', itemId);
+
+      final units = (unitsResp as List?)?.cast<Map<String, dynamic>>() ?? const <Map<String, dynamic>>[];
+      final totalUnits = units.length;
+      final availableUnits = units.where((unit) {
+        final unitId = unit['unit_id'] as int?;
+        if (unitId == null) return false;
+        return _isUnitAvailableStatus(unit['status'] as String?);
+      }).length;
+
+      final normalizedInUse = normalizeItemUsage(totalUnits, totalUnits - availableUnits);
+      await _client.from('items').update({
+        'quantity_in_use': normalizedInUse,
+        'updated_at': DateTime.now().toIso8601String(),
+      }).eq('item_id', itemId);
+    } catch (_) {
+      // Best-effort recalculation; do not fail a reservation flow because of stale counters.
+    }
+  }
 
   // MARK: - Room Operations
 
@@ -497,7 +540,7 @@ class ReservationService {
           return _isUnitAvailableStatus(u['status'] as String?);
         }).length;
         final clampedAvailable = available.clamp(0, total);
-        final inUse = (total - clampedAvailable).clamp(0, total);
+        final inUse = ItemModel.normalizeItemUsage(total, total - clampedAvailable);
 
         return ItemModel(
           itemId: id,
@@ -553,7 +596,7 @@ class ReservationService {
         return _isUnitAvailableStatus(u['status'] as String?);
       }).length;
       final clampedAvailable = available.clamp(0, total);
-      final inUse = (total - clampedAvailable).clamp(0, total);
+      final inUse = ItemModel.normalizeItemUsage(total, total - clampedAvailable);
 
       // Debug: if availability is unexpectedly zero, print unit details to help diagnose
       if (available == 0) {
@@ -1680,10 +1723,46 @@ class ReservationService {
     required DateTime endTime,
     required List<int>? chairsQuantity,
     required List<int>? itemIds,
+    Map<int, int>? itemQuantities,
     required List<int> approvalChain,
     String? proofOfConsentUrl,
   }) async {
     try {
+      final normalizedItemQuantities = <int, int>{};
+      if (itemQuantities != null && itemQuantities.isNotEmpty) {
+        for (final entry in itemQuantities.entries) {
+          final qty = entry.value;
+          if (qty > 0) {
+            normalizedItemQuantities[entry.key] = qty;
+          }
+        }
+      } else if (itemIds != null && itemIds.isNotEmpty) {
+        for (final itemId in itemIds) {
+          normalizedItemQuantities[itemId] = 1;
+        }
+      }
+
+      final resolvedItemIds = normalizedItemQuantities.keys.toList();
+
+      if (normalizedItemQuantities.isNotEmpty) {
+        for (final itemId in normalizedItemQuantities.keys) {
+          final quantity = normalizedItemQuantities[itemId]!;
+          if (quantity <= 0) {
+            throw Exception('Invalid quantity requested for item $itemId: $quantity');
+          }
+
+          final availableUnits = await _getAvailableItemUnits(
+            itemId,
+            quantity,
+            requestStart: startTime,
+            requestEnd: endTime,
+          );
+          if (availableUnits.length < quantity) {
+            throw Exception('Not enough available units for item $itemId: requested $quantity, available ${availableUnits.length}');
+          }
+        }
+      }
+
       // Prevent overlapping reservations for the same room/time
       final conflict = await _hasRoomTimeConflict(
         roomId,
@@ -1745,8 +1824,9 @@ class ReservationService {
         });
       }
 
-      if (itemIds != null && itemIds.isNotEmpty) {
-        for (int itemId in itemIds) {
+      if (resolvedItemIds.isNotEmpty) {
+        for (final itemId in resolvedItemIds) {
+          final quantity = normalizedItemQuantities[itemId]!;
           final itemResponse = await _client.from('reservation_items').insert({
             'item_id': itemId,
             'created_at': DateTime.now().toIso8601String(),
@@ -1758,7 +1838,7 @@ class ReservationService {
           await _client.from('reservation_details').insert({
             'reservation_id': reservationId,
             'reservation_items_id': reservationItemsId,
-            'quantity': 1,
+            'quantity': quantity,
             'created_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
           });
@@ -1766,7 +1846,9 @@ class ReservationService {
           await _reserveItemUnitsForReservation(
             reservationItemsId: reservationItemsId,
             itemId: itemId,
-            quantity: 1,
+            quantity: quantity,
+            requestStart: startTime,
+            requestEnd: endTime,
           );
 
           final currentItem = await getItemDetails(itemId);
@@ -2043,13 +2125,7 @@ class ReservationService {
         );
 
         // Update the item's in-use quantity from the actual unit state.
-        final currentItem = await getItemDetails(itemId);
-        if (currentItem != null) {
-          await _client.from('items').update({
-            'quantity_in_use': currentItem.quantityInUse,
-            'updated_at': DateTime.now().toIso8601String(),
-          }).eq('item_id', itemId);
-        }
+        await _recalculateItemUsageFromUnits(itemId);
       }
 
       print('Item reservation created: $reservationId');
@@ -2189,14 +2265,7 @@ class ReservationService {
             }
           }
 
-          final currentItem = await getItemDetails(itemId);
-          if (currentItem != null) {
-            final safeQuantity = (currentItem.quantityInUse - quantity).clamp(0, currentItem.quantityInUse) as int;
-            await _client.from('items').update({
-              'quantity_in_use': safeQuantity,
-              'updated_at': DateTime.now().toIso8601String(),
-            }).eq('item_id', itemId);
-          }
+          await _recalculateItemUsageFromUnits(itemId);
         }
       }
 

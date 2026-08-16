@@ -178,9 +178,10 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   Room? _selectedRoom;
   List<Room> _availableRooms = [];
   List<ItemModel> _equipmentItems = [];
-  final Set<int> _selectedItemIds = {};
+  final Map<int, int> _selectedItemQuantities = {};
   bool _isLoadingRooms = false;
   bool _isLoadingItems = false;
+  bool _isSubmitting = false;
   String? _loadError;
   File? _proofOfConsentFile;
   String? _proofOfConsentUrl;
@@ -559,6 +560,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   }
 
   Future<void> _submitReservation() async {
+    if (_isSubmitting) return;
     if (!_agreedToTerms) {
       _showError('Please agree to the terms and conditions.');
       return;
@@ -568,89 +570,143 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       return;
     }
 
-    final currentUser = AuthService.currentUser;
-    if (currentUser == null || currentUser['user_id'] == null) {
-      _showError('Please sign in again.');
-      return;
-    }
+    setState(() {
+      _isSubmitting = true;
+    });
 
-    final startDateTime = DateTime(
-      _selectedDate!.year,
-      _selectedDate!.month,
-      _selectedDate!.day,
-      _selectedStartTime!.hour,
-      _selectedStartTime!.minute,
-    );
-    final endDateTime = DateTime(
-      _selectedDate!.year,
-      _selectedDate!.month,
-      _selectedDate!.day,
-      _selectedEndTime!.hour,
-      _selectedEndTime!.minute,
-    );
+    try {
+      final currentUser = AuthService.currentUser;
+      if (currentUser == null || currentUser['user_id'] == null) {
+        _showError('Please sign in again.');
+        return;
+      }
 
-    final approvalChain = await _reservationService.calculateApprovalChain(
-      roomType: _selectedRoomType ?? '',
-      itemIds: _selectedItemIds.isEmpty ? null : _selectedItemIds.toList(),
-    );
-
-    final reservationId = await _reservationService.createReservation(
-      activityName: _activityController.text.trim(),
-      userId: currentUser['user_id'] as int,
-      roomId: _selectedRoom!.roomId,
-      dateOfActivity: _selectedDate!,
-      startTime: startDateTime,
-      endTime: endDateTime,
-      chairsQuantity: _selectedChairs != null ? [_selectedChairs!] : null,
-      itemIds: _selectedItemIds.isEmpty ? null : _selectedItemIds.toList(),
-      approvalChain: approvalChain.officeIds,
-      proofOfConsentUrl: _proofOfConsentUrl,
-    );
-
-    if (reservationId != null) {
-      final reservationTime = '${_timeLabel(_selectedStartTime)} - ${_timeLabel(_selectedEndTime)}';
-      final timeline = approvalChain.offices.map((office) {
-        return ReservationTimelineEntry(
-          title: office,
-          status: 'Pending',
-          date: _selectedDate!,
-          timestamp: 'Pending',
-          description: 'Waiting for approval from $office.',
-        );
-      }).toList();
-
-      final newRecord = ReservationRecord(
-        id: reservationId.toString(),
-        userId: currentUser['user_id'] as int,
-        reservationTitle: _activityController.text.trim().isEmpty
-            ? 'Reservation Request'
-            : _activityController.text.trim(),
-        roomName: _selectedRoom!.roomNumber,
-        reservationType: 'Venue Reservation',
-        reservationStatus: 'Pending Approval',
-        date: _selectedDate!,
-        reservationTime: reservationTime,
-        reservedItems: _equipmentItems.where((e) => _selectedItemIds.contains(e.itemId)).map((e) => e.itemName).toList(),
-        timeline: [
-          ReservationTimelineEntry(
-            title: 'Request Submitted',
-            status: 'Completed',
-            date: _selectedDate!,
-            timestamp: _formatTimestamp(_selectedDate!),
-            description: 'Your reservation request was submitted successfully.',
-          ),
-          ...timeline,
-        ],
+      final startDateTime = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        _selectedStartTime!.hour,
+        _selectedStartTime!.minute,
+      );
+      final endDateTime = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        _selectedEndTime!.hour,
+        _selectedEndTime!.minute,
       );
 
-      ReservationActivityStore.add(newRecord);
+      final selectedItemIds = _selectedItemQuantities.keys.toList();
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Room reservation submitted successfully.')));
-        Navigator.of(context).pop();
+      if (_selectedItemQuantities.isNotEmpty) {
+        final insufficient = <String>[];
+        for (final entry in _selectedItemQuantities.entries) {
+          final itemId = entry.key;
+          final requested = entry.value;
+          final details = await _reservationService.getItemDetails(
+            itemId,
+            requestStart: startDateTime,
+            requestEnd: endDateTime,
+          );
+          final available = details?.availableQuantity ?? 0;
+          final itemName = details?.itemName ?? 'Item $itemId';
+          if (requested > available) {
+            insufficient.add('$itemName: requested $requested, available $available');
+          }
+        }
+        if (insufficient.isNotEmpty) {
+          _showError('Insufficient availability:\n${insufficient.join('\n')}');
+          return;
+        }
       }
-    } else {
-      _showError('Reservation failed. Please try again.');
+
+      final approvalChain = await _reservationService.calculateApprovalChain(
+        roomType: _selectedRoomType ?? '',
+        itemIds: selectedItemIds.isEmpty ? null : selectedItemIds,
+      );
+
+      final reservationId = await _reservationService.createReservation(
+        activityName: _activityController.text.trim(),
+        userId: currentUser['user_id'] as int,
+        roomId: _selectedRoom!.roomId,
+        dateOfActivity: _selectedDate!,
+        startTime: startDateTime,
+        endTime: endDateTime,
+        chairsQuantity: _selectedChairs != null ? [_selectedChairs!] : null,
+        itemIds: selectedItemIds.isEmpty ? null : selectedItemIds,
+        itemQuantities: _selectedItemQuantities.isEmpty ? null : Map<int, int>.from(_selectedItemQuantities),
+        approvalChain: approvalChain.officeIds,
+        proofOfConsentUrl: _proofOfConsentUrl,
+      );
+
+      if (reservationId != null) {
+        final reservationTime = '${_timeLabel(_selectedStartTime)} - ${_timeLabel(_selectedEndTime)}';
+        final timeline = approvalChain.offices.map((office) {
+          return ReservationTimelineEntry(
+            title: office,
+            status: 'Pending',
+            date: _selectedDate!,
+            timestamp: 'Pending',
+            description: 'Waiting for approval from $office.',
+          );
+        }).toList();
+
+        final newRecord = ReservationRecord(
+          id: reservationId.toString(),
+          userId: currentUser['user_id'] as int,
+          reservationTitle: _activityController.text.trim().isEmpty
+              ? 'Reservation Request'
+              : _activityController.text.trim(),
+          roomName: _selectedRoom!.roomNumber,
+          reservationType: 'Venue Reservation',
+          reservationStatus: 'Pending Approval',
+          date: _selectedDate!,
+          reservationTime: reservationTime,
+          reservedItems: _selectedItemQuantities.entries.map((entry) {
+            final item = _equipmentItems.firstWhere(
+              (equipment) => equipment.itemId == entry.key,
+              orElse: () => ItemModel(
+                itemId: entry.key,
+                itemName: 'Item #${entry.key}',
+                quantityTotal: 0,
+                quantityInUse: 0,
+                ownerId: null,
+                ownerName: null,
+                maintenanceStatus: false,
+                availabilityStatus: true,
+              ),
+            );
+            return '${item.itemName} (${entry.value})';
+          }).toList(),
+          timeline: [
+            ReservationTimelineEntry(
+              title: 'Request Submitted',
+              status: 'Completed',
+              date: _selectedDate!,
+              timestamp: _formatTimestamp(_selectedDate!),
+              description: 'Your reservation request was submitted successfully.',
+            ),
+            ...timeline,
+          ],
+        );
+
+        ReservationActivityStore.add(newRecord);
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Room reservation submitted successfully.')));
+          Navigator.of(context).pop();
+        }
+      } else {
+        _showError('Reservation failed. Please try again.');
+      }
+    } catch (e) {
+      _showError('Error submitting reservation: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmitting = false;
+        });
+      }
     }
   }
 
@@ -974,23 +1030,90 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
 
     return Column(
       children: _equipmentItems.map((item) {
-        final selected = _selectedItemIds.contains(item.itemId);
-        return CheckboxListTile(
-          tileColor: selected ? const Color(0xFFE4E7FB) : Colors.white,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          title: Text(item.itemName, style: const TextStyle(fontWeight: FontWeight.w700)),
-          subtitle: Text('Available: ${item.availableQuantity}'),
-          value: selected,
-          onChanged: (value) {
-            setState(() {
-              if (value == true) {
-                _selectedItemIds.add(item.itemId);
-              } else {
-                _selectedItemIds.remove(item.itemId);
-              }
-            });
-          },
+        final selectedQty = _selectedItemQuantities[item.itemId] ?? 0;
+        final remaining = item.availableQuantity;
+
+        return Container(
+          margin: const EdgeInsets.only(bottom: 12),
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: selectedQty > 0 ? const Color(0xFFE4E7FB) : Colors.white,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: selectedQty > 0 ? const Color(0xFFF6C914) : const Color(0xFFE4E7FB),
+              width: 2,
+            ),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(item.itemName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF111111))),
+                    const SizedBox(height: 4),
+                    Text('Available: $remaining', style: const TextStyle(color: Color(0xFF6A6F86), fontSize: 12)),
+                  ],
+                ),
+              ),
+              if (remaining > 0) ...[
+                GestureDetector(
+                  onTap: selectedQty > 0
+                      ? () {
+                          setState(() {
+                            final nextQty = selectedQty - 1;
+                            if (nextQty <= 0) {
+                              _selectedItemQuantities.remove(item.itemId);
+                            } else {
+                              _selectedItemQuantities[item.itemId] = nextQty;
+                            }
+                          });
+                        }
+                      : null,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: selectedQty > 0 ? const Color(0xFFF6C914) : const Color(0xFFE4E7FB),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.remove, color: Colors.white, size: 18),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                SizedBox(
+                  width: 28,
+                  child: Text(
+                    selectedQty.toString(),
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: Color(0xFF111111)),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: selectedQty < remaining
+                      ? () {
+                          setState(() {
+                            _selectedItemQuantities[item.itemId] = selectedQty + 1;
+                          });
+                        }
+                      : null,
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: selectedQty < remaining ? const Color(0xFF35489A) : const Color(0xFFE4E7FB),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.add, color: Colors.white, size: 18),
+                  ),
+                ),
+              ] else ...[
+                const Text('Out of stock', style: TextStyle(color: Color(0xFFD22828), fontWeight: FontWeight.w700)),
+              ],
+            ],
+          ),
         );
       }).toList(),
     );
@@ -1193,7 +1316,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       _buildReviewRow(Icons.calendar_today, 'Date', _selectedDate == null ? 'Not selected' : '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}'),
       _buildReviewRow(Icons.people_alt_outlined, 'Capacity', _selectedAttendance ?? 'Not selected'),
       _buildReviewRow(Icons.chair_alt, 'Chair', _chairsNeeded ? '${_selectedChairs ?? 'Requested'}' : 'None'),
-      _buildReviewRow(Icons.tv, 'Equipment', _equipmentNeeded ? '${_selectedItemIds.length} selected' : 'None'),
+      _buildReviewRow(Icons.tv, 'Equipment', _equipmentNeeded ? '${_selectedItemQuantities.values.fold<int>(0, (sum, qty) => sum + qty)} selected' : 'None'),
       _buildReviewRow(Icons.miscellaneous_services, 'Miscellaneous', _miscNeeded ? _miscController.text.trim() : 'None'),
     ]);
   }
@@ -1274,7 +1397,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                     children: [
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: _goToPreviousStep,
+                          onPressed: _isSubmitting || _currentStep == 0 ? null : _goToPreviousStep,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: const Color(0xFF35489A),
@@ -1287,13 +1410,22 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: _currentStep == 5 ? _submitReservation : _goToNextStep,
+                          onPressed: _isSubmitting ? null : (_currentStep == 5 ? _submitReservation : _goToNextStep),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFF6C914),
                             foregroundColor: const Color(0xFF35489A),
                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                           ),
-                          child: Text(_currentStep == 5 ? 'Submit' : 'Next', style: const TextStyle(fontWeight: FontWeight.w700)),
+                          child: _isSubmitting && _currentStep == 5
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF35489A)),
+                                  ),
+                                )
+                              : Text(_currentStep == 5 ? 'Submit' : 'Next', style: const TextStyle(fontWeight: FontWeight.w700)),
                         ),
                       ),
                     ],

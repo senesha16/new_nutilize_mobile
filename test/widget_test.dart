@@ -150,6 +150,14 @@ void main() {
     );
   });
 
+  test('clamps item usage to the valid zero-to-total range', () {
+    expect(ReservationService.normalizeItemUsage(280, 300), 280);
+    expect(ReservationService.normalizeItemUsage(280, -5), 0);
+    expect(ReservationService.normalizeItemUsage(280, 20), 20);
+    expect(ReservationService.normalizeAvailableQuantity(280, 300), 0);
+    expect(ReservationService.normalizeAvailableQuantity(280, 20), 260);
+  });
+
   test('detects newly added or updated notifications', () {
     final previous = <NotificationRecord>[
       NotificationRecord(

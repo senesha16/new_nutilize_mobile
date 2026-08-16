@@ -8,6 +8,7 @@ class ReservationTimelineEntry {
     required this.date,
     this.description = '',
     this.timestamp = '',
+    this.approvedAt,
   });
 
   final String title;
@@ -15,6 +16,22 @@ class ReservationTimelineEntry {
   final DateTime date;
   final String description;
   final String timestamp;
+  final DateTime? approvedAt; // Actual approval timestamp from backend
+
+  /// Format approval time in Philippine Time (UTC+8)
+  String get approvalTimeFormatted {
+    if (approvedAt == null) return '';
+    
+    // Convert to Philippine Time (UTC+8)
+    final phTime = approvedAt!.add(const Duration(hours: 8));
+    final month = phTime.month.toString().padLeft(2, '0');
+    final day = phTime.day.toString().padLeft(2, '0');
+    final hour = phTime.hour % 12 == 0 ? 12 : phTime.hour % 12;
+    final minute = phTime.minute.toString().padLeft(2, '0');
+    final period = phTime.hour >= 12 ? 'PM' : 'AM';
+    
+    return '${phTime.year}-$month-$day $hour:$minute $period';
+  }
 
   bool get isCompleted {
     final normalized = status.toLowerCase();
@@ -201,11 +218,24 @@ class ReservationActivityStore {
     return left.toString() == right.toString();
   }
 
+  static bool matchesCurrentUser(
+    ReservationRecord reservation, {
+    required int? currentUserId,
+  }) {
+    if (currentUserId == null) {
+      return true;
+    }
+    if (reservation.userId == null) {
+      return false;
+    }
+    return _userIdsMatch(reservation.userId, currentUserId);
+  }
+
   static bool isVisibleOnCalendar(
     ReservationRecord reservation, {
     required int? currentUserId,
   }) {
-    if (currentUserId != null && !_userIdsMatch(reservation.userId, currentUserId)) {
+    if (!matchesCurrentUser(reservation, currentUserId: currentUserId)) {
       return false;
     }
 
@@ -293,7 +323,7 @@ List<ReservationRecord> collectReservations(DateTime now) {
     ...ReservationActivityStore.listenable.value,
     ...ReservationRepository.sample(now).reservations,
   ]) {
-    if (!ReservationActivityStore.isVisibleOnCalendar(
+    if (!ReservationActivityStore.matchesCurrentUser(
       reservation,
       currentUserId: currentUserId,
     )) {
@@ -318,8 +348,10 @@ List<ReservationRecord> collectAllReservations(DateTime now) {
     ...ReservationActivityStore.reservations,
     ...ReservationRepository.sample(now).reservations,
   ]) {
-    if (currentUserId != null &&
-        !ReservationActivityStore._userIdsMatch(reservation.userId, currentUserId)) {
+    if (!ReservationActivityStore.matchesCurrentUser(
+      reservation,
+      currentUserId: currentUserId,
+    )) {
       continue;
     }
 

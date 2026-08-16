@@ -278,6 +278,13 @@ class AuthService {
       return null;
     }
 
+    // Validate email case sensitivity: check if email exists in users table with exact case match
+    final caseCheckValid = await _validateEmailCaseSensitivity(email);
+    if (!caseCheckValid) {
+      _setLastAuthError('Invalid credentials.');
+      return null;
+    }
+
     try {
       final authResponse = await Supabase.instance.client.auth.signInWithPassword(
         email: email,
@@ -647,6 +654,45 @@ class AuthService {
   }
 
   // Load the profile row for the signed-in user.
+  // Validate that email exists in users table with exact case match
+  static Future<bool> _validateEmailCaseSensitivity(String email) async {
+    try {
+      // Query all users and check for exact case match
+      final url = Uri.parse(
+        '$_baseUrl/rest/v1/users?select=email&limit=10000',
+      );
+
+      final resp = await http.get(
+        url,
+        headers: {
+          'apikey': _anonKey,
+          'Accept': 'application/json',
+        },
+      );
+
+      if (resp.statusCode != 200) {
+        return false;
+      }
+
+      final decoded = jsonDecode(resp.body);
+      if (decoded is! List) {
+        return false;
+      }
+
+      // Check if email exists with exact case match
+      for (final user in decoded) {
+        if (user is Map && user['email'] == email) {
+          return true; // Exact match found
+        }
+      }
+
+      return false; // No exact match found
+    } catch (e) {
+      debugPrint('[AuthService] Case sensitivity check error: $e');
+      return false;
+    }
+  }
+
   static Future<Map<String, dynamic>?> _fetchUserProfile({
     required String email,
     required String accessToken,

@@ -1529,6 +1529,11 @@ class _TimelineRow extends StatelessWidget {
         ? const Color(0xFF6A6F86)
         : const Color(0xFFBFBFBF);
 
+    // Use approval time if available (from backend), otherwise use timestamp
+    final displayTime = entry.approvalTimeFormatted.isNotEmpty
+        ? entry.approvalTimeFormatted
+        : entry.timestamp;
+
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1538,7 +1543,7 @@ class _TimelineRow extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                entry.timestamp,
+                displayTime,
                 textAlign: TextAlign.right,
                 style: TextStyle(
                   color: completed
