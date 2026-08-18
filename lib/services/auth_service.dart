@@ -5,9 +5,10 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
+import 'package:new_nutilize_mobile/services/supabase_service.dart';
 
 class AuthService {
-  static const String _baseUrl = 'https://uszlgigsuseomkwmqwan.supabase.co';
+  static String get _baseUrl => SupabaseService.supabaseUrl;
   static Map<String, dynamic>? currentUser;
   static String? lastAuthError;
   static Map<String, String> _envVars = <String, String>{};  // Store env from main.dart
@@ -273,27 +274,42 @@ class AuthService {
     currentUser = null;
     _setLastAuthError(null);
 
+    final normalizedEmail = email.trim();
+
     if (!_hasValidAnonKey) {
       _setLastAuthError('Supabase anon key is missing or still using a placeholder. Open the project root and put your real anon key in .env as SUPABASE_ANON=...');
+      debugPrint('[AuthService] signIn: anon key missing');
       return null;
     }
 
-    // Validate email case sensitivity: check if email exists in users table with exact case match
-    final caseCheckValid = await _validateEmailCaseSensitivity(email);
-    if (!caseCheckValid) {
-      _setLastAuthError('Invalid credentials.');
-      return null;
+    debugPrint('[AuthService] signIn: attempting for $normalizedEmail');
+
+    // TEMPORARY: Log but don't block on email validation to diagnose Supabase connectivity
+    // The email validation was returning false due to RLS permissions, blocking all logins
+    // TODO: Fix RLS policies on users table so anon key can read emails
+    try {
+      unawaited(_validateEmailCaseSensitivity(normalizedEmail).then((valid) {
+        debugPrint('[AuthService] Email validation result (non-blocking): $valid for $normalizedEmail');
+      }));
+    } catch (e) {
+      debugPrint('[AuthService] Email validation error (caught, non-blocking): $e');
     }
+
+    debugPrint('[AuthService] signIn: using Supabase URL $_baseUrl');
+    debugPrint('[AuthService] signIn: bypassing email validation check, attempting Supabase auth directly');
 
     try {
+      debugPrint('[AuthService] signIn: calling Supabase.instance.client.auth.signInWithPassword for $normalizedEmail');
       final authResponse = await Supabase.instance.client.auth.signInWithPassword(
         email: email,
         password: password,
       );
       final session = authResponse.session;
       if (session == null) {
+        debugPrint('[AuthService] signIn: no session from Supabase, attempting recovery');
         return await _recoverLoginWithEdgeFunction(email: email, password: password);
       }
+      debugPrint('[AuthService] signIn: Supabase auth success, session obtained');
 
       final profile = await _fetchUserProfile(
         email: email,
@@ -311,8 +327,10 @@ class AuthService {
         'user_id': null,
         'auth_user_id': session.user.id,
       };
+      debugPrint('[AuthService] signIn: success for $normalizedEmail');
       return session.accessToken;
     } on AuthException catch (e) {
+      debugPrint('[AuthService] signIn: AuthException: ${e.message}');
       _setLastAuthError(e.message);
       final recovered = await _recoverLoginWithEdgeFunction(email: email, password: password);
       if (recovered != null) {
@@ -320,7 +338,8 @@ class AuthService {
       }
       return await _loginWithLegacyUsersTable(email: email, password: password);
     } catch (e) {
-      _setLastAuthError(e?.toString() ?? 'Unknown auth error');
+      debugPrint('[AuthService] signIn: exception: $e');
+      _setLastAuthError(e.toString());
       final recovered = await _recoverLoginWithEdgeFunction(email: email, password: password);
       if (recovered != null) {
         return recovered;
@@ -454,10 +473,12 @@ class AuthService {
     required String email,
     required String password,
   }) async {
+    debugPrint('[AuthService] _loginWithLegacyUsersTable: attempting legacy auth for $email');
     final url = Uri.parse(
       '$_baseUrl/rest/v1/users?select=user_id,email,username,role,affiliation,program_id,password&email=eq.${Uri.encodeQueryComponent(email)}&limit=1',
     );
 
+    debugPrint('[AuthService] _loginWithLegacyUsersTable: querying public.users table');
     final resp = await http.get(
       url,
       headers: {
@@ -467,22 +488,30 @@ class AuthService {
       },
     );
 
+    debugPrint('[AuthService] _loginWithLegacyUsersTable: query status ${resp.statusCode}');
     if (resp.statusCode != 200) {
+      debugPrint('[AuthService] _loginWithLegacyUsersTable: query failed with status ${resp.statusCode}, body: ${resp.body}');
       return null;
     }
 
     try {
       final decoded = jsonDecode(resp.body);
+      debugPrint('[AuthService] _loginWithLegacyUsersTable: decoded response type ${decoded.runtimeType}');
       if (decoded is! List || decoded.isEmpty) {
+        debugPrint('[AuthService] _loginWithLegacyUsersTable: no users found for $email');
         return null;
       }
 
       final row = Map<String, dynamic>.from(decoded.first as Map);
       final storedPassword = row['password']?.toString();
+      debugPrint('[AuthService] _loginWithLegacyUsersTable: found user, checking password');
+      
       if (storedPassword == null || storedPassword != password) {
+        debugPrint('[AuthService] _loginWithLegacyUsersTable: password mismatch');
         return null;
       }
 
+      debugPrint('[AuthService] _loginWithLegacyUsersTable: password matches! Setting currentUser');
       currentUser = {
         'user_id': row['user_id'],
         'email': row['email'] ?? email,
@@ -491,14 +520,18 @@ class AuthService {
         'affiliation': row['affiliation'],
         'program_id': row['program_id'],
       };
+      _setLastAuthError(null);
 
       final sessionToken = await _passwordGrantWithRetry(email: email, password: password);
       if (sessionToken != null) {
+        debugPrint('[AuthService] _loginWithLegacyUsersTable: got session token from password grant');
         return sessionToken;
       }
 
+      debugPrint('[AuthService] _loginWithLegacyUsersTable: returning legacy session token');
       return 'legacy-session:${email}';
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[AuthService] _loginWithLegacyUsersTable: exception: $e');
       return null;
     }
   }
@@ -654,13 +687,21 @@ class AuthService {
   }
 
   // Load the profile row for the signed-in user.
-  // Validate that email exists in users table with exact case match
+  // Treat email matching as case-insensitive so users do not get false
+  // "Invalid credentials" failures when the row is stored with a different case.
   static Future<bool> _validateEmailCaseSensitivity(String email) async {
+    final normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty) {
+      debugPrint('[AuthService] _validateEmailCaseSensitivity: empty email');
+      return false;
+    }
+
     try {
-      // Query all users and check for exact case match
       final url = Uri.parse(
         '$_baseUrl/rest/v1/users?select=email&limit=10000',
       );
+
+      debugPrint('[AuthService] _validateEmailCaseSensitivity: querying users table');
 
       final resp = await http.get(
         url,
@@ -670,25 +711,36 @@ class AuthService {
         },
       );
 
+      debugPrint('[AuthService] _validateEmailCaseSensitivity: response status ${resp.statusCode}');
+
       if (resp.statusCode != 200) {
+        debugPrint('[AuthService] _validateEmailCaseSensitivity: query failed with status ${resp.statusCode}');
+        debugPrint('[AuthService] _validateEmailCaseSensitivity: response body: ${resp.body}');
         return false;
       }
 
       final decoded = jsonDecode(resp.body);
       if (decoded is! List) {
+        debugPrint('[AuthService] _validateEmailCaseSensitivity: response is not a list');
         return false;
       }
 
-      // Check if email exists with exact case match
+      debugPrint('[AuthService] _validateEmailCaseSensitivity: checking ${decoded.length} users');
+
       for (final user in decoded) {
-        if (user is Map && user['email'] == email) {
-          return true; // Exact match found
+        if (user is Map) {
+          final storedEmail = user['email']?.toString();
+          if (storedEmail != null && storedEmail.toLowerCase() == normalizedEmail.toLowerCase()) {
+            debugPrint('[AuthService] _validateEmailCaseSensitivity: found matching email');
+            return true;
+          }
         }
       }
 
-      return false; // No exact match found
+      debugPrint('[AuthService] _validateEmailCaseSensitivity: no matching email found for $normalizedEmail');
+      return false;
     } catch (e) {
-      debugPrint('[AuthService] Case sensitivity check error: $e');
+      debugPrint('[AuthService] _validateEmailCaseSensitivity error: $e');
       return false;
     }
   }
@@ -758,40 +810,91 @@ class AuthService {
 
   // Request server to send a 6-digit verification code to the provided email.
   static Future<String?> sendEmailCode(String email) async {
+    final normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty) {
+      return 'Please enter your email.';
+    }
+
+    if (!_hasValidAnonKey) {
+      debugPrint('[AuthService] sendEmailCode: anon key is invalid or missing');
+      return 'Supabase anonymous key is missing. Check your .env values.';
+    }
+
     final funcUrl = Uri.parse('$_baseUrl/functions/v1/send_email_code');
-    final resp = await http.post(funcUrl,
+    debugPrint('[AuthService] sendEmailCode: calling $funcUrl for $normalizedEmail');
+    debugPrint('[AuthService] sendEmailCode: using anon key = ${_anonKey.substring(0, 20)}...');
+
+    try {
+      final resp = await http.post(
+        funcUrl,
         headers: {
           'Content-Type': 'application/json',
           'apikey': _anonKey,
+          'Authorization': 'Bearer $_anonKey',
         },
-        body: jsonEncode({'email': email}));
+        body: jsonEncode({'email': normalizedEmail}),
+      ).timeout(const Duration(seconds: 10), onTimeout: () {
+        throw TimeoutException('Edge function request timed out after 10 seconds');
+      });
 
-    if (resp.statusCode == 200 || resp.statusCode == 201) {
-      return null;
-    }
+      debugPrint('[AuthService] sendEmailCode response: status=${resp.statusCode}');
+      debugPrint('[AuthService] sendEmailCode response headers: ${resp.headers}');
+      debugPrint('[AuthService] sendEmailCode response body: ${resp.body}');
 
-    try {
-      final body = jsonDecode(resp.body);
-      return body['message']?.toString() ?? body['error']?.toString() ?? 'Status ${resp.statusCode}';
-    } catch (_) {
-      return 'Status ${resp.statusCode}: ${resp.body}';
+      if (resp.statusCode == 200 || resp.statusCode == 201) {
+        debugPrint('[AuthService] sendEmailCode: success');
+        return null;
+      }
+
+      try {
+        final body = jsonDecode(resp.body);
+        final msg = body['message']?.toString() ??
+            body['error']?.toString() ??
+            body['details']?.toString() ??
+            'HTTP ${resp.statusCode}';
+        debugPrint('[AuthService] sendEmailCode: API error = $msg');
+        return msg;
+      } catch (_) {
+        final errorMsg = 'HTTP ${resp.statusCode}: ${resp.body}';
+        debugPrint('[AuthService] sendEmailCode: parse error = $errorMsg');
+        return errorMsg;
+      }
+    } catch (e, st) {
+      debugPrint('[AuthService] sendEmailCode exception: $e');
+      debugPrint('[AuthService] sendEmailCode stack: $st');
+      return 'Edge function error: $e';
     }
   }
 
   // Verify a code previously sent to the email. Expects `verify_email_code` function.
   static Future<bool> verifyEmailCode(String email, String code) async {
-    final funcUrl = Uri.parse('$_baseUrl/functions/v1/verify_email_code');
-    final resp = await http.post(funcUrl,
+    final normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty || code.trim().isEmpty) {
+      return false;
+    }
+
+    try {
+      final funcUrl = Uri.parse('$_baseUrl/functions/v1/verify_email_code');
+      final resp = await http.post(
+        funcUrl,
         headers: {
           'Content-Type': 'application/json',
           'apikey': _anonKey,
+          'Authorization': 'Bearer $_anonKey',
         },
-        body: jsonEncode({'email': email, 'code': code}));
+        body: jsonEncode({'email': normalizedEmail, 'code': code.trim()}),
+      );
 
-    if (resp.statusCode == 200) {
-      final body = jsonDecode(resp.body);
-      return body['ok'] == true;
+      if (resp.statusCode == 200) {
+        final body = jsonDecode(resp.body);
+        return body['ok'] == true;
+      }
+
+      debugPrint('[AuthService] verifyEmailCode failed: ${resp.statusCode} ${resp.body}');
+      return false;
+    } catch (e) {
+      debugPrint('[AuthService] verifyEmailCode exception: $e');
+      return false;
     }
-    return false;
   }
 }

@@ -14,39 +14,47 @@ final globalEnv = <String, String>{};
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Try to load .env from assets (works on all platforms)
   try {
-    // On Windows desktop, rootBundle doesn't work. Read .env directly from the absolute path.
-    final envPath = 'c:\\Users\\Joshueee\\new_nutilize_mobile\\.env';
-    final envFile = File(envPath);
-    if (envFile.existsSync()) {
-      final contents = await envFile.readAsString();
-      debugPrint('[main] .env file read successfully, size=${contents.length}');
-      
-      // Manually parse .env and populate globalEnv
-      final lines = contents.split('\n');
-      for (final line in lines) {
-        final trimmed = line.trim();
-        if (trimmed.isNotEmpty && !trimmed.startsWith('#')) {
-          final parts = trimmed.split('=');
-          if (parts.length == 2) {
-            globalEnv[parts[0]] = parts[1];
+    await dotenv.load();  // No fileName - uses pubspec.yaml assets by default
+    for (final entry in dotenv.env.entries) {
+      globalEnv[entry.key] = entry.value;
+    }
+
+    final anonKey = globalEnv['SUPABASE_ANON'];
+    debugPrint('[main] Loaded SUPABASE_ANON from assets, length: ${anonKey?.length}');
+
+    AuthService.setEnvironment(globalEnv);
+    SupabaseService.setEnvironment(globalEnv);
+  } catch (e) {
+    debugPrint('[main] .env asset load error: $e');
+
+    // Fallback: try loading from Windows file path (for desktop development)
+    try {
+      final envPath = 'c:\\Users\\Joshueee\\new_nutilize_mobile\\.env';
+      final envFile = File(envPath);
+      if (envFile.existsSync()) {
+        final contents = await envFile.readAsString();
+        final lines = contents.split('\n');
+        for (final line in lines) {
+          final trimmed = line.trim();
+          if (trimmed.isNotEmpty && !trimmed.startsWith('#')) {
+            final parts = trimmed.split('=');
+            if (parts.length >= 2) {
+              globalEnv[parts[0]] = parts.sublist(1).join('=');
+            }
           }
         }
+        debugPrint('[main] Loaded .env from Windows fallback path');
+        AuthService.setEnvironment(globalEnv);
+        SupabaseService.setEnvironment(globalEnv);
       }
-      
-      final anonKey = globalEnv['SUPABASE_ANON'];
-      debugPrint('[main] Loaded SUPABASE_ANON length: ${anonKey?.length}');
-      
-      // Pass the environment to AuthService and SupabaseService
-      AuthService.setEnvironment(globalEnv);
-      SupabaseService.setEnvironment(globalEnv);
-    } else {
-      debugPrint('[main] .env file not found at $envPath');
+    } catch (e) {
+      debugPrint('[main] Windows fallback also failed: $e');
     }
-  } catch (e) {
-    debugPrint('[main] .env load error: $e');
   }
-  
+
   try {
     await SupabaseService.init();
   } catch (e) {

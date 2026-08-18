@@ -1,0 +1,335 @@
+  sign_in_with_apple 5.0.0 (8.1.0 available)
+  sign_in_with_apple_platform_interface 1.1.0 (2.0.0 available)
+  sign_in_with_apple_web 1.0.1 (3.0.0 available)
+  webview_flutter 4.14.0 (4.14.1 available)
+  webview_flutter_android 4.12.0 (4.14.0 available)
+  webview_flutter_wkwebview 3.25.1 (3.26.0 available)
+[+1159 ms] Found plugin webview_flutter at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter-4.14.0\
+[  +11 ms] Found plugin webview_flutter_wkwebview at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter_wkwebview-3.25.1\
+[  +15 ms] Found plugin webview_flutter_android at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter_android-4.12.0\
+[  +59 ms] Found plugin sign_in_with_apple at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\
+[   +4 ms] Found plugin sign_in_with_apple_web at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple_web-1.0.1\
+[  +94 ms] Found plugin webview_flutter at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter-4.14.0\
+[   +2 ms] Found plugin webview_flutter_wkwebview at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter_wkwebview-3.25.1\
+[  +84 ms] Found plugin webview_flutter_android at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter_android-4.12.0\
+[  +28 ms] Found plugin sign_in_with_apple at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\
+[   +1 ms] Found plugin sign_in_with_apple_web at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple_web-1.0.1\
+[  +36 ms] Found plugin webview_flutter at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter-4.14.0\
+[   +1 ms] Found plugin webview_flutter_wkwebview at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter_wkwebview-3.25.1\
+[   +2 ms] Found plugin webview_flutter_android at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter_android-4.12.0\
+[  +18 ms] Found plugin sign_in_with_apple at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\
+[   +1 ms] Found plugin sign_in_with_apple_web at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple_web-1.0.1\
+[  +15 ms] Top-level Gradle build file not found, skipping migration of task "clean".
+[  +17 ms] CMake project not found, skipping support Android 15 16k page size migration.
+[        ] file or directory 'C:\flutter\packages\flutter_tools\gradle\src\main\java', not found
+[        ] Included projects: [root project 'android', project ':app', project ':app_links', project ':flutter_plugin_android_lifecycle', project ':image_picker_android', project ':jni', project ':jni_flutter', project ':shared_preferences_android', project ':sign_in_with_apple', project ':url_launcher_android', project ':webview_flutter_android']
+[+1199 ms] > Configure project :sign_in_with_apple
+[        ] Evaluating project ':sign_in_with_apple' using build file 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\build.gradle'.
+[ +695 ms] > Configure project :webview_flutter_android
+[        ] Evaluating project ':webview_flutter_android' using build file 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter_android-4.12.0\android\build.gradle.kts'.
+[ +704 ms] Tasks to be executed: [task ':app:preBuild', task ':app:preReleaseBuild', task ':app:extractReleaseVersionControlInfo', task ':app:cleanMergeReleaseAssets', task ':app:mergeReleaseShaders', task ':app:compileReleaseShaders', task ':app:generateReleaseAssets', task ':app:compileFlutterBuildRelease', task ':app:packJniLibsflutterBuildRelease', task ':app_links:preBuild', task ':app_links:preReleaseBuild', task ':app_links:mergeReleaseShaders', task ':app_links:compileReleaseShaders', task ':app_links:generateReleaseAssets', task ':app_links:mergeReleaseAssets', task ':flutter_plugin_android_lifecycle:preBuild', task ':flutter_plugin_android_lifecycle:preReleaseBuild', task ':flutter_plugin_android_lifecycle:mergeReleaseShaders', task ':flutter_plugin_android_lifecycle:compileReleaseShaders', task ':flutter_plugin_android_lifecycle:generateReleaseAssets', task ':flutter_plugin_android_lifecycle:mergeReleaseAssets', task ':image_picker_android:preBuild', task ':image_picker_android:preReleaseBuild', task ':image_picker_android:mergeReleaseShaders', task ':image_picker_android:compileReleaseShaders', task ':image_picker_android:generateReleaseAssets', task ':image_picker_android:mergeReleaseAssets', task ':jni:preBuild', task ':jni:preReleaseBuild', task ':jni:mergeReleaseShaders', task ':jni:compileReleaseShaders', task ':jni:generateReleaseAssets', task ':jni:mergeReleaseAssets', task ':jni_flutter:preBuild', task ':jni_flutter:preReleaseBuild', task ':jni_flutter:mergeReleaseShaders', task ':jni_flutter:compileReleaseShaders', task ':jni_flutter:generateReleaseAssets', task ':jni_flutter:mergeReleaseAssets', task ':shared_preferences_android:preBuild', task ':shared_preferences_android:preReleaseBuild', task ':shared_preferences_android:mergeReleaseShaders', task ':shared_preferences_android:compileReleaseShaders', task ':shared_preferences_android:generateReleaseAssets', task ':shared_preferences_android:mergeReleaseAssets', task ':sign_in_with_apple:preBuild', task ':sign_in_with_apple:preReleaseBuild', task ':sign_in_with_apple:mergeReleaseShaders', task ':sign_in_with_apple:compileReleaseShaders', task ':sign_in_with_apple:generateReleaseAssets', task ':sign_in_with_apple:mergeReleaseAssets', task ':url_launcher_android:preBuild', task ':url_launcher_android:preReleaseBuild', task ':url_launcher_android:mergeReleaseShaders', task ':url_launcher_android:compileReleaseShaders', task ':url_launcher_android:generateReleaseAssets', task ':url_launcher_android:mergeReleaseAssets', task ':webview_flutter_android:preBuild', task ':webview_flutter_android:preReleaseBuild', task ':webview_flutter_android:mergeReleaseShaders', task ':webview_flutter_android:compileReleaseShaders', task ':webview_flutter_android:generateReleaseAssets', task ':webview_flutter_android:mergeReleaseAssets', task ':app:mergeReleaseAssets', task ':app_links:generateReleaseResValues', task ':app_links:generateReleaseResources', task ':app_links:packageReleaseResources', task ':app_links:parseReleaseLocalResources', task ':app_links:generateReleaseRFile', task ':app_links:javaPreCompileRelease', task ':app_links:compileReleaseJavaWithJavac', task ':app_links:mergeReleaseGeneratedProguardFiles', task ':app_links:exportReleaseConsumerProguardFiles', task ':flutter_plugin_android_lifecycle:generateReleaseResValues', task ':flutter_plugin_android_lifecycle:generateReleaseResources', task ':flutter_plugin_android_lifecycle:packageReleaseResources', task ':flutter_plugin_android_lifecycle:parseReleaseLocalResources', task ':flutter_plugin_android_lifecycle:generateReleaseRFile', task ':flutter_plugin_android_lifecycle:javaPreCompileRelease', task ':flutter_plugin_android_lifecycle:compileReleaseJavaWithJavac', task ':flutter_plugin_android_lifecycle:bundleLibCompileToJarRelease', task ':image_picker_android:checkKotlinGradlePluginConfigurationErrors', task ':image_picker_android:generateReleaseResValues', task ':image_picker_android:generateReleaseResources', task ':image_picker_android:packageReleaseResources', task ':image_picker_android:parseReleaseLocalResources', task ':image_picker_android:generateReleaseRFile', task ':image_picker_android:compileReleaseKotlin', task ':image_picker_android:javaPreCompileRelease', task ':image_picker_android:compileReleaseJavaWithJavac', task ':image_picker_android:mergeReleaseGeneratedProguardFiles', task ':image_picker_android:exportReleaseConsumerProguardFiles', task ':flutter_plugin_android_lifecycle:mergeReleaseGeneratedProguardFiles', task ':flutter_plugin_android_lifecycle:exportReleaseConsumerProguardFiles', task ':jni:generateReleaseResValues', task ':jni:generateReleaseResources', task ':jni:packageReleaseResources', task ':jni:parseReleaseLocalResources', task ':jni:generateReleaseRFile', task ':jni:javaPreCompileRelease', task ':jni:compileReleaseJavaWithJavac', task ':jni:bundleLibCompileToJarRelease', task ':jni_flutter:generateReleaseResValues', task ':jni_flutter:generateReleaseResources', task ':jni_flutter:packageReleaseResources', task ':jni_flutter:parseReleaseLocalResources', task ':jni_flutter:generateReleaseRFile', task ':jni_flutter:javaPreCompileRelease', task ':jni_flutter:compileReleaseJavaWithJavac', task ':jni_flutter:mergeReleaseGeneratedProguardFiles', task ':jni_flutter:exportReleaseConsumerProguardFiles', task ':jni:mergeReleaseGeneratedProguardFiles', task ':jni:exportReleaseConsumerProguardFiles', task ':shared_preferences_android:checkKotlinGradlePluginConfigurationErrors', task ':shared_preferences_android:generateReleaseResValues', task ':shared_preferences_android:generateReleaseResources', task ':shared_preferences_android:packageReleaseResources', task ':shared_preferences_android:parseReleaseLocalResources', task ':shared_preferences_android:generateReleaseRFile', task ':shared_preferences_android:compileReleaseKotlin', task ':shared_preferences_android:javaPreCompileRelease', task ':shared_preferences_android:compileReleaseJavaWithJavac', task ':shared_preferences_android:mergeReleaseGeneratedProguardFiles', task ':shared_preferences_android:exportReleaseConsumerProguardFiles', task ':sign_in_with_apple:checkKotlinGradlePluginConfigurationErrors', task ':sign_in_with_apple:generateReleaseResValues', task ':sign_in_with_apple:generateReleaseResources', task ':sign_in_with_apple:packageReleaseResources', task ':sign_in_with_apple:parseReleaseLocalResources', task ':sign_in_with_apple:generateReleaseRFile', task ':sign_in_with_apple:compileReleaseKotlin', task ':sign_in_with_apple:javaPreCompileRelease', task ':sign_in_with_apple:compileReleaseJavaWithJavac', task ':sign_in_with_apple:mergeReleaseGeneratedProguardFiles', task ':sign_in_with_apple:exportReleaseConsumerProguardFiles', task ':url_launcher_android:checkKotlinGradlePluginConfigurationErrors', task ':url_launcher_android:generateReleaseBuildConfig', task ':url_launcher_android:generateReleaseResValues', task ':url_launcher_android:generateReleaseResources', task ':url_launcher_android:packageReleaseResources', task ':url_launcher_android:parseReleaseLocalResources', task ':url_launcher_android:generateReleaseRFile', task ':url_launcher_android:compileReleaseKotlin', task ':url_launcher_android:javaPreCompileRelease', task ':url_launcher_android:compileReleaseJavaWithJavac', task ':url_launcher_android:mergeReleaseGeneratedProguardFiles', task ':url_launcher_android:exportReleaseConsumerProguardFiles', task ':webview_flutter_android:checkKotlinGradlePluginConfigurationErrors', task ':webview_flutter_android:generateReleaseResValues', task ':webview_flutter_android:generateReleaseResources', task ':webview_flutter_android:packageReleaseResources', task ':webview_flutter_android:parseReleaseLocalResources', task ':webview_flutter_android:generateReleaseRFile', task ':webview_flutter_android:compileReleaseKotlin', task ':webview_flutter_android:javaPreCompileRelease', task ':webview_flutter_android:compileReleaseJavaWithJavac', task ':webview_flutter_android:mergeReleaseGeneratedProguardFiles', task ':webview_flutter_android:exportReleaseConsumerProguardFiles', task ':app:buildKotlinToolingMetadata', task ':app:checkReleaseDuplicateClasses', task ':app:checkKotlinGradlePluginConfigurationErrors', task ':app_links:writeReleaseAarMetadata', task ':flutter_plugin_android_lifecycle:writeReleaseAarMetadata', task ':image_picker_android:writeReleaseAarMetadata', task ':jni:writeReleaseAarMetadata', task ':jni_flutter:writeReleaseAarMetadata', task ':shared_preferences_android:writeReleaseAarMetadata', task ':sign_in_with_apple:writeReleaseAarMetadata', task ':url_launcher_android:writeReleaseAarMetadata', task ':webview_flutter_android:writeReleaseAarMetadata', task ':app:checkReleaseAarMetadata', task ':app:copyFlutterAssetsRelease', task ':app:generateReleaseResValues', task ':app:mapReleaseSourceSetPaths', task ':app:generateReleaseResources', task ':app:mergeReleaseResources', task ':app:packageReleaseResources', task ':app:parseReleaseLocalResources', task ':app:createReleaseCompatibleScreenManifests', task ':app:extractDeepLinksRelease', task ':app_links:extractDeepLinksRelease', task ':app_links:processReleaseManifest', task ':flutter_plugin_android_lifecycle:extractDeepLinksRelease', task ':flutter_plugin_android_lifecycle:processReleaseManifest', task ':image_picker_android:extractDeepLinksRelease', task ':image_picker_android:processReleaseManifest', task ':jni:extractDeepLinksRelease', task ':jni:processReleaseManifest', task ':jni_flutter:extractDeepLinksRelease', task ':jni_flutter:processReleaseManifest', task ':shared_preferences_android:extractDeepLinksRelease', task ':shared_preferences_android:processReleaseManifest', task ':sign_in_with_apple:extractDeepLinksRelease', task ':sign_in_with_apple:processReleaseManifest', task ':url_launcher_android:extractDeepLinksRelease', task ':url_launcher_android:processReleaseManifest', task ':webview_flutter_android:extractDeepLinksRelease', task ':webview_flutter_android:processReleaseManifest', task ':app:processReleaseMainManifest', task ':app:outputReleaseAppLinkSettings', task ':app:processReleaseManifest', task ':app:processReleaseManifestForPackage', task ':app:processReleaseResources', task ':app_links:bundleLibCompileToJarRelease', task ':image_picker_android:bundleLibCompileToJarRelease', task ':jni_flutter:bundleLibCompileToJarRelease', task ':shared_preferences_android:bundleLibCompileToJarRelease', task ':sign_in_with_apple:bundleLibCompileToJarRelease', task ':url_launcher_android:bundleLibCompileToJarRelease', task ':webview_flutter_android:bundleLibCompileToJarRelease', task ':app:compileReleaseKotlin', task ':app:javaPreCompileRelease', task ':app:compileReleaseJavaWithJavac', task ':app_links:prepareReleaseArtProfile', task ':flutter_plugin_android_lifecycle:prepareReleaseArtProfile', task ':image_picker_android:prepareReleaseArtProfile', task ':jni:prepareReleaseArtProfile', task ':jni_flutter:prepareReleaseArtProfile', task ':shared_preferences_android:prepareReleaseArtProfile', task ':sign_in_with_apple:prepareReleaseArtProfile', task ':url_launcher_android:prepareReleaseArtProfile', task ':webview_flutter_android:prepareReleaseArtProfile', task ':app:mergeReleaseArtProfile', task ':app_links:bundleLibRuntimeToJarRelease', task ':flutter_plugin_android_lifecycle:bundleLibRuntimeToJarRelease', task ':image_picker_android:bundleLibRuntimeToJarRelease', task ':jni:bundleLibRuntimeToJarRelease', task ':jni_flutter:bundleLibRuntimeToJarRelease', task ':shared_preferences_android:bundleLibRuntimeToJarRelease', task ':sign_in_with_apple:bundleLibRuntimeToJarRelease', task ':url_launcher_android:bundleLibRuntimeToJarRelease', task ':webview_flutter_android:bundleLibRuntimeToJarRelease', task ':app:expandReleaseArtProfileWildcards', task ':app:extractProguardFiles', task ':app:mergeReleaseGeneratedProguardFiles', task ':app:processReleaseJavaRes', task ':app_links:processReleaseJavaRes', task ':flutter_plugin_android_lifecycle:processReleaseJavaRes', task ':image_picker_android:processReleaseJavaRes', task ':jni:processReleaseJavaRes', task ':jni_flutter:processReleaseJavaRes', task ':shared_preferences_android:processReleaseJavaRes', task ':sign_in_with_apple:processReleaseJavaRes', task ':url_launcher_android:processReleaseJavaRes', task ':webview_flutter_android:processReleaseJavaRes', task ':app:mergeReleaseJavaResource', task ':app:mergeReleaseStartupProfile', task ':app:minifyReleaseWithR8', task ':app:configureCMakeRelease[arm64-v8a]', task ':app:buildCMakeRelease[arm64-v8a]', task ':app:configureCMakeRelease[armeabi-v7a]', task ':app:buildCMakeRelease[armeabi-v7a]', task ':app:configureCMakeRelease[x86_64]', task ':app:buildCMakeRelease[x86_64]', task ':app:mergeReleaseJniLibFolders', task ':app_links:mergeReleaseJniLibFolders', task ':app_links:mergeReleaseNativeLibs', task ':app_links:copyReleaseJniLibsProjectOnly', task ':flutter_plugin_android_lifecycle:mergeReleaseJniLibFolders', task ':flutter_plugin_android_lifecycle:mergeReleaseNativeLibs', task ':flutter_plugin_android_lifecycle:copyReleaseJniLibsProjectOnly', task ':image_picker_android:mergeReleaseJniLibFolders', task ':image_picker_android:mergeReleaseNativeLibs', task ':image_picker_android:copyReleaseJniLibsProjectOnly', task ':jni:configureCMakeRelWithDebInfo[arm64-v8a]', task ':jni:buildCMakeRelWithDebInfo[arm64-v8a]', task ':jni:configureCMakeRelWithDebInfo[armeabi-v7a]', task ':jni:buildCMakeRelWithDebInfo[armeabi-v7a]', task ':jni:configureCMakeRelWithDebInfo[x86]', task ':jni:buildCMakeRelWithDebInfo[x86]', task ':jni:configureCMakeRelWithDebInfo[x86_64]', task ':jni:buildCMakeRelWithDebInfo[x86_64]', task ':jni:mergeReleaseJniLibFolders', task ':jni:mergeReleaseNativeLibs', task ':jni:copyReleaseJniLibsProjectOnly', task ':jni_flutter:mergeReleaseJniLibFolders', task ':jni_flutter:mergeReleaseNativeLibs', task ':jni_flutter:copyReleaseJniLibsProjectOnly', task ':shared_preferences_android:mergeReleaseJniLibFolders', task ':shared_preferences_android:mergeReleaseNativeLibs', task ':shared_preferences_android:copyReleaseJniLibsProjectOnly', task ':sign_in_with_apple:mergeReleaseJniLibFolders', task ':sign_in_with_apple:mergeReleaseNativeLibs', task ':sign_in_with_apple:copyReleaseJniLibsProjectOnly', task ':url_launcher_android:mergeReleaseJniLibFolders', task ':url_launcher_android:mergeReleaseNativeLibs', task ':url_launcher_android:copyReleaseJniLibsProjectOnly', task ':webview_flutter_android:mergeReleaseJniLibFolders', task ':webview_flutter_android:mergeReleaseNativeLibs', task ':webview_flutter_android:copyReleaseJniLibsProjectOnly', task ':app:mergeReleaseNativeLibs', task ':app:stripReleaseDebugSymbols', task ':app:writeReleaseAppMetadata', task ':app:buildReleasePreBundle', task ':app:compileReleaseArtProfile', task ':app:collectReleaseDependencies', task ':app:configureReleaseDependencies', task ':app:extractReleaseNativeSymbolTables', task ':app_links:createFullJarRelease', task ':app_links:extractProguardFiles', task ':app_links:generateReleaseLintModel', task ':app_links:prepareLintJarForPublish', task ':flutter_plugin_android_lifecycle:createFullJarRelease', task ':flutter_plugin_android_lifecycle:extractProguardFiles', task ':flutter_plugin_android_lifecycle:generateReleaseLintModel', task ':flutter_plugin_android_lifecycle:prepareLintJarForPublish', task ':image_picker_android:createFullJarRelease', task ':image_picker_android:extractProguardFiles', task ':image_picker_android:generateReleaseLintModel', task ':image_picker_android:prepareLintJarForPublish', task ':jni:createFullJarRelease', task ':jni:extractProguardFiles', task ':jni:generateReleaseLintModel', task ':jni:prepareLintJarForPublish', task ':jni_flutter:createFullJarRelease', task ':jni_flutter:extractProguardFiles', task ':jni_flutter:generateReleaseLintModel', task ':jni_flutter:prepareLintJarForPublish', task ':shared_preferences_android:createFullJarRelease', task ':shared_preferences_android:extractProguardFiles', task ':shared_preferences_android:generateReleaseLintModel', task ':shared_preferences_android:prepareLintJarForPublish', task ':sign_in_with_apple:createFullJarRelease', task ':sign_in_with_apple:extractProguardFiles', task ':sign_in_with_apple:generateReleaseLintModel', task ':sign_in_with_apple:prepareLintJarForPublish', task ':url_launcher_android:createFullJarRelease', task ':url_launcher_android:extractProguardFiles', task ':url_launcher_android:generateReleaseLintModel', task ':url_launcher_android:prepareLintJarForPublish', task ':webview_flutter_android:createFullJarRelease', task ':webview_flutter_android:extractProguardFiles', task ':webview_flutter_android:generateReleaseLintModel', task ':webview_flutter_android:prepareLintJarForPublish', task ':app:generateReleaseLintVitalReportModel', task ':app_links:stripReleaseDebugSymbols', task ':app_links:copyReleaseJniLibsProjectAndLocalJars', task ':app_links:extractDeepLinksForAarRelease', task ':app_links:extractReleaseAnnotations', task ':app_links:mergeReleaseConsumerProguardFiles', task ':app_links:mergeReleaseJavaResource', task ':app_links:syncReleaseLibJars', task ':app_links:bundleReleaseLocalLintAar', task ':image_picker_android:stripReleaseDebugSymbols', task ':image_picker_android:copyReleaseJniLibsProjectAndLocalJars', task ':image_picker_android:extractDeepLinksForAarRelease', task ':image_picker_android:extractReleaseAnnotations', task ':image_picker_android:mergeReleaseConsumerProguardFiles', task ':image_picker_android:mergeReleaseJavaResource', task ':image_picker_android:syncReleaseLibJars', task ':image_picker_android:bundleReleaseLocalLintAar', task ':flutter_plugin_android_lifecycle:stripReleaseDebugSymbols', task ':flutter_plugin_android_lifecycle:copyReleaseJniLibsProjectAndLocalJars', task ':flutter_plugin_android_lifecycle:extractDeepLinksForAarRelease', task ':flutter_plugin_android_lifecycle:extractReleaseAnnotations', task ':flutter_plugin_android_lifecycle:mergeReleaseConsumerProguardFiles', task ':flutter_plugin_android_lifecycle:mergeReleaseJavaResource', task ':flutter_plugin_android_lifecycle:syncReleaseLibJars', task ':flutter_plugin_android_lifecycle:bundleReleaseLocalLintAar', task ':jni_flutter:stripReleaseDebugSymbols', task ':jni_flutter:copyReleaseJniLibsProjectAndLocalJars', task ':jni_flutter:extractDeepLinksForAarRelease', task ':jni_flutter:extractReleaseAnnotations', task ':jni_flutter:mergeReleaseConsumerProguardFiles', task ':jni_flutter:mergeReleaseJavaResource', task ':jni_flutter:syncReleaseLibJars', task ':jni_flutter:bundleReleaseLocalLintAar', task ':jni:stripReleaseDebugSymbols', task ':jni:copyReleaseJniLibsProjectAndLocalJars', task ':jni:extractDeepLinksForAarRelease', task ':jni:extractReleaseAnnotations', task ':jni:mergeReleaseConsumerProguardFiles', task ':jni:mergeReleaseJavaResource', task ':jni:syncReleaseLibJars', task ':jni:bundleReleaseLocalLintAar', task ':shared_preferences_android:stripReleaseDebugSymbols', task ':shared_preferences_android:copyReleaseJniLibsProjectAndLocalJars', task ':shared_preferences_android:extractDeepLinksForAarRelease', task ':shared_preferences_android:extractReleaseAnnotations', task ':shared_preferences_android:mergeReleaseConsumerProguardFiles', task ':shared_preferences_android:mergeReleaseJavaResource', task ':shared_preferences_android:syncReleaseLibJars', task ':shared_preferences_android:bundleReleaseLocalLintAar', task ':sign_in_with_apple:stripReleaseDebugSymbols', task ':sign_in_with_apple:copyReleaseJniLibsProjectAndLocalJars', task ':sign_in_with_apple:extractDeepLinksForAarRelease', task ':sign_in_with_apple:extractReleaseAnnotations', task ':sign_in_with_apple:mergeReleaseConsumerProguardFiles', task ':sign_in_with_apple:mergeReleaseJavaResource', task ':sign_in_with_apple:syncReleaseLibJars', task ':sign_in_with_apple:bundleReleaseLocalLintAar', task ':url_launcher_android:stripReleaseDebugSymbols', task ':url_launcher_android:copyReleaseJniLibsProjectAndLocalJars', task ':url_launcher_android:extractDeepLinksForAarRelease', task ':url_launcher_android:extractReleaseAnnotations', task ':url_launcher_android:mergeReleaseConsumerProguardFiles', task ':url_launcher_android:mergeReleaseJavaResource', task ':url_launcher_android:syncReleaseLibJars', task ':url_launcher_android:bundleReleaseLocalLintAar', task ':webview_flutter_android:stripReleaseDebugSymbols', task ':webview_flutter_android:copyReleaseJniLibsProjectAndLocalJars', task ':webview_flutter_android:extractDeepLinksForAarRelease', task ':webview_flutter_android:extractReleaseAnnotations', task ':webview_flutter_android:mergeReleaseConsumerProguardFiles', task ':webview_flutter_android:mergeReleaseJavaResource', task ':webview_flutter_android:syncReleaseLibJars', task ':webview_flutter_android:bundleReleaseLocalLintAar', task ':app_links:lintVitalAnalyzeRelease', task ':app_links:writeReleaseLintModelMetadata', task ':flutter_plugin_android_lifecycle:lintVitalAnalyzeRelease', task ':flutter_plugin_android_lifecycle:writeReleaseLintModelMetadata', task ':image_picker_android:lintVitalAnalyzeRelease', task ':image_picker_android:writeReleaseLintModelMetadata', task ':jni:lintVitalAnalyzeRelease', task ':jni:writeReleaseLintModelMetadata', task ':jni_flutter:lintVitalAnalyzeRelease', task ':jni_flutter:writeReleaseLintModelMetadata', task ':shared_preferences_android:lintVitalAnalyzeRelease', task ':shared_preferences_android:writeReleaseLintModelMetadata', task ':sign_in_with_apple:lintVitalAnalyzeRelease', task ':sign_in_with_apple:writeReleaseLintModelMetadata', task ':url_launcher_android:lintVitalAnalyzeRelease', task ':url_launcher_android:writeReleaseLintModelMetadata', task ':webview_flutter_android:lintVitalAnalyzeRelease', task ':webview_flutter_android:writeReleaseLintModelMetadata', task ':app:lintVitalAnalyzeRelease', task ':app_links:generateReleaseLintVitalModel', task ':flutter_plugin_android_lifecycle:generateReleaseLintVitalModel', task ':image_picker_android:generateReleaseLintVitalModel', task ':jni:generateReleaseLintVitalModel', task ':jni_flutter:generateReleaseLintVitalModel', task ':shared_preferences_android:generateReleaseLintVitalModel', task ':sign_in_with_apple:generateReleaseLintVitalModel', task ':url_launcher_android:generateReleaseLintVitalModel', task ':webview_flutter_android:generateReleaseLintVitalModel', task ':app:lintVitalReportRelease', task ':app:lintVitalRelease', task ':app:parseReleaseIntegrityConfig', task ':app:packageReleaseBundle', task ':app:validateSigningRelease', task ':app:signReleaseBundle', task ':app:produceReleaseBundleIdeListingFile', task ':app:createReleaseBundleListingFileRedirect', task ':app:bundleRelease']
+[ +310 ms] [ +337 ms] Found plugin webview_flutter at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter-4.14.0\
+[        ] [   +8 ms] Found plugin webview_flutter_wkwebview at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter_wkwebview-3.25.1\
+[        ] [  +13 ms] Found plugin webview_flutter_android at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\webview_flutter_android-4.12.0\
+[ +108 ms] [  +56 ms] Found plugin sign_in_with_apple at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\
+[        ] [   +6 ms] Found plugin sign_in_with_apple_web at C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple_web-1.0.1\
+[+1796 ms] file or directory 'C:\Users\Joshueee\new_nutilize_mobile\build\native_assets\android\jniLibs\lib\armeabi-v7a', not found
+[ +594 ms] file or directory 'C:\Users\Joshueee\new_nutilize_mobile\build\native_assets\android\jniLibs\lib\arm64-v8a', not found
+[ +803 ms] file or directory 'C:\Users\Joshueee\new_nutilize_mobile\build\native_assets\android\jniLibs\lib\x86_64', not found
+[        ] Resolve mutations for :sign_in_with_apple:preBuild (Thread[#1031,Execution worker,5,main]) started.
+[        ] :sign_in_with_apple:preBuild (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :sign_in_with_apple:preBuild UP-TO-DATE
+[        ] Skipping task ':sign_in_with_apple:preBuild' as it has no actions.
+[        ] Resolve mutations for :sign_in_with_apple:preReleaseBuild (Thread[#1031,Execution worker,5,main]) started.
+[        ] :sign_in_with_apple:preReleaseBuild (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :sign_in_with_apple:preReleaseBuild UP-TO-DATE
+[        ] Skipping task ':sign_in_with_apple:preReleaseBuild' as it has no actions.
+[        ] Resolve mutations for :sign_in_with_apple:mergeReleaseShaders (Thread[#1031,Execution worker,5,main]) started.
+[        ] :sign_in_with_apple:mergeReleaseShaders (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :sign_in_with_apple:mergeReleaseShaders
+[        ] Caching disabled for task ':sign_in_with_apple:mergeReleaseShaders' because:
+[        ] Task ':sign_in_with_apple:mergeReleaseShaders' is not up-to-date because:
+[        ]   Class path of task ':sign_in_with_apple:mergeReleaseShaders' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[        ] The input changes require a full rebuild for incremental task ':sign_in_with_apple:mergeReleaseShaders'.
+[        ] Resolve mutations for :sign_in_with_apple:compileReleaseShaders (Thread[#1031,Execution worker,5,main]) started.
+[        ] :sign_in_with_apple:compileReleaseShaders (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :sign_in_with_apple:compileReleaseShaders NO-SOURCE
+[        ] Skipping task ':sign_in_with_apple:compileReleaseShaders' as it has no source files and no previous output files.
+[        ] Resolve mutations for :sign_in_with_apple:generateReleaseAssets (Thread[#1031,Execution worker,5,main]) started.
+[        ] :sign_in_with_apple:generateReleaseAssets (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :sign_in_with_apple:generateReleaseAssets UP-TO-DATE
+[        ] Skipping task ':sign_in_with_apple:generateReleaseAssets' as it has no actions.
+[        ] Resolve mutations for :sign_in_with_apple:mergeReleaseAssets (Thread[#1031,Execution worker,5,main]) started.
+[        ] :sign_in_with_apple:mergeReleaseAssets (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :sign_in_with_apple:mergeReleaseAssets
+[        ] Caching disabled for task ':sign_in_with_apple:mergeReleaseAssets' because:
+[        ] Task ':sign_in_with_apple:mergeReleaseAssets' is not up-to-date because:
+[        ]   Class path of task ':sign_in_with_apple:mergeReleaseAssets' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[        ] The input changes require a full rebuild for incremental task ':sign_in_with_apple:mergeReleaseAssets'.
+[        ] work action resolve mergeReleaseAssets (project :sign_in_with_apple) (Thread[#1031,Execution worker,5,main]) started.
+[        ] Resolve mutations for :webview_flutter_android:preBuild (Thread[#1031,Execution worker,5,main]) started.
+[        ] :webview_flutter_android:preBuild (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :webview_flutter_android:preBuild UP-TO-DATE
+[        ] Skipping task ':webview_flutter_android:preBuild' as it has no actions.
+[        ] Resolve mutations for :webview_flutter_android:preReleaseBuild (Thread[#1031,Execution worker,5,main]) started.
+[        ] :webview_flutter_android:preReleaseBuild (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :webview_flutter_android:preReleaseBuild UP-TO-DATE
+[        ] Skipping task ':webview_flutter_android:preReleaseBuild' as it has no actions.
+[  +75 ms] Resolve mutations for :webview_flutter_android:mergeReleaseShaders (Thread[#1031,Execution worker,5,main]) started.
+[        ] :webview_flutter_android:mergeReleaseShaders (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :webview_flutter_android:mergeReleaseShaders
+[        ] Caching disabled for task ':webview_flutter_android:mergeReleaseShaders' because:
+[        ] Task ':webview_flutter_android:mergeReleaseShaders' is not up-to-date because:
+[        ]   Class path of task ':webview_flutter_android:mergeReleaseShaders' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[        ] The input changes require a full rebuild for incremental task ':webview_flutter_android:mergeReleaseShaders'.
+[        ] Resolve mutations for :webview_flutter_android:compileReleaseShaders (Thread[#1031,Execution worker,5,main]) started.
+[        ] :webview_flutter_android:compileReleaseShaders (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :webview_flutter_android:compileReleaseShaders NO-SOURCE
+[        ] Skipping task ':webview_flutter_android:compileReleaseShaders' as it has no source files and no previous output files.
+[        ] Resolve mutations for :webview_flutter_android:generateReleaseAssets (Thread[#1031,Execution worker,5,main]) started.
+[        ] :webview_flutter_android:generateReleaseAssets (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :webview_flutter_android:generateReleaseAssets UP-TO-DATE
+[        ] Skipping task ':webview_flutter_android:generateReleaseAssets' as it has no actions.
+[        ] Resolve mutations for :webview_flutter_android:mergeReleaseAssets (Thread[#1031,Execution worker,5,main]) started.
+[        ] :webview_flutter_android:mergeReleaseAssets (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :webview_flutter_android:mergeReleaseAssets
+[        ] Caching disabled for task ':webview_flutter_android:mergeReleaseAssets' because:
+[        ] Task ':webview_flutter_android:mergeReleaseAssets' is not up-to-date because:
+[        ]   Class path of task ':webview_flutter_android:mergeReleaseAssets' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[        ] The input changes require a full rebuild for incremental task ':webview_flutter_android:mergeReleaseAssets'.
+[        ] work action resolve mergeReleaseAssets (project :webview_flutter_android) (Thread[#1031,Execution worker,5,main]) started.
+[        ] Full recompilation is required because no incremental change information is available. This is usually caused by clean builds or changing compiler arguments.
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\app_links-3.5.1\android\src\release\java', not found
+[        ] Full recompilation is required because no incremental change information is available. This is usually caused by clean builds or changing compiler arguments.
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\flutter_plugin_android_lifecycle-2.0.35\android\src\release\java', not found
+[ +396 ms] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[ +305 ms] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] Full recompilation is required because no incremental change information is available. This is usually caused by clean builds or changing compiler arguments.
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\jni-1.0.0\android\src\release\java', not found
+[        ] Full recompilation is required because no incremental change information is available. This is usually caused by clean builds or changing compiler arguments.
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\jni_flutter-1.0.1\android\src\release\java', not found
+[        ] Resolve mutations for :sign_in_with_apple:checkKotlinGradlePluginConfigurationErrors (Thread[#1035,Execution worker Thread 5,5,main]) started.
+[        ] :sign_in_with_apple:checkKotlinGradlePluginConfigurationErrors (Thread[#1035,Execution worker Thread 5,5,main]) started.
+[        ] > Task :sign_in_with_apple:checkKotlinGradlePluginConfigurationErrors SKIPPED
+[        ] Skipping task ':sign_in_with_apple:checkKotlinGradlePluginConfigurationErrors' as task onlyIf 'errorDiagnostics are present' is false.
+[  +91 ms] Resolve mutations for :sign_in_with_apple:generateReleaseResValues (Thread[#1035,Execution worker Thread 5,5,main]) started.
+[        ] :sign_in_with_apple:generateReleaseResValues (Thread[#1035,Execution worker Thread 5,5,main]) started.
+[        ] > Task :sign_in_with_apple:generateReleaseResValues
+[        ] Caching disabled for task ':sign_in_with_apple:generateReleaseResValues' because:
+[        ] Task ':sign_in_with_apple:generateReleaseResValues' is not up-to-date because:
+[        ]   Class path of task ':sign_in_with_apple:generateReleaseResValues' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[        ] Resolve mutations for :sign_in_with_apple:generateReleaseResources (Thread[#1031,Execution worker,5,main]) started.
+[        ] :sign_in_with_apple:generateReleaseResources (Thread[#1031,Execution worker,5,main]) started.
+[ +102 ms] > Task :sign_in_with_apple:generateReleaseResources
+[        ] Caching disabled for task ':sign_in_with_apple:generateReleaseResources' because:
+[        ] Task ':sign_in_with_apple:generateReleaseResources' is not up-to-date because:
+[        ]   Class path of task ':sign_in_with_apple:generateReleaseResources' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[        ] Resolve mutations for :sign_in_with_apple:packageReleaseResources (Thread[#1031,Execution worker,5,main]) started.
+[        ] :sign_in_with_apple:packageReleaseResources (Thread[#1031,Execution worker,5,main]) started.
+[        ] > Task :sign_in_with_apple:packageReleaseResources
+[        ] Caching disabled for task ':sign_in_with_apple:packageReleaseResources' because:
+[        ] Task ':sign_in_with_apple:packageReleaseResources' is not up-to-date because:
+[        ]   Class path of task ':sign_in_with_apple:packageReleaseResources' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[        ] The input changes require a full rebuild for incremental task ':sign_in_with_apple:packageReleaseResources'.
+[        ] work action resolve packageReleaseResources (project :sign_in_with_apple) (Thread[#1031,Execution worker,5,main]) started.
+[ +102 ms] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[   +3 ms] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[  +89 ms] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[   +1 ms] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[        ] Resolve mutations for :sign_in_with_apple:parseReleaseLocalResources (Thread[#1035,Execution worker Thread 5,5,main]) started.
+[        ] :sign_in_with_apple:parseReleaseLocalResources (Thread[#1035,Execution worker Thread 5,5,main]) started.
+[        ] > Task :sign_in_with_apple:parseReleaseLocalResources
+[        ] Caching disabled for task ':sign_in_with_apple:parseReleaseLocalResources' because:
+[        ] Task ':sign_in_with_apple:parseReleaseLocalResources' is not up-to-date because:
+[        ]   Class path of task ':sign_in_with_apple:parseReleaseLocalResources' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[        ] The input changes require a full rebuild for incremental task ':sign_in_with_apple:parseReleaseLocalResources'.
+[        ] Full recompilation is required because no incremental change information is available. This is usually caused by clean builds or changing compiler arguments.
+[  +91 ms] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\image_picker_android-0.8.13+17\android\src\release\java', not found
+[        ] Full recompilation is required because no incremental change information is available. This is usually caused by clean builds or changing compiler arguments.
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\shared_preferences_android-2.4.23\android\src\release\java', not found
+[ +104 ms] Resolve mutations for :sign_in_with_apple:generateReleaseRFile (Thread[#1040,Execution worker Thread 10,5,main]) started.
+[        ] :sign_in_with_apple:generateReleaseRFile (Thread[#1034,Execution worker Thread 4,5,main]) started.
+[  +89 ms] Resolve mutations for :sign_in_with_apple:javaPreCompileRelease (Thread[#1040,Execution worker Thread 10,5,main]) started.
+[        ] :sign_in_with_apple:javaPreCompileRelease (Thread[#1040,Execution worker Thread 10,5,main]) started.
+[        ] > Task :sign_in_with_apple:javaPreCompileRelease
+[        ] Caching disabled for task ':sign_in_with_apple:javaPreCompileRelease' because:
+[        ] Task ':sign_in_with_apple:javaPreCompileRelease' is not up-to-date because:
+[        ]   Class path of task ':sign_in_with_apple:javaPreCompileRelease' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[  +92 ms] > Task :sign_in_with_apple:generateReleaseRFile
+[        ] Caching disabled for task ':sign_in_with_apple:generateReleaseRFile' because:
+[        ] Task ':sign_in_with_apple:generateReleaseRFile' is not up-to-date because:
+[        ]   Class path of task ':sign_in_with_apple:generateReleaseRFile' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[        ] The input changes require a full rebuild for incremental task ':sign_in_with_apple:generateReleaseRFile'.
+[        ] work action resolve package-aware-r.txt (project :sign_in_with_apple) (Thread[#1040,Execution worker Thread 10,5,main]) started.
+[        ] Resolve mutations for :sign_in_with_apple:compileReleaseKotlin (Thread[#1040,Execution worker Thread 10,5,main]) started.
+[        ] :sign_in_with_apple:compileReleaseKotlin (Thread[#1040,Execution worker Thread 10,5,main]) started.
+[+1998 ms] > Task :sign_in_with_apple:compileReleaseKotlin
+[        ] Adding -Xuse-inline-scopes-numbers Kotlin compiler flag for task :sign_in_with_apple:compileDebugAndroidTestKotlin
+[        ] Caching disabled for ClasspathEntrySnapshotTransform: C:\Users\Joshueee\new_nutilize_mobile\build\sign_in_with_apple\intermediates\compile_r_class_jar\release\generateReleaseRFile\R.jar because:
+[+3894 ms] Caching disabled for task ':sign_in_with_apple:compileReleaseKotlin' because:
+[        ] Task ':sign_in_with_apple:compileReleaseKotlin' is not up-to-date because:
+[        ]   Class path of task ':sign_in_with_apple:compileReleaseKotlin' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[        ] The input changes require a full rebuild for incremental task ':sign_in_with_apple:compileReleaseKotlin'.
+[ +106 ms] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[  +91 ms] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[   +4 ms] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\java', not found
+[ +101 ms] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\release\java', not found
+[        ] Kotlin source files: C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\sign_in_with_apple-5.0.0\android\src\main\kotlin\com\aboutyou\dart_packages\sign_in_with_apple\SignInWithApplePlugin.kt
+[        ] > Task :sign_in_with_apple:compileReleaseKotlin
+[        ] Options for KOTLIN DAEMON: IncrementalCompilationOptions(super=CompilationOptions(compilerMode=INCREMENTAL_COMPILER, targetPlatform=JVM, reportCategories=[0, 3], reportSeverity=2, requestedCompilationResults=[0], kotlinScriptExtensions=[]), sourceChanges=org.jetbrains.kotlin.buildtools.api.SourcesChanges$Unknown@202399b8, classpathChanges=NotAvailableForNonIncrementalRun, workingDir=C:\Users\Joshueee\new_nutilize_mobile\build\sign_in_with_apple\kotlin\compileReleaseKotlin\cacheable, multiModuleICSettings=MultiModuleICSettings(buildHistoryFile=C:\Users\Joshueee\new_nutilize_mobile\build\sign_in_with_apple\kotlin\compileReleaseKotlin\local-state\build-history.bin, useModuleDetection=true), icFeatures=IncrementalCompilationFeatures(usePreciseJavaTracking=true, withAbiSnapshot=false, preciseCompilationResultsBackup=true, keepIncrementalCompilationCachesInMemory=true, enableUnsafeIncrementalCompilationForMultiplatform=false, enableMonotonousIncrementalCompileSetExpansion=true), outputFiles=[C:\Users\Joshueee\new_nutilize_mobile\build\sign_in_with_apple\tmp\kotlin-classes\release, C:\Users\Joshueee\new_nutilize_mobile\build\sign_in_with_apple\kotlin\compileReleaseKotlin\cacheable, C:\Users\Joshueee\new_nutilize_mobile\build\sign_in_with_apple\kotlin\compileReleaseKotlin\local-state])
+[        ] Resolve mutations for :webview_flutter_android:checkKotlinGradlePluginConfigurationErrors (Thread[#1039,Execution worker Thread 9,5,main]) started.
+[        ] :webview_flutter_android:checkKotlinGradlePluginConfigurationErrors (Thread[#1039,Execution worker Thread 9,5,main]) started.
+[        ] > Task :webview_flutter_android:checkKotlinGradlePluginConfigurationErrors SKIPPED
+[        ] Skipping task ':webview_flutter_android:checkKotlinGradlePluginConfigurationErrors' as task onlyIf 'errorDiagnostics are present' is false.
+[        ] Resolve mutations for :webview_flutter_android:generateReleaseResValues (Thread[#1039,Execution worker Thread 9,5,main]) started.
+[        ] :webview_flutter_android:generateReleaseResValues (Thread[#1039,Execution worker Thread 9,5,main]) started.
+[        ] > Task :webview_flutter_android:generateReleaseResValues
+[        ] Caching disabled for task ':webview_flutter_android:generateReleaseResValues' because:
+[        ] Task ':webview_flutter_android:generateReleaseResValues' is not up-to-date because:
+[        ]   Class path of task ':webview_flutter_android:generateReleaseResValues' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[  +87 ms] Resolve mutations for :webview_flutter_android:generateReleaseResources (Thread[#1038,Execution worker Thread 8,5,main]) started.
+[   +1 ms] :webview_flutter_android:generateReleaseResources (Thread[#1038,Execution worker Thread 8,5,main]) started.
+[ +102 ms] > Task :webview_flutter_android:generateReleaseResources
+[        ] Caching disabled for task ':webview_flutter_android:generateReleaseResources' because:
+[        ] Task ':webview_flutter_android:generateReleaseResources' is not up-to-date because:
+[        ]   Class path of task ':webview_flutter_android:generateReleaseResources' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[        ] Resolve mutations for :webview_flutter_android:packageReleaseResources (Thread[#1038,Execution worker Thread 8,5,main]) started.
+[        ] :webview_flutter_android:packageReleaseResources (Thread[#1038,Execution worker Thread 8,5,main]) started.
+[  +89 ms] > Task :webview_flutter_android:packageReleaseResources
+[        ] Caching disabled for task ':webview_flutter_android:packageReleaseResources' because:
+[        ] Task ':webview_flutter_android:packageReleaseResources' is not up-to-date because:
+[        ]   Class path of task ':webview_flutter_android:packageReleaseResources' has changed from 9d044dca61a0cb66d9c7caad8effcb1b to c7d86173902e31334ec1dfc068593c9e.
+[        ] The input changes require a full rebuild for incremental task ':webview_flutter_android:packageReleaseResources'.
+[        ] work action resolve packageReleaseResources (project :webview_flutter_android) (Thread[#1038,Execution worker Thread 8,5,main]) started.
+[+1600 ms] > Task :sign_in_with_apple:compileReleaseKotlin
+sign_in_with_apple-5.0.0/android/src/main/kotlin/com/aboutyou/dart_packages/sig
+sign_in_with_apple-5.0.0/android/src/main/kotlin/com/aboutyou/dart_packages/sig
+sign_in_with_apple-5.0.0/android/src/main/kotlin/com/aboutyou/dart_packages/sig
+[ +299 ms] > Task :sign_in_with_apple:compileReleaseKotlin FAILED
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[  +84 ms] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\kotlin', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] file or directory 'C:\Users\Joshueee\AppData\Local\Pub\Cache\hosted\pub.dev\url_launcher_android-6.3.30\android\src\release\java', not found
+[        ] FAILURE: Build failed with an exception.
+[        ] * What went wrong:
+[        ] Execution failed for task 
+':sign_in_with_apple:compileReleaseKotlin'.
+[        ] org.gradle.api.tasks.TaskExecutionException: Execution failed for 
+task ':sign_in_with_apple:compileReleaseKotlin'.
+[        ] Caused by: 
+[        ] Caused by: 
+[        ] BUILD FAILED in 3m 2s

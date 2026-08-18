@@ -2008,7 +2008,7 @@ class ReservationService {
         }
 
         final storageClient = SupabaseClient(
-          _client.supabaseUrl,
+          SupabaseService.supabaseUrl,
           serviceRoleKey,
         );
 

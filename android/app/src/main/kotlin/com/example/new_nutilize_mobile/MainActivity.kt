@@ -1,4 +1,4 @@
-package com.example.new_nutilize_mobile
+package com.nutilizmobile
 
 import io.flutter.embedding.android.FlutterActivity
 
