@@ -240,6 +240,12 @@ class _RequestHistoryPageState extends State<RequestHistoryPage> {
 
   String _statusBucket(String value) {
     final normalized = value.toLowerCase();
+    if (normalized.contains('returned')) {
+      return 'Returned';
+    }
+    if (normalized.contains('completed')) {
+      return 'Completed';
+    }
     if (normalized.contains('approved')) {
       return 'Approved';
     }
@@ -318,6 +324,10 @@ class _StatusChip extends StatelessWidget {
     switch (status.toLowerCase()) {
       case 'approved':
         return const Color(0xFFE7F7EA);
+      case 'completed':
+        return const Color(0xFFE9F7F2);
+      case 'returned':
+        return const Color(0xFFE7ECFF);
       case 'rejected':
         return const Color(0xFFFDE8E8);
       case 'cancelled':
@@ -331,6 +341,10 @@ class _StatusChip extends StatelessWidget {
     switch (status.toLowerCase()) {
       case 'approved':
         return const Color(0xFF2F8F4E);
+      case 'completed':
+        return const Color(0xFF1D7B62);
+      case 'returned':
+        return const Color(0xFF35489A);
       case 'rejected':
         return const Color(0xFFDA1E1E);
       case 'cancelled':

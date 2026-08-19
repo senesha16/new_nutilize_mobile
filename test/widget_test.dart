@@ -23,7 +23,7 @@ void main() {
     await tester.pumpWidget(const NUtilizeApp());
 
     expect(find.text('Welcome to'), findsOneWidget);
-    expect(find.text('Log In with Microsoft'), findsOneWidget);
+    expect(find.text('Register with Microsoft'), findsOneWidget);
   });
 
   testWidgets('shows request history entries and filters', (
@@ -89,20 +89,23 @@ void main() {
   });
 
   test('sorts an approval timeline by workflow order', () {
-    final ordered = ReservationService.sortApprovalEntriesForTimeline([
-      {'office_name': 'Physical Facilities', 'created_at': '2026-07-20T10:00:00Z'},
-      {'office_name': 'Security', 'created_at': '2026-07-20T10:01:00Z'},
-      {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:02:00Z'},
-      {'office_name': 'Item Owner', 'created_at': '2026-07-20T10:03:00Z'},
-    ]);
+    final ordered = ReservationService.sortApprovalEntriesForTimeline(
+      [
+        {'office_name': 'Physical Facilities', 'created_at': '2026-07-20T10:00:00Z'},
+        {'office_name': 'Security', 'created_at': '2026-07-20T10:01:00Z'},
+        {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:02:00Z'},
+        {'office_name': 'Item Owner', 'created_at': '2026-07-20T10:03:00Z'},
+      ],
+      itemOwnerOfficeId: 42,
+    );
 
     expect(
       ordered.map((entry) => entry['office_name']),
-      ['Program Chair', 'Item Owner', 'Security', 'Physical Facilities'],
+      ['Item Owner', 'Program Chair', 'Security', 'Physical Facilities'],
     );
   });
 
-  test('preserves the original approval order for the timeline UI', () {
+  test('keeps a borrowed item owner ahead of program chair in the timeline UI', () {
     final ordered = ReservationService.sortApprovalEntriesForTimeline([
       {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:00:00Z'},
       {'office_name': 'Maria Lerma', 'created_at': '2026-07-20T10:01:00Z'},
@@ -112,22 +115,51 @@ void main() {
 
     expect(
       ordered.map((entry) => entry['office_name']),
-      ['Program Chair', 'Maria Lerma', 'SDAO', 'Physical Facilities'],
+      ['Maria Lerma', 'Program Chair', 'SDAO', 'Physical Facilities'],
     );
   });
 
   test('sorts an approval timeline for AVR with item owner before Program Chair', () {
-    final ordered = ReservationService.sortApprovalEntriesForTimeline([
-      {'office_name': 'Physical Facilities', 'created_at': '2026-07-20T10:00:00Z'},
-      {'office_name': 'Maria Lerma', 'created_at': '2026-07-20T10:01:00Z'},
-      {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:02:00Z'},
-      {'office_name': 'Security', 'created_at': '2026-07-20T10:03:00Z'},
-    ]);
+    final ordered = ReservationService.sortApprovalEntriesForTimeline(
+      [
+        {'office_name': 'Physical Facilities', 'created_at': '2026-07-20T10:00:00Z'},
+        {'office_name': 'Maria Lerma', 'created_at': '2026-07-20T10:01:00Z'},
+        {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:02:00Z'},
+        {'office_name': 'Security', 'created_at': '2026-07-20T10:03:00Z'},
+      ],
+      itemOwnerOfficeId: 42,
+    );
 
     expect(
       ordered.map((entry) => entry['office_name']),
       ['Maria Lerma', 'Program Chair', 'Security', 'Physical Facilities'],
     );
+  });
+
+  test('places general education ahead of item owners in gym requests', () {
+    final ordered = ReservationService.sortApprovalEntriesForTimeline(
+      [
+        {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:02:00Z'},
+        {'office_name': 'Maria Lerma', 'created_at': '2026-07-20T10:03:00Z'},
+        {'office_name': 'General Education', 'created_at': '2026-07-20T10:00:00Z'},
+        {'office_name': 'Security', 'created_at': '2026-07-20T10:04:00Z'},
+      ],
+      itemOwnerOfficeId: 42,
+      generalEducationOfficeId: 99,
+    );
+
+    expect(
+      ordered.map((entry) => entry['office_name']),
+      ['General Education', 'Maria Lerma', 'Program Chair', 'Security'],
+    );
+  });
+
+  test('normalizes gym room types so general education is retained in the approval chain', () {
+    expect(ReservationService.normalizeRoomType(' gym '), 'gym');
+    expect(ReservationService.isGymRoomType(' gym '), isTrue);
+    expect(ReservationService.isGymRoomType('Gym'), isTrue);
+    expect(ReservationService.isGymRoomType('GYM'), isTrue);
+    expect(ReservationService.isGymRoomType('Classroom'), isFalse);
   });
 
   test('keeps reservations visible while awaiting physical facilities approval', () {
@@ -147,6 +179,46 @@ void main() {
         currentUserId: 42,
       ),
       isTrue,
+    );
+  });
+
+  test('prefers the latest approval row when overall status is stale', () {
+    final approvalRows = [
+      {'status': 'Pending', 'created_at': '2026-07-20T10:00:00Z'},
+      {'status': 'Approved', 'created_at': '2026-07-20T11:00:00Z'},
+      {'status': 'Rejected', 'created_at': '2026-07-20T12:00:00Z'},
+    ];
+
+    expect(
+      ReservationService.resolveApprovalStatusFromRows(
+        overallStatus: 'Pending Approval',
+        approvalRows: approvalRows,
+      ),
+      'Rejected',
+    );
+  });
+
+  test('keeps completed and returned states distinct from pending and cancelled', () {
+    expect(
+      ReservationService.resolveApprovalStatusFromRows(
+        overallStatus: 'Pending Approval',
+        approvalRows: [
+          {'status': 'Pending', 'updated_at': '2026-07-20T10:00:00Z'},
+          {'status': 'Completed', 'updated_at': '2026-07-20T11:00:00Z'},
+        ],
+      ),
+      'Completed',
+    );
+
+    expect(
+      ReservationService.resolveApprovalStatusFromRows(
+        overallStatus: 'Pending Approval',
+        approvalRows: [
+          {'status': 'Pending', 'updated_at': '2026-07-20T10:00:00Z'},
+          {'status': 'Returned', 'updated_at': '2026-07-20T11:00:00Z'},
+        ],
+      ),
+      'Returned',
     );
   });
 

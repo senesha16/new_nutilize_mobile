@@ -69,7 +69,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   void _scheduleRefresh() {
     _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) {
         unawaited(_refreshReservations());
       }

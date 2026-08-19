@@ -243,6 +243,11 @@ class ReservationActivityStore {
     final isApprovedLike = normalizedStatus.contains('approved') ||
         normalizedStatus.contains('completed') ||
         normalizedStatus.contains('confirmed');
+    final isReturnedLike = normalizedStatus.contains('returned');
+    final isCancelledLike = normalizedStatus.contains('cancelled') ||
+        normalizedStatus.contains('canceled') ||
+        normalizedStatus.contains('rejected') ||
+        normalizedStatus.contains('denied');
     final isInProgressLike = normalizedStatus.contains('pending') ||
         normalizedStatus.contains('processing') ||
         normalizedStatus.contains('submitted') ||
@@ -253,7 +258,7 @@ class ReservationActivityStore {
         _userIdsMatch(reservation.userId, currentUserId) &&
         isInProgressLike;
 
-    return isApprovedLike || isOwnPendingLike;
+    return (isApprovedLike || isReturnedLike || isCancelledLike || isOwnPendingLike);
   }
 
   static List<ReservationRecord> get reservations =>

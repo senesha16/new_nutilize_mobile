@@ -96,7 +96,12 @@ class NUtilizeApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasSession = Supabase.instance.client.auth.currentSession != null;
+    bool hasSession = false;
+    try {
+      hasSession = Supabase.instance.client.auth.currentSession != null;
+    } catch (_) {
+      hasSession = false;
+    }
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,

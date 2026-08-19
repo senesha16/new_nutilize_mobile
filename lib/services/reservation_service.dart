@@ -122,7 +122,33 @@ bool _isUnitAvailableStatus(String? status) {
 
 bool _isCancelledReservationStatus(String? status) {
   final normalized = (status ?? '').trim().toLowerCase();
-  return normalized == 'cancelled' || normalized == 'canceled' || normalized == 'rejected' || normalized == 'denied' || normalized == 'returned' || normalized == 'void' || normalized == 'completed' || normalized == 'complete';
+  return normalized == 'cancelled' ||
+      normalized == 'canceled' ||
+      normalized == 'rejected' ||
+      normalized == 'denied' ||
+      normalized == 'void';
+}
+
+bool _isBlockingReservationStatus(String? status) {
+  final normalized = (status ?? '').trim().toLowerCase();
+  if (normalized.isEmpty) return true;
+  return !normalized.contains('cancelled') &&
+      !normalized.contains('canceled') &&
+      !normalized.contains('rejected') &&
+      !normalized.contains('denied') &&
+      !normalized.contains('returned') &&
+      !normalized.contains('void');
+}
+
+bool _isTerminalReservationStatus(String? status) {
+  final normalized = (status ?? '').trim().toLowerCase();
+  return normalized == 'completed' ||
+      normalized == 'complete' ||
+      normalized == 'returned' ||
+      normalized == 'cancelled' ||
+      normalized == 'canceled' ||
+      normalized == 'rejected' ||
+      normalized == 'denied';
 }
 
 bool _reservationOverlapsWindow({
@@ -146,6 +172,59 @@ class ReservationService {
   ReservationService._internal();
 
   SupabaseClient get _client => Supabase.instance.client;
+
+  static String resolveApprovalStatusFromRows({
+    required String overallStatus,
+    required List<Map<String, dynamic>> approvalRows,
+  }) {
+    if (approvalRows.isEmpty) {
+      return overallStatus.trim().isNotEmpty ? overallStatus : 'Pending Approval';
+    }
+
+    final rows = [...approvalRows]
+      ..sort((left, right) {
+        final leftTime = DateTime.tryParse(
+              (left['updated_at'] ?? left['created_at'] ?? '').toString(),
+            ) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final rightTime = DateTime.tryParse(
+              (right['updated_at'] ?? right['created_at'] ?? '').toString(),
+            ) ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        return rightTime.compareTo(leftTime);
+      });
+
+    for (final row in rows) {
+      final status = (row['status'] as String? ?? '').trim();
+      if (status.isEmpty) {
+        continue;
+      }
+      final normalized = status.toLowerCase();
+      if (normalized.contains('returned')) {
+        return 'Returned';
+      }
+      if (normalized.contains('completed') || normalized.contains('complete')) {
+        return 'Completed';
+      }
+      if (normalized.contains('approved') || normalized.contains('accepted')) {
+        return 'Approved';
+      }
+      if (normalized.contains('rejected') || normalized.contains('denied')) {
+        return 'Rejected';
+      }
+      if (normalized.contains('cancelled') || normalized.contains('canceled')) {
+        return 'Cancelled';
+      }
+      if (normalized.contains('pending') ||
+          normalized.contains('processing') ||
+          normalized.contains('waiting') ||
+          normalized.contains('review')) {
+        return 'Pending Approval';
+      }
+    }
+
+    return overallStatus.trim().isNotEmpty ? overallStatus : 'Pending Approval';
+  }
 
   static int normalizeItemUsage(int total, int usage) {
     return ItemModel.normalizeItemUsage(total, usage);
@@ -443,7 +522,7 @@ class ReservationService {
       for (final row in reservations) {
         final reservationId = row['reservation_id'] as int?;
         final status = row['overall_status'] as String?;
-        if (reservationId == null || _isCancelledReservationStatus(status)) continue;
+        if (reservationId == null || !_isBlockingReservationStatus(status)) continue;
 
         final reservationStartRaw = row['Start_of_activity'] as String?;
         final reservationEndRaw = row['End_of_Activity'] as String?;
@@ -750,8 +829,32 @@ class ReservationService {
         return [];
       }
 
-      // Process each reservation concurrently to reduce total network latency.
       final resList = reservationsResponse as List;
+      final reservationIds = resList
+          .map((res) => res['reservation_id'] as int?)
+          .whereType<int>()
+          .toList();
+
+      final approvalsResponse = reservationIds.isEmpty
+          ? const <Map<String, dynamic>>[]
+          : await _client
+              .from('reservation_approvals')
+              .select('reservation_id, status, created_at, updated_at')
+              .in_('reservation_id', reservationIds);
+
+      final approvalRowsByReservation = <int, List<Map<String, dynamic>>>{};
+      if (approvalsResponse != null) {
+        for (final approval in approvalsResponse as List) {
+          final reservationId = approval['reservation_id'] as int?;
+          if (reservationId == null) {
+            continue;
+          }
+          approvalRowsByReservation.putIfAbsent(reservationId, () => []).add(
+            Map<String, dynamic>.from(approval as Map<String, dynamic>),
+          );
+        }
+      }
+
       final futures = resList.map((res) async {
         try {
           final reservationId = res['reservation_id'] as int;
@@ -759,8 +862,11 @@ class ReservationService {
           final startTime = DateTime.parse(res['Start_of_activity'] as String);
           final endTime = DateTime.parse(res['End_of_Activity'] as String);
           final reservationTime = '${_formatDateTime(startTime)} - ${_formatDateTime(endTime)}';
+          final effectiveStatus = resolveApprovalStatusFromRows(
+            overallStatus: (res['overall_status'] as String?) ?? 'Pending Approval',
+            approvalRows: approvalRowsByReservation[reservationId] ?? const [],
+          );
 
-          // Kick off independent async work in parallel
           final roomNameFuture = _fetchReservationRoomName(reservationId);
           final timelineFuture = _buildApprovalTimeline(reservationId, date);
           final reservedItemsFuture = _fetchReservationItemNames(reservationId);
@@ -794,14 +900,13 @@ class ReservationService {
             reservationTitle: res['activity_name'] as String? ?? 'Reservation Request',
             roomName: roomName,
             reservationType: reservationType,
-            reservationStatus: res['overall_status'] as String? ?? 'Pending Approval',
+            reservationStatus: effectiveStatus,
             date: date,
             reservationTime: reservationTime,
             timeline: timeline,
             reservedItems: reservedItems,
           );
         } catch (e) {
-          // If one reservation fails to parse, skip it but don't fail the whole fetch.
           print('Error processing reservation entry: $e');
           return null;
         }
@@ -973,6 +1078,7 @@ class ReservationService {
   static List<Map<String, dynamic>> sortApprovalEntriesForTimeline(
     List<Map<String, dynamic>> approvals, {
     int? itemOwnerOfficeId,
+    int? generalEducationOfficeId,
   }) {
     return approvals
         .asMap()
@@ -982,8 +1088,6 @@ class ReservationService {
           final officeId = approval['office_id'] as int?;
           final officeName = (approval['office_name'] as String?)?.toLowerCase() ?? '';
 
-          // Parse created_at if available; this reflects insertion order when
-          // approvals were created and should be the primary ordering key.
           try {
             final createdRaw = approval['created_at'] as String?;
             if (createdRaw != null && createdRaw.isNotEmpty) {
@@ -997,11 +1101,21 @@ class ReservationService {
           }
 
           int rank;
-          if (officeName.contains('general education')) {
-            rank = -1;
-          } else if (officeId != null && itemOwnerOfficeId != null && officeId == itemOwnerOfficeId) {
+          if (generalEducationOfficeId != null && officeId == generalEducationOfficeId) {
+            rank = -2;
+          } else if (officeName.contains('general education')) {
+            rank = -2;
+          } else if (itemOwnerOfficeId != null && officeId == itemOwnerOfficeId) {
             rank = 0;
           } else if (officeName.contains('item owner')) {
+            rank = 0;
+          } else if (officeName.isNotEmpty &&
+              !officeName.contains('program chair') &&
+              !officeName.contains('sdao') &&
+              !officeName.contains('do') &&
+              !officeName.contains('security') &&
+              !officeName.contains('physical facilities') &&
+              !officeName.contains('general education')) {
             rank = 0;
           } else if (officeName.contains('program chair')) {
             rank = 1;
@@ -1023,6 +1137,12 @@ class ReservationService {
         })
         .toList()
       ..sort((a, b) {
+        final rankA = a['__timeline_rank'] as int;
+        final rankB = b['__timeline_rank'] as int;
+        if (rankA != rankB) {
+          return rankA.compareTo(rankB);
+        }
+
         final aTs = a['__created_at_ts'] as int?;
         final bTs = b['__created_at_ts'] as int?;
         if (aTs != null && bTs != null) {
@@ -1034,11 +1154,6 @@ class ReservationService {
           return 1;
         }
 
-        final rankA = a['__timeline_rank'] as int;
-        final rankB = b['__timeline_rank'] as int;
-        if (rankA != rankB) {
-          return rankA.compareTo(rankB);
-        }
         final indexA = a['__original_index'] as int;
         final indexB = b['__original_index'] as int;
         return indexA.compareTo(indexB);
@@ -1046,6 +1161,14 @@ class ReservationService {
   }
 
   // MARK: - Approval Workflow
+
+  static String normalizeRoomType(String? roomType) {
+    return (roomType ?? '').trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+  }
+
+  static bool isGymRoomType(String? roomType) {
+    return normalizeRoomType(roomType) == 'gym';
+  }
 
   /// Calculate the approval chain based on room type and items reserved
   Future<ApprovalChain> calculateApprovalChain({
@@ -1056,6 +1179,7 @@ class ReservationService {
       final officeTitles = <String>[];
       final officeIds = <int>[];
       final itemOwners = <String>[];
+      final normalizedRoomType = normalizeRoomType(roomType);
 
       if (itemIds != null && itemIds.isNotEmpty) {
         for (int itemId in itemIds) {
@@ -1108,8 +1232,8 @@ class ReservationService {
         }
       }
 
-      if (roomType == 'Gym') {
-        // Gym: General Education → Program Chair → SDAO → DO → Security → Physical Facilities
+      if (normalizedRoomType == 'gym') {
+        // Gym: General Education → Item Owner? → Program Chair → SDAO → DO → Security → Physical Facilities
         await addOfficeToChain('General Education');
         if (itemOwners.isNotEmpty) {
           await addItemOwnersToChain();
@@ -1118,7 +1242,7 @@ class ReservationService {
         for (int i = 1; i < standardOffices.length; i++) {
           await addOfficeToChain(standardOffices[i]);
         }
-      } else if (roomType == 'Classroom') {
+      } else if (normalizedRoomType == 'classroom') {
         // Classroom: Item Owner? → Program Chair → SDAO → DO → Security → Physical Facilities
         if (itemOwners.isNotEmpty) {
           await addItemOwnersToChain();
@@ -1127,7 +1251,9 @@ class ReservationService {
         for (int i = 1; i < standardOffices.length; i++) {
           await addOfficeToChain(standardOffices[i]);
         }
-      } else if (roomType == 'AVR' || roomType == 'Lobby' || roomType == 'Student Lounge') {
+      } else if (normalizedRoomType == 'avr' ||
+          normalizedRoomType == 'lobby' ||
+          normalizedRoomType == 'student lounge') {
         // AVR/Lobby/Student Lounge: Item Owner? → Program Chair → SDAO → DO → Security → Physical Facilities
         if (itemOwners.isNotEmpty) {
           await addItemOwnersToChain();
@@ -1557,11 +1683,19 @@ class ReservationService {
           final rowStatus = (row['status'] as String?)?.trim().toLowerCase() ?? 'pending';
           final createdAt = row['created_at'] as String?;
           final updatedAt = row['updated_at'] as String?;
-          status = rowStatus == 'approved' || rowStatus == 'completed' || rowStatus == 'accepted'
-              ? 'Approved'
-              : rowStatus == 'rejected' || rowStatus == 'denied'
-                  ? 'Rejected'
-                  : 'Pending';
+          if (rowStatus.contains('returned')) {
+            status = 'Returned';
+          } else if (rowStatus == 'approved' || rowStatus == 'accepted') {
+            status = 'Approved';
+          } else if (rowStatus == 'completed' || rowStatus == 'complete') {
+            status = 'Completed';
+          } else if (rowStatus == 'rejected' || rowStatus == 'denied') {
+            status = 'Rejected';
+          } else if (rowStatus == 'cancelled' || rowStatus == 'canceled') {
+            status = 'Cancelled';
+          } else {
+            status = 'Pending';
+          }
           if (status == 'Pending') {
             timestamp = 'Pending';
           } else {
@@ -1569,9 +1703,15 @@ class ReservationService {
           }
           description = status == 'Approved'
               ? 'Your reservation has been approved by $displayName.'
-              : status == 'Rejected'
-                  ? 'Your reservation was rejected by $displayName.'
-                  : 'Waiting for approval from $displayName.';
+              : status == 'Completed'
+                  ? 'This reservation has been completed.'
+                  : status == 'Returned'
+                      ? 'This reservation has been returned and the item units are available again.'
+                      : status == 'Rejected'
+                          ? 'Your reservation was rejected by $displayName.'
+                          : status == 'Cancelled'
+                              ? 'This reservation was cancelled.'
+                              : 'Waiting for approval from $displayName.';
         }
 
         entries.add(ReservationTimelineEntry(
@@ -1642,6 +1782,7 @@ class ReservationService {
       final ordered = sortApprovalEntriesForTimeline(
         approvalEntries,
         itemOwnerOfficeId: await _getOfficeIdByName('Item Owner'),
+        generalEducationOfficeId: await _getOfficeIdByName('General Education'),
       );
 
       print('DEBUG: reservation $reservationId ordered approvals: ${ordered.map((e) => e['office_name']).toList()}');
@@ -2266,6 +2407,51 @@ class ReservationService {
           }
 
           await _recalculateItemUsageFromUnits(itemId);
+        }
+      }
+
+      final cancelledReservation = await _client
+          .from('reservations')
+          .select('reservation_id, overall_status')
+          .eq('reservation_id', reservationId)
+          .maybeSingle();
+      if (cancelledReservation != null && (cancelledReservation['overall_status'] as String? ?? '').toLowerCase() == 'cancelled') {
+        final allReservationItems = await _client
+            .from('reservation_details')
+            .select('reservation_items_id')
+            .eq('reservation_id', reservationId);
+
+        if (allReservationItems != null) {
+          for (final detail in allReservationItems as List) {
+            final reservationItemsId = detail['reservation_items_id'] as int?;
+            if (reservationItemsId == null) continue;
+
+            final itemLink = await _client
+                .from('reservation_items')
+                .select('item_id')
+                .eq('reservation_items_id', reservationItemsId)
+                .maybeSingle();
+            final itemId = itemLink?['item_id'] as int?;
+            if (itemId == null) continue;
+
+            final linkedUnits = await _client
+                .from('reservation_item_units')
+                .select('unit_id')
+                .eq('reservation_items_id', reservationItemsId);
+
+            if (linkedUnits != null) {
+              for (final linkedUnit in linkedUnits as List) {
+                final unitId = linkedUnit['unit_id'] as int?;
+                if (unitId == null) continue;
+                await _client.from('item_units').update({
+                  'status': 'available',
+                  'updated_at': DateTime.now().toIso8601String(),
+                }).eq('unit_id', unitId);
+              }
+            }
+
+            await _recalculateItemUsageFromUnits(itemId);
+          }
         }
       }
 
