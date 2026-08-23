@@ -95,6 +95,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           : int.tryParse(rawUserId?.toString() ?? '');
 
       if (userId == null) {
+        ReservationActivityStore.clear();
         return;
       }
 
@@ -179,7 +180,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         key: ValueKey(notification.id),
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
-        dismissDirection: DismissDirection.horizontal,
+        dismissDirection: DismissDirection.vertical,
         content: Text(notification.title),
         action: SnackBarAction(
           label: 'View',
