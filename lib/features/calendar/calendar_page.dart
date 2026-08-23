@@ -465,6 +465,10 @@ class _CalendarGrid extends StatelessWidget {
                         isToday:
                             cell.date != null &&
                             DateUtils.isSameDay(cell.date, todayDate),
+                        isPast:
+                          cell.date != null &&
+                          DateTime(cell.date!.year, cell.date!.month, cell.date!.day)
+                            .isBefore(DateTime(todayDate.year, todayDate.month, todayDate.day)),
                         hasReservation:
                             cell.date != null &&
                             (reservationCountsByDate[DateTime(
@@ -494,6 +498,7 @@ class _DayCell extends StatelessWidget {
     required this.date,
     required this.selected,
     required this.isToday,
+    required this.isPast,
     required this.hasReservation,
     required this.onTap,
   });
@@ -502,6 +507,7 @@ class _DayCell extends StatelessWidget {
   final DateTime? date;
   final bool selected;
   final bool isToday;
+  final bool isPast;
   final bool hasReservation;
   final VoidCallback? onTap;
 
@@ -528,7 +534,11 @@ class _DayCell extends StatelessWidget {
           child: Text(
             day,
             style: TextStyle(
-              color: selected ? Colors.white : const Color(0xFF111111),
+              color: selected
+                ? Colors.white
+                : isPast
+                  ? const Color(0xFFB8BBC5)
+                  : const Color(0xFF111111),
               fontSize: 15,
               fontWeight: FontWeight.w500,
             ),
@@ -540,8 +550,8 @@ class _DayCell extends StatelessWidget {
             child: Container(
               width: 5,
               height: 5,
-              decoration: const BoxDecoration(
-                color: Color(0xFF35489A),
+              decoration: BoxDecoration(
+                color: isPast ? const Color(0xFFB8BBC5) : const Color(0xFF35489A),
                 shape: BoxShape.circle,
               ),
             ),

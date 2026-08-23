@@ -120,6 +120,22 @@ bool _isUnitAvailableStatus(String? status) {
   return normalized == 'available' || normalized == 'free' || normalized == 'ready' || normalized == 'active' || normalized == 'new' || normalized == 'in_stock' || normalized == 'instock';
 }
 
+bool _isUnitAvailableForRequest(
+  Map<String, dynamic> unit,
+  Set<int> unavailableUnitIds,
+) {
+  final unitId = unit['unit_id'] as int?;
+  if (unitId != null && unavailableUnitIds.contains(unitId)) {
+    return false;
+  }
+
+  final normalized = (unit['status'] as String? ?? '').trim().toLowerCase();
+  return _isUnitAvailableStatus(normalized) ||
+      normalized == 'in_use' ||
+      normalized == 'reserved' ||
+      normalized == 'borrowed';
+}
+
 bool _isCancelledReservationStatus(String? status) {
   final normalized = (status ?? '').trim().toLowerCase();
   return normalized == 'cancelled' ||
@@ -151,6 +167,21 @@ bool _isTerminalReservationStatus(String? status) {
       normalized == 'denied';
 }
 
+bool _isPendingReservationStatus(String? status) {
+  final normalized = (status ?? '').trim().toLowerCase();
+  return normalized.contains('pending') ||
+      normalized.contains('processing') ||
+      normalized.contains('waiting') ||
+      normalized.contains('review');
+}
+
+bool _isApprovedReservationStatus(String? status) {
+  final normalized = (status ?? '').trim().toLowerCase();
+  return normalized.contains('approved') ||
+      normalized.contains('completed') ||
+      normalized.contains('confirmed');
+}
+
 bool _reservationOverlapsWindow({
   required DateTime reservationStart,
   required DateTime reservationEnd,
@@ -177,53 +208,60 @@ class ReservationService {
     required String overallStatus,
     required List<Map<String, dynamic>> approvalRows,
   }) {
+    final normalizedOverallStatus = overallStatus.trim().toLowerCase();
+    if (normalizedOverallStatus == 'to return' ||
+        normalizedOverallStatus == 'timed out') {
+      return overallStatus;
+    }
+
     if (approvalRows.isEmpty) {
       return overallStatus.trim().isNotEmpty ? overallStatus : 'Pending Approval';
     }
 
-    final rows = [...approvalRows]
-      ..sort((left, right) {
-        final leftTime = DateTime.tryParse(
-              (left['updated_at'] ?? left['created_at'] ?? '').toString(),
-            ) ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        final rightTime = DateTime.tryParse(
-              (right['updated_at'] ?? right['created_at'] ?? '').toString(),
-            ) ??
-            DateTime.fromMillisecondsSinceEpoch(0);
-        return rightTime.compareTo(leftTime);
-      });
+    var completedCount = 0;
+    var hasPending = false;
+    var hasRejected = false;
+    var hasCancelled = false;
+    var hasReturned = false;
 
-    for (final row in rows) {
-      final status = (row['status'] as String? ?? '').trim();
-      if (status.isEmpty) {
-        continue;
-      }
-      final normalized = status.toLowerCase();
-      if (normalized.contains('returned')) {
-        return 'Returned';
-      }
-      if (normalized.contains('completed') || normalized.contains('complete')) {
-        return 'Completed';
-      }
-      if (normalized.contains('approved') || normalized.contains('accepted')) {
-        return 'Approved';
-      }
+    for (final row in approvalRows) {
+      final normalized = (row['status'] as String? ?? '').trim().toLowerCase();
+      if (normalized.isEmpty) continue;
+
       if (normalized.contains('rejected') || normalized.contains('denied')) {
-        return 'Rejected';
-      }
-      if (normalized.contains('cancelled') || normalized.contains('canceled')) {
-        return 'Cancelled';
-      }
-      if (normalized.contains('pending') ||
+        hasRejected = true;
+      } else if (normalized.contains('cancelled') || normalized.contains('canceled')) {
+        hasCancelled = true;
+      } else if (normalized.contains('returned')) {
+        hasReturned = true;
+      } else if (normalized.contains('pending') ||
           normalized.contains('processing') ||
           normalized.contains('waiting') ||
           normalized.contains('review')) {
-        return 'Pending Approval';
+        hasPending = true;
+      } else if (normalized.contains('returned') ||
+          normalized.contains('completed') ||
+          normalized.contains('complete') ||
+          normalized.contains('approved') ||
+          normalized.contains('accepted')) {
+        completedCount++;
+      } else {
+        hasPending = true;
       }
     }
 
-    return overallStatus.trim().isNotEmpty ? overallStatus : 'Pending Approval';
+    if (hasReturned) return 'Returned';
+    if (hasRejected) return 'Rejected';
+    if (hasCancelled) return 'Cancelled';
+    if (hasPending || completedCount < approvalRows.length) {
+      return 'Pending Approval';
+    }
+
+    final hasCompleted = approvalRows.any((row) {
+      final normalized = (row['status'] as String? ?? '').trim().toLowerCase();
+      return normalized.contains('completed') || normalized.contains('complete');
+    });
+    return hasCompleted ? 'Completed' : 'Approved';
   }
 
   static int normalizeItemUsage(int total, int usage) {
@@ -232,6 +270,56 @@ class ReservationService {
 
   static int normalizeAvailableQuantity(int total, int usage) {
     return ItemModel.normalizeAvailableQuantity(total, usage);
+  }
+
+  Future<String?> enforceReservationLifecycle(int userId) async {
+    try {
+      final response = await _client
+          .from('reservations')
+          .select('reservation_id, activity_name, overall_status, Date_of_Activity, Start_of_activity, End_of_activity')
+          .eq('user_id', userId);
+      final now = DateTime.now();
+      final returnRequired = <String>[];
+
+      for (final rawReservation in response as List) {
+        final reservation = Map<String, dynamic>.from(rawReservation as Map);
+        final reservationId = reservation['reservation_id'] as int?;
+        if (reservationId == null) continue;
+
+        final status = (reservation['overall_status'] as String?) ?? 'Pending Approval';
+        final start = DateTime.tryParse((reservation['Start_of_activity'] ?? '').toString());
+        final end = DateTime.tryParse((reservation['End_of_activity'] ?? '').toString());
+        if (start == null || end == null) continue;
+
+        String? nextStatus;
+        if (_isPendingReservationStatus(status) && !now.isBefore(start)) {
+          nextStatus = 'Timed Out';
+        } else if (_isApprovedReservationStatus(status) && !now.isBefore(end)) {
+          nextStatus = 'To Return';
+        }
+
+        if (nextStatus != null && status.trim().toLowerCase() != nextStatus.toLowerCase()) {
+          await _client
+              .from('reservations')
+              .update({'overall_status': nextStatus})
+              .eq('reservation_id', reservationId);
+        }
+
+        final effectiveStatus = nextStatus ?? status;
+        if (effectiveStatus.toLowerCase() == 'to return' &&
+            !now.isBefore(end.add(const Duration(hours: 24)))) {
+          final title = (reservation['activity_name'] as String?)?.trim();
+          final deadline = _formatDateTime(end.add(const Duration(hours: 24)));
+          returnRequired.add('${title?.isNotEmpty == true ? title : 'Reservation #$reservationId'} (return deadline: $deadline)');
+        }
+      }
+
+      if (returnRequired.isEmpty) return null;
+      return 'Please return the following request(s) before making a new reservation:\n\n${returnRequired.join('\n')}';
+    } catch (e) {
+      print('Error enforcing reservation lifecycle: $e');
+      return null;
+    }
   }
 
   Future<void> _recalculateItemUsageFromUnits(int itemId) async {
@@ -518,11 +606,34 @@ class ReservationService {
       if (reservationsResponse == null) return unavailableByItem;
 
       final reservations = (reservationsResponse as List).cast<Map<String, dynamic>>();
+      final approvalStatusesByReservation = <int, List<String>>{};
+      final approvalResponse = await _client
+          .from('reservation_approvals')
+          .select('reservation_id, status')
+          .in_('reservation_id', reservationIds);
+      for (final rawApproval in (approvalResponse as List).cast<Map<String, dynamic>>()) {
+        final reservationId = rawApproval['reservation_id'] as int?;
+        if (reservationId == null) continue;
+        approvalStatusesByReservation
+            .putIfAbsent(reservationId, () => <String>[])
+            .add((rawApproval['status'] ?? '').toString().trim().toLowerCase());
+      }
+
       final activeReservationItemIds = <int>{};
       for (final row in reservations) {
         final reservationId = row['reservation_id'] as int?;
         final status = row['overall_status'] as String?;
         if (reservationId == null || !_isBlockingReservationStatus(status)) continue;
+        final approvalStatuses = approvalStatusesByReservation[reservationId] ?? const <String>[];
+        if (approvalStatuses.any(
+          (approvalStatus) => approvalStatus.contains('cancelled') ||
+              approvalStatus.contains('canceled') ||
+              approvalStatus.contains('rejected') ||
+              approvalStatus.contains('denied') ||
+              approvalStatus.contains('returned'),
+        )) {
+          continue;
+        }
 
         final reservationStartRaw = row['Start_of_activity'] as String?;
         final reservationEndRaw = row['End_of_Activity'] as String?;
@@ -612,11 +723,7 @@ class ReservationService {
         final total = itemUnits.isNotEmpty ? itemUnits.length : (item['quantity_total'] as int? ?? 0);
         final unavailableUnitIds = unavailableByItem[id] ?? const <int>{};
         final available = itemUnits.where((u) {
-          final unitId = u['unit_id'] as int?;
-          if (unitId != null && unavailableUnitIds.contains(unitId)) {
-            return false;
-          }
-          return _isUnitAvailableStatus(u['status'] as String?);
+          return _isUnitAvailableForRequest(u, unavailableUnitIds);
         }).length;
         final clampedAvailable = available.clamp(0, total);
         final inUse = ItemModel.normalizeItemUsage(total, total - clampedAvailable);
@@ -668,11 +775,10 @@ class ReservationService {
       );
       final total = units.length;
       final available = units.where((u) {
-        final unitId = u['unit_id'] as int?;
-        if (unitId != null && (unavailableUnitIds[itemId] ?? const <int>{}).contains(unitId)) {
-          return false;
-        }
-        return _isUnitAvailableStatus(u['status'] as String?);
+        return _isUnitAvailableForRequest(
+          u,
+          unavailableUnitIds[itemId] ?? const <int>{},
+        );
       }).length;
       final clampedAvailable = available.clamp(0, total);
       final inUse = ItemModel.normalizeItemUsage(total, total - clampedAvailable);
@@ -726,11 +832,10 @@ class ReservationService {
       );
 
       return units.where((unit) {
-        final unitId = unit['unit_id'] as int?;
-        if (unitId != null && (unavailableUnitIds[itemId] ?? const <int>{}).contains(unitId)) {
-          return false;
-        }
-        return _isUnitAvailableStatus(unit['status'] as String?);
+        return _isUnitAvailableForRequest(
+          unit,
+          unavailableUnitIds[itemId] ?? const <int>{},
+        );
       }).take(quantity).toList();
     } catch (e) {
       print('Error fetching available item units: $e');
@@ -819,9 +924,10 @@ class ReservationService {
   /// Fetch reservations created by a specific user.
   Future<List<ReservationRecord>> getReservationRecordsForUser(int userId) async {
     try {
+      await enforceReservationLifecycle(userId);
       final reservationsResponse = await _client
           .from('reservations')
-          .select('reservation_id, activity_name, overall_status, Date_of_Activity, Start_of_activity, End_of_Activity')
+          .select('reservation_id, activity_name, overall_status, created_at, updated_at, Date_of_Activity, Start_of_activity, End_of_Activity')
           .eq('user_id', userId)
           .order('Date_of_Activity', ascending: false);
 
@@ -839,7 +945,7 @@ class ReservationService {
           ? const <Map<String, dynamic>>[]
           : await _client
               .from('reservation_approvals')
-              .select('reservation_id, status, created_at, updated_at')
+              .select('reservation_id, status, approved_at, created_at, updated_at')
               .in_('reservation_id', reservationIds);
 
       final approvalRowsByReservation = <int, List<Map<String, dynamic>>>{};
@@ -866,6 +972,22 @@ class ReservationService {
             overallStatus: (res['overall_status'] as String?) ?? 'Pending Approval',
             approvalRows: approvalRowsByReservation[reservationId] ?? const [],
           );
+          final databaseTimestamps = <DateTime>[];
+          for (final rawTimestamp in [
+            res['updated_at'],
+            res['created_at'],
+            ...?approvalRowsByReservation[reservationId]?.expand(
+              (approval) => [
+                approval['updated_at'],
+                approval['approved_at'],
+                approval['created_at'],
+              ],
+            ),
+          ]) {
+            final parsed = DateTime.tryParse(rawTimestamp?.toString() ?? '');
+            if (parsed != null) databaseTimestamps.add(parsed);
+          }
+          databaseTimestamps.sort();
 
           final roomNameFuture = _fetchReservationRoomName(reservationId);
           final timelineFuture = _buildApprovalTimeline(reservationId, date);
@@ -903,6 +1025,9 @@ class ReservationService {
             reservationStatus: effectiveStatus,
             date: date,
             reservationTime: reservationTime,
+            lastUpdatedAt: databaseTimestamps.isEmpty
+              ? null
+              : databaseTimestamps.last,
             timeline: timeline,
             reservedItems: reservedItems,
           );
@@ -2067,15 +2192,17 @@ class ReservationService {
       if (reservationIds.isEmpty) return false;
 
       // Fetch reservations by id and check date/time overlap
-        final reservationsResp = await _client
+      final reservationsResp = await _client
           .from('reservations')
           .select('reservation_id, Date_of_Activity, Start_of_activity, End_of_Activity, overall_status')
-          .in_('reservation_id', reservationIds.toList())
-          .neq('overall_status', 'Cancelled');
+          .in_('reservation_id', reservationIds.toList());
 
       if (reservationsResp == null) return false;
 
       for (final res in reservationsResp as List) {
+        if (!_isBlockingReservationStatus(res['overall_status'] as String?)) {
+          continue;
+        }
         final dateStr = res['Date_of_Activity'] as String?;
         final startStr = res['Start_of_activity'] as String?;
         final endStr = res['End_of_Activity'] as String?;

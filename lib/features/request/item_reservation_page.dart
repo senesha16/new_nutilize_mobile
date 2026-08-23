@@ -289,6 +289,22 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _showReturnLock(String message) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Items or requests to return'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submitReservation() async {
     if (!_agreedToTerms) {
       _showError('Please agree to terms and conditions');
@@ -298,6 +314,14 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
     final currentUser = AuthService.currentUser;
     if (currentUser == null) {
       _showError('Please sign in again');
+      return;
+    }
+
+    final returnLock = await _reservationService.enforceReservationLifecycle(
+      currentUser['user_id'] as int,
+    );
+    if (returnLock != null) {
+      await _showReturnLock(returnLock);
       return;
     }
 

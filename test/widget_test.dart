@@ -182,6 +182,26 @@ void main() {
     );
   });
 
+  test('hides cancelled reservations from the calendar', () {
+    final reservation = ReservationRecord(
+      reservationTitle: 'Cancelled Party',
+      roomName: 'Room 511',
+      reservationType: 'Venue Reservation',
+      reservationStatus: 'Cancelled',
+      date: DateTime.now(),
+      reservationTime: '8:00 AM - 10:00 AM',
+      userId: 42,
+    );
+
+    expect(
+      ReservationActivityStore.isVisibleOnCalendar(
+        reservation,
+        currentUserId: 42,
+      ),
+      isFalse,
+    );
+  });
+
   test('prefers the latest approval row when overall status is stale', () {
     final approvalRows = [
       {'status': 'Pending', 'created_at': '2026-07-20T10:00:00Z'},
@@ -198,12 +218,54 @@ void main() {
     );
   });
 
+  test('keeps the reservation pending while any approval office is pending', () {
+    expect(
+      ReservationService.resolveApprovalStatusFromRows(
+        overallStatus: 'Approved',
+        approvalRows: [
+          {'status': 'Approved', 'updated_at': '2026-08-20T08:00:00Z'},
+          {'status': 'Pending', 'updated_at': '2026-08-20T08:01:00Z'},
+          {'status': 'Pending', 'updated_at': '2026-08-20T08:02:00Z'},
+        ],
+      ),
+      'Pending Approval',
+    );
+  });
+
+  test('marks the reservation approved only after every approval office approves', () {
+    expect(
+      ReservationService.resolveApprovalStatusFromRows(
+        overallStatus: 'Pending Approval',
+        approvalRows: [
+          {'status': 'Approved'},
+          {'status': 'Approved'},
+          {'status': 'Accepted'},
+        ],
+      ),
+      'Approved',
+    );
+  });
+
+  test('keeps reservation pending until every office approves', () {
+    expect(
+      ReservationService.resolveApprovalStatusFromRows(
+        overallStatus: 'Approved',
+        approvalRows: [
+          {'status': 'Approved', 'updated_at': '2026-07-20T11:00:00Z'},
+          {'status': 'Pending', 'updated_at': '2026-07-20T10:00:00Z'},
+          {'status': 'Pending', 'updated_at': '2026-07-20T10:00:00Z'},
+        ],
+      ),
+      'Pending Approval',
+    );
+  });
+
   test('keeps completed and returned states distinct from pending and cancelled', () {
     expect(
       ReservationService.resolveApprovalStatusFromRows(
         overallStatus: 'Pending Approval',
         approvalRows: [
-          {'status': 'Pending', 'updated_at': '2026-07-20T10:00:00Z'},
+          {'status': 'Completed', 'updated_at': '2026-07-20T10:00:00Z'},
           {'status': 'Completed', 'updated_at': '2026-07-20T11:00:00Z'},
         ],
       ),

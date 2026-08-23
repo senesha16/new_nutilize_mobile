@@ -315,6 +315,11 @@ class AuthService {
         email: email,
         accessToken: session.accessToken,
       );
+      if (profile == null || profile['user_id'] == null) {
+        _setLastAuthError('Login succeeded, but the application profile could not be loaded.');
+        await Supabase.instance.client.auth.signOut();
+        return null;
+      }
       if (profile != null) {
         await _repairProgramIdIfNeeded(
           email: email,
@@ -322,11 +327,7 @@ class AuthService {
           profile: profile,
         );
       }
-      currentUser = profile ?? {
-        'email': email,
-        'user_id': null,
-        'auth_user_id': session.user.id,
-      };
+      currentUser = profile;
       debugPrint('[AuthService] signIn: success for $normalizedEmail');
       return session.accessToken;
     } on AuthException catch (e) {
@@ -475,7 +476,7 @@ class AuthService {
   }) async {
     debugPrint('[AuthService] _loginWithLegacyUsersTable: attempting legacy auth for $email');
     final url = Uri.parse(
-      '$_baseUrl/rest/v1/users?select=user_id,email,username,role,affiliation,program_id,password&email=eq.${Uri.encodeQueryComponent(email)}&limit=1',
+      '$_baseUrl/rest/v1/users?select=user_id,email,username,first_name,role,affiliation,program_id,password&email=eq.${Uri.encodeQueryComponent(email)}&limit=1',
     );
 
     debugPrint('[AuthService] _loginWithLegacyUsersTable: querying public.users table');
@@ -516,6 +517,7 @@ class AuthService {
         'user_id': row['user_id'],
         'email': row['email'] ?? email,
         'username': row['username'] ?? email,
+        'first_name': row['first_name'],
         'role': row['role'],
         'affiliation': row['affiliation'],
         'program_id': row['program_id'],
@@ -559,11 +561,12 @@ class AuthService {
       );
     }
 
-    currentUser = profile ?? {
-      'email': email,
-      'user_id': null,
-      'auth_user_id': Supabase.instance.client.auth.currentSession?.user.id,
-    };
+    if (profile == null || profile['user_id'] == null) {
+      _setLastAuthError('Login succeeded, but the application profile could not be loaded.');
+      return null;
+    }
+
+    currentUser = profile;
     return token;
   }
 
@@ -750,7 +753,7 @@ class AuthService {
     required String accessToken,
   }) async {
     final url = Uri.parse(
-      '$_baseUrl/rest/v1/users?select=user_id,email,username,role,affiliation,program_id&email=eq.${Uri.encodeQueryComponent(email)}&limit=1',
+      '$_baseUrl/rest/v1/users?select=user_id,email,username,first_name,role,affiliation,program_id&email=ilike.${Uri.encodeQueryComponent(email)}&limit=1',
     );
 
     final resp = await http.get(
@@ -772,10 +775,17 @@ class AuthService {
     }
 
     final user = Map<String, dynamic>.from(decoded.first as Map);
+    final userId = user['user_id'] is int
+        ? user['user_id'] as int
+        : int.tryParse(user['user_id']?.toString() ?? '');
+    if (userId == null) {
+      return null;
+    }
     return {
-      'user_id': user['user_id'],
+      'user_id': userId,
       'email': user['email'],
       'username': user['username'],
+      'first_name': user['first_name'],
       'role': user['role'],
       'affiliation': user['affiliation'],
       'program_id': user['program_id'],

@@ -43,7 +43,8 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final userName = AuthService.currentUser?['username'] ?? 'User';
+    final firstName = (AuthService.currentUser?['first_name'] as String?)?.trim();
+    final userName = firstName?.isNotEmpty == true ? firstName! : 'User';
     
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5FB),
@@ -58,7 +59,7 @@ class _HomePageState extends State<HomePage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Good Evening, $userName! 👋',
+                      'Good Evening, $userName',
                       style: const TextStyle(
                         color: Color(0xFF111111),
                         fontSize: 22,

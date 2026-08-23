@@ -35,7 +35,7 @@ class RequestPage extends StatelessWidget {
                     const SizedBox(height: 24),
                     _ReservationCard(
                       icon: Icons.home_work_rounded,
-                      title: 'Room Reservation',
+                      title: 'Venue Reservation',
                       subtitle: 'Classrooms, gymnasium, AMP',
                       onTap: () {
                         Navigator.of(context).push(

@@ -88,6 +88,8 @@ Future<void> _repairPersistedSession() async {
   if (userId != null) {
     final records = await ReservationService().getReservationRecordsForUser(userId);
     ReservationActivityStore.replaceAll(records);
+  } else {
+    await AuthService.signOut();
   }
 }
 

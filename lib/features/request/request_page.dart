@@ -232,7 +232,28 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
     setState(() {
       _isLoadingItems = true;
     });
-    final items = await _reservationService.getAllItems();
+    final requestStart = _selectedDate == null || _selectedStartTime == null
+        ? null
+        : DateTime(
+            _selectedDate!.year,
+            _selectedDate!.month,
+            _selectedDate!.day,
+            _selectedStartTime!.hour,
+            _selectedStartTime!.minute,
+          );
+    final requestEnd = _selectedDate == null || _selectedEndTime == null
+        ? null
+        : DateTime(
+            _selectedDate!.year,
+            _selectedDate!.month,
+            _selectedDate!.day,
+            _selectedEndTime!.hour,
+            _selectedEndTime!.minute,
+          );
+    final items = await _reservationService.getAllItems(
+      requestStart: requestStart,
+      requestEnd: requestEnd,
+    );
     if (mounted) {
       setState(() {
         _equipmentItems = items;
@@ -323,6 +344,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         _selectedDate = picked;
         _dateController.text = '${picked.month}/${picked.day}/${picked.year}';
       });
+      await _loadEquipmentItems();
     }
   }
 
@@ -370,6 +392,8 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
           _selectedEndTime = picked;
         }
       });
+      await _loadEquipmentItems();
+      await _loadEquipmentItems();
     }
   }
 
@@ -498,6 +522,8 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         _showError('Please upload proof of consent.');
         return;
       }
+      await _loadEquipmentItems();
+      if (!mounted) return;
       setState(() {
         _currentStep = 2;
       });
@@ -559,6 +585,22 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
+  Future<void> _showReturnLock(String message) async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Items or requests to return'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
   Future<void> _submitReservation() async {
     if (_isSubmitting) return;
     if (!_agreedToTerms) {
@@ -578,6 +620,14 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       final currentUser = AuthService.currentUser;
       if (currentUser == null || currentUser['user_id'] == null) {
         _showError('Please sign in again.');
+        return;
+      }
+
+      final returnLock = await _reservationService.enforceReservationLifecycle(
+        currentUser['user_id'] as int,
+      );
+      if (returnLock != null) {
+        await _showReturnLock(returnLock);
         return;
       }
 
@@ -1053,7 +1103,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                   children: [
                     Text(item.itemName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF111111))),
                     const SizedBox(height: 4),
-                    Text('Available: $remaining', style: const TextStyle(color: Color(0xFF6A6F86), fontSize: 12)),
+                    Text('Available: $remaining / ${item.quantityTotal}', style: const TextStyle(color: Color(0xFF6A6F86), fontSize: 12)),
                   ],
                 ),
               ),
