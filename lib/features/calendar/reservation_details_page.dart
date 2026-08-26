@@ -4,25 +4,14 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
-import 'package:new_nutilize_mobile/request.dart';
 import 'package:new_nutilize_mobile/services/reservation_service.dart';
-import 'package:new_nutilize_mobile/features/user/profile_page.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
+import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
 import 'package:new_nutilize_mobile/widgets/secondary_header.dart';
 
 const Color _brandBlue = Color(0xFF35489A);
 const Color _brandRed = Color(0xFFE53935);
 const Color _brandAmber = Color(0xFFF6A700);
-
-Route<T> _fadePageRoute<T>(Widget page) {
-  return PageRouteBuilder(
-    pageBuilder: (context, animation, secondaryAnimation) => page,
-    transitionDuration: const Duration(milliseconds: 280),
-    transitionsBuilder: (context, animation, secondaryAnimation, child) {
-      return FadeTransition(opacity: animation, child: child);
-    },
-  );
-}
 
 Future<T?> _showReservationDialog<T>(
   BuildContext context,
@@ -384,24 +373,18 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                 ),
               ),
             ),
-            AppBottomNav(
-              selectedIndex: 1,
-              onTap: (index) {
-                if (index == 0) {
-                  Navigator.of(context).popUntil((route) => route.isFirst);
-                } else if (index == 1) {
-                  Navigator.of(context).pop();
-                } else if (index == 2) {
-                  Navigator.of(
-                    context,
-                  ).push(_fadePageRoute(const RequestPage()));
-                } else if (index == 3) {
-                  Navigator.of(context).push(_fadePageRoute(const ProfilePage()));
-                }
-              },
-            ),
           ],
         ),
+      ),
+      bottomNavigationBar: AppBottomNav(
+        selectedIndex: AppShellScope.maybeOf(context)?.currentIndex ?? 1,
+        onTap: (index) {
+          final shell = AppShellScope.maybeOf(context);
+          if (shell != null) {
+            Navigator.of(context).pop();
+            shell.onTabSelected(index);
+          }
+        },
       ),
     );
   }

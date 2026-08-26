@@ -14,7 +14,10 @@ final globalEnv = <String, String>{};
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+  runApp(const NUtilizeApp());
+}
+
+Future<void> _initializeApplication() async {
   // Try to load .env from assets (works on all platforms)
   try {
     await dotenv.load();  // No fileName - uses pubspec.yaml assets by default
@@ -66,7 +69,6 @@ Future<void> main() async {
   } catch (e) {
     debugPrint('[main] Session repair error (continuing anyway): $e');
   }
-  runApp(const NUtilizeApp());
 }
 
 Future<void> _repairPersistedSession() async {
@@ -113,7 +115,81 @@ class NUtilizeApp extends StatelessWidget {
         useMaterial3: true,
         scaffoldBackgroundColor: Colors.transparent,
       ),
-      home: hasSession ? const AppShell() : const SignInFlowPage(),
+      home: const _StartupGate(),
+    );
+  }
+}
+
+class _StartupGate extends StatefulWidget {
+  const _StartupGate();
+
+  @override
+  State<_StartupGate> createState() => _StartupGateState();
+}
+
+class _StartupGateState extends State<_StartupGate> {
+  bool _isReady = false;
+  bool _hasSession = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      await _initializeApplication();
+      _hasSession = Supabase.instance.client.auth.currentSession != null;
+    } catch (e) {
+      debugPrint('[startup] Initialization error: $e');
+      _hasSession = false;
+    }
+    if (mounted) {
+      setState(() => _isReady = true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isReady) {
+      return const _StartupSplash();
+    }
+    return _hasSession ? const AppShell() : const SignInFlowPage();
+  }
+}
+
+class _StartupSplash extends StatelessWidget {
+  const _StartupSplash();
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF243C8F),
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Image.asset('assets/images/nutilize_logo.png', width: 230),
+              const SizedBox(height: 28),
+              const SizedBox(
+                width: 42,
+                height: 42,
+                child: CircularProgressIndicator(
+                  strokeWidth: 4,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF6C914)),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Text(
+                'Loading NUtilize...',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

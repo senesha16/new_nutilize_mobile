@@ -687,6 +687,7 @@ class NotificationActivityStore {
 
   static bool _seeded = false;
   static bool _hasStatusBaseline = false;
+  static DateTime? _sessionStartedAt;
   static final Map<String, String> _knownReservationStates = {};
 
   static List<NotificationRecord> get notifications =>
@@ -720,6 +721,7 @@ class NotificationActivityStore {
       listenable.value = [];
       _seeded = false;
       _hasStatusBaseline = false;
+      _sessionStartedAt = null;
       _knownReservationStates.clear();
       return;
     }
@@ -730,16 +732,49 @@ class NotificationActivityStore {
     }
   }
 
+  static List<NotificationRecord> _initialNotificationsFor(
+    List<ReservationRecord> reservations,
+  ) {
+    final notifications = <NotificationRecord>[];
+    for (final reservation in reservations) {
+      final status = reservation.reservationStatus.trim().toLowerCase();
+      if (!_isNotifiableStatus(status)) {
+        continue;
+      }
+
+      final category = _categoryForStatus(status);
+      final title = _titleForStatus(status, reservation.approvalSummary);
+      notifications.add(
+        NotificationRecord(
+          id: 'reservation-status-${reservation.stableId}-${status.hashCode}',
+          category: category,
+          title: title,
+          description: _descriptionForStatus(reservation, status),
+          date: reservation.lastUpdatedAt ?? reservation.date,
+          targetKind: NotificationTargetKind.reservation,
+          reservation: reservation,
+          detailTitle: title,
+          detailBody: _descriptionForStatus(reservation, status),
+        ),
+      );
+    }
+
+    notifications.sort((a, b) => b.date.compareTo(a.date));
+    return notifications;
+  }
+
   static void syncFromReservations([DateTime? now]) {
     if (AuthService.currentUser == null) {
       listenable.value = [];
       _seeded = false;
       _hasStatusBaseline = false;
+      _sessionStartedAt = null;
       _knownReservationStates.clear();
       return;
     }
 
     final current = now ?? DateTime.now();
+    _sessionStartedAt ??= current;
     final reservations = ReservationActivityStore.reservations;
     if (!_hasStatusBaseline) {
       _knownReservationStates
@@ -753,7 +788,8 @@ class NotificationActivityStore {
           ),
         );
       _hasStatusBaseline = true;
-      listenable.value = [];
+      final initialNotifications = _initialNotificationsFor(reservations);
+      listenable.value = initialNotifications;
       return;
     }
 
@@ -765,7 +801,9 @@ class NotificationActivityStore {
       final previousState = _knownReservationStates[reservation.stableId];
       if (previousState != null &&
           previousState != currentState &&
-          _isNotifiableTransition(previousState, reservation, status)) {
+          _isNotifiableTransition(previousState, reservation, status) &&
+          (reservation.lastUpdatedAt == null ||
+            !reservation.lastUpdatedAt!.isBefore(_sessionStartedAt!))) {
         final notificationId =
           'reservation-status-${reservation.stableId}-${currentState.hashCode}';
         if (!existingIds.contains(notificationId)) {

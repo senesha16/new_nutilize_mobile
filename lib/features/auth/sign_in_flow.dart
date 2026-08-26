@@ -21,6 +21,11 @@ enum SignInStep {
   // Login
   loginEmail,
   loginCode,
+
+  // Forgot password
+  forgotPasswordEmail,
+  forgotPasswordCode,
+  forgotPasswordPassword,
 }
 
 class SignInFlowPage extends StatefulWidget {
@@ -40,7 +45,11 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     _ProgramOption(id: 3, label: 'BS Civil Engineering'),
     _ProgramOption(id: 4, label: 'BS Computer Science'),
     _ProgramOption(id: 5, label: 'BS Computer Engineering'),
-    _ProgramOption(id: 6, label: 'BS Information Technology with specialization in Mobile and Web Applications'),
+    _ProgramOption(
+      id: 6,
+      label:
+          'BS Information Technology with specialization in Mobile and Web Applications',
+    ),
     _ProgramOption(id: 7, label: 'BS Accountancy'),
     _ProgramOption(id: 8, label: 'BSBA Major in Financial Management'),
     _ProgramOption(id: 9, label: 'BSBA Major in Marketing Management'),
@@ -75,17 +84,19 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
+  final TextEditingController _resetPasswordController =
+      TextEditingController();
+  final TextEditingController _resetConfirmPasswordController =
+      TextEditingController();
   final TextEditingController _firstNameController = TextEditingController();
   final TextEditingController _lastNameController = TextEditingController();
-  final TextEditingController _contactNumberController = TextEditingController();
+  final TextEditingController _contactNumberController =
+      TextEditingController();
   final List<TextEditingController> _codeControllers = List.generate(
     6,
     (_) => TextEditingController(),
   );
-  final List<FocusNode> _codeFocusNodes = List.generate(
-    6,
-    (_) => FocusNode(),
-  );
+  final List<FocusNode> _codeFocusNodes = List.generate(6, (_) => FocusNode());
 
   @override
   void dispose() {
@@ -105,6 +116,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
   }
 
   bool _isLoggingIn = false;
+  bool _isSendingResetCode = false;
+  bool _isVerifyingResetCode = false;
+  bool _isSubmittingNewPassword = false;
 
   Future<void> _attemptLogin() async {
     final email = _emailController.text.trim();
@@ -126,7 +140,8 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         await Future<void>.delayed(const Duration(milliseconds: 500));
         final userId = AuthService.currentUser?['user_id'] as int?;
         if (userId != null) {
-          final records = await ReservationService().getReservationRecordsForUser(userId);
+          final records = await ReservationService()
+              .getReservationRecordsForUser(userId);
           ReservationActivityStore.replaceAll(records);
         }
         if (!mounted) return;
@@ -136,18 +151,19 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         );
       } else {
         await Future<void>.delayed(const Duration(milliseconds: 300));
-        final error = AuthService.lastAuthError ?? 'Login failed. Check credentials.';
+        final error =
+            AuthService.lastAuthError ?? 'Login failed. Check credentials.';
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(error)));
       }
     } catch (e) {
       await Future<void>.delayed(const Duration(milliseconds: 300));
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Login failed: ${e.toString()}')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Login failed: ${e.toString()}')));
     } finally {
       if (mounted && _step == SignInStep.loginEmail) {
         setState(() {
@@ -158,6 +174,167 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
   }
 
   bool _isSavingAccount = false;
+
+  Future<void> _sendForgotPasswordCode() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Please enter your email')));
+      return;
+    }
+
+    setState(() {
+      _isSendingResetCode = true;
+    });
+
+    try {
+      final error = await AuthService.sendForgotPasswordCode(email);
+      if (!mounted) return;
+
+      if (error == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Reset code sent. Check your email.')),
+        );
+        _goToStep(SignInStep.forgotPasswordCode);
+        return;
+      }
+
+      if (error == 'No account found, register account first') {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No account found, register account first'),
+          ),
+        );
+        return;
+      }
+
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(error)));
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingResetCode = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _verifyForgotPasswordCode() async {
+    final email = _emailController.text.trim();
+    final code = _codeControllers.map((c) => c.text).join();
+
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email first')),
+      );
+      return;
+    }
+
+    if (code.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter the 6-digit code')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isVerifyingResetCode = true;
+    });
+
+    try {
+      final ok = await AuthService.verifyForgotPasswordCode(email, code);
+      if (!mounted) return;
+
+      if (ok) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Code verified')));
+        _goToStep(SignInStep.forgotPasswordPassword);
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Incorrect code, try again')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isVerifyingResetCode = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _submitNewPassword() async {
+    final email = _emailController.text.trim();
+    final password = _resetPasswordController.text;
+    final confirm = _resetConfirmPasswordController.text;
+
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your email first')),
+      );
+      return;
+    }
+
+    if (password.isEmpty || confirm.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter and confirm your new password'),
+        ),
+      );
+      return;
+    }
+
+    if (password != confirm) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
+      return;
+    }
+
+    setState(() {
+      _isSubmittingNewPassword = true;
+    });
+
+    try {
+      final ok = await AuthService.resetPassword(
+        email: email,
+        newPassword: password,
+      );
+
+      if (!mounted) return;
+
+      if (ok) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Password updated successfully')),
+        );
+        _emailController.clear();
+        _passwordController.clear();
+        _resetPasswordController.clear();
+        _resetConfirmPasswordController.clear();
+        for (final controller in _codeControllers) {
+          controller.clear();
+        }
+        _goToStep(SignInStep.login);
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Could not update password. Please try again.'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSubmittingNewPassword = false;
+        });
+      }
+    }
+  }
 
   Future<void> _attemptSignUp() async {
     final email = _emailController.text.trim();
@@ -170,24 +347,33 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       return;
     }
     if (password != confirm) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
       return;
     }
 
     final affiliation = _selectedDepartment?.trim();
     if (affiliation == null || affiliation.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select your program before creating your account.')),
+        const SnackBar(
+          content: Text(
+            'Please select your program before creating your account.',
+          ),
+        ),
       );
       return;
     }
 
-    final programId = _selectedProgramId ?? AuthService.programIdForAffiliation(affiliation);
+    final programId =
+        _selectedProgramId ?? AuthService.programIdForAffiliation(affiliation);
     if (programId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a valid program before creating your account.')),
+        const SnackBar(
+          content: Text(
+            'Please select a valid program before creating your account.',
+          ),
+        ),
       );
       return;
     }
@@ -207,20 +393,26 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         'program_id': programId,
       };
 
-      final result = await AuthService.signUp(email: email, password: password, profile: profile);
+      final result = await AuthService.signUp(
+        email: email,
+        password: password,
+        profile: profile,
+      );
       final error = result['error'] as String?;
 
       if (error == null) {
         final warning = result['warning'] as String?;
         if (warning != null) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('✓ $warning')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('✓ $warning')));
         }
 
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('✓ Account created. Please log in to continue.')),
+          const SnackBar(
+            content: Text('✓ Account created. Please log in to continue.'),
+          ),
         );
 
         _goToStep(SignInStep.loginEmail);
@@ -231,9 +423,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       }
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Registration failed: $error')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Registration failed: $error')));
     } finally {
       if (mounted) {
         setState(() {
@@ -391,7 +583,26 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                 ),
               ),
 
-              const SizedBox(height: 20),
+              const SizedBox(height: 10),
+
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    _emailController.text = _emailController.text.trim();
+                    _goToStep(SignInStep.forgotPasswordEmail);
+                  },
+                  child: const Text(
+                    'Forgot password?',
+                    style: TextStyle(
+                      color: Color(0xFFF6C914),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 10),
 
               if (_isLoggingIn)
                 const Padding(
@@ -404,7 +615,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                         height: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF6C914)),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFFF6C914),
+                          ),
                         ),
                       ),
                       SizedBox(width: 12),
@@ -419,10 +632,208 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                   ),
                 )
               else
-                _PrimaryButton(
-                  label: 'LOG IN',
-                  onPressed: _attemptLogin,
+                _PrimaryButton(label: 'LOG IN', onPressed: _attemptLogin),
+            ],
+          ),
+        );
+
+      case SignInStep.forgotPasswordEmail:
+        return _AuthCard(
+          key: const ValueKey('forgotPasswordEmail'),
+          title: 'Forgot Password',
+          subtitle: 'Enter your email to receive a reset code.',
+          onBack: () => _goToStep(SignInStep.loginEmail),
+          child: Column(
+            children: [
+              _InputField(
+                controller: _emailController,
+                hintText: 'Enter your email',
+                keyboardType: TextInputType.emailAddress,
+                prefix: const Icon(
+                  Icons.email_outlined,
+                  color: Color(0xFFF6C914),
                 ),
+              ),
+              const SizedBox(height: 20),
+              if (_isSendingResetCode)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFFF6C914),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Sending code...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                _PrimaryButton(
+                  label: 'CONFIRM EMAIL',
+                  onPressed: _sendForgotPasswordCode,
+                ),
+            ],
+          ),
+        );
+
+      case SignInStep.forgotPasswordCode:
+        return _AuthCard(
+          key: const ValueKey('forgotPasswordCode'),
+          title: 'Reset Code',
+          subtitle: 'Enter the 6-digit code sent to your email.',
+          onBack: () => _goToStep(SignInStep.forgotPasswordEmail),
+          child: Column(
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: List.generate(
+                  6,
+                  (index) => _CodeDigitField(
+                    controller: _codeControllers[index],
+                    focusNode: _codeFocusNodes[index],
+                    nextFocusNode: index < 5
+                        ? _codeFocusNodes[index + 1]
+                        : null,
+                    previousFocusNode: index > 0
+                        ? _codeFocusNodes[index - 1]
+                        : null,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: _sendForgotPasswordCode,
+                child: const Text(
+                  'Resend Code',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+              const SizedBox(height: 10),
+              if (_isVerifyingResetCode)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFFF6C914),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Verifying code...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                _PrimaryButton(
+                  label: 'VERIFY RESET CODE',
+                  onPressed: _verifyForgotPasswordCode,
+                ),
+            ],
+          ),
+        );
+
+      case SignInStep.forgotPasswordPassword:
+        return _AuthCard(
+          key: const ValueKey('forgotPasswordPassword'),
+          title: 'Enter New Password',
+          subtitle: 'Create a new password for your account.',
+          onBack: () => _goToStep(SignInStep.forgotPasswordCode),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Enter new password',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ),
+              const SizedBox(height: 6),
+              _InputField(
+                controller: _resetPasswordController,
+                hintText: '••••••••••••',
+                obscureText: true,
+                prefix: const Icon(
+                  Icons.lock_outline,
+                  color: Color(0xFFF6C914),
+                ),
+              ),
+              const SizedBox(height: 14),
+              const Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Re Enter new password',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                ),
+              ),
+              const SizedBox(height: 6),
+              _InputField(
+                controller: _resetConfirmPasswordController,
+                hintText: '••••••••••••',
+                obscureText: true,
+                prefix: const Icon(
+                  Icons.lock_outline,
+                  color: Color(0xFFF6C914),
+                ),
+              ),
+              const SizedBox(height: 18),
+              if (_isSubmittingNewPassword)
+                const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFFF6C914),
+                          ),
+                        ),
+                      ),
+                      SizedBox(width: 12),
+                      Text(
+                        'Saving password...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                _PrimaryButton(label: 'SUBMIT', onPressed: _submitNewPassword),
             ],
           ),
         );
@@ -454,7 +865,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                   final error = await AuthService.sendEmailCode(email);
                   if (error == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Code sent. Check your email')),
+                      const SnackBar(
+                        content: Text('Code sent. Check your email'),
+                      ),
                     );
                     _goToStep(SignInStep.code);
                   } else {
@@ -482,8 +895,12 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                   (index) => _CodeDigitField(
                     controller: _codeControllers[index],
                     focusNode: _codeFocusNodes[index],
-                    nextFocusNode: index < 5 ? _codeFocusNodes[index + 1] : null,
-                    previousFocusNode: index > 0 ? _codeFocusNodes[index - 1] : null,
+                    nextFocusNode: index < 5
+                        ? _codeFocusNodes[index + 1]
+                        : null,
+                    previousFocusNode: index > 0
+                        ? _codeFocusNodes[index - 1]
+                        : null,
                   ),
                 ),
               ),
@@ -493,14 +910,20 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                   final email = _emailController.text.trim();
                   if (email.isEmpty) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Enter your email to resend the code')),
+                      const SnackBar(
+                        content: Text('Enter your email to resend the code'),
+                      ),
                     );
                     return;
                   }
                   final error = await AuthService.sendEmailCode(email);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text(error == null ? 'Code resent. Check your email.' : 'Failed to resend code: $error'),
+                      content: Text(
+                        error == null
+                            ? 'Code resent. Check your email.'
+                            : 'Failed to resend code: $error',
+                      ),
                     ),
                   );
                 },
@@ -517,7 +940,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                   final code = _codeControllers.map((c) => c.text).join();
                   if (code.length != 6) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter the 6-digit code')),
+                      const SnackBar(
+                        content: Text('Please enter the 6-digit code'),
+                      ),
                     );
                     return;
                   }
@@ -553,8 +978,12 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                   (index) => _CodeDigitField(
                     controller: _codeControllers[index],
                     focusNode: _codeFocusNodes[index],
-                    nextFocusNode: index < 5 ? _codeFocusNodes[index + 1] : null,
-                    previousFocusNode: index > 0 ? _codeFocusNodes[index - 1] : null,
+                    nextFocusNode: index < 5
+                        ? _codeFocusNodes[index + 1]
+                        : null,
+                    previousFocusNode: index > 0
+                        ? _codeFocusNodes[index - 1]
+                        : null,
                   ),
                 ),
               ),
@@ -695,7 +1124,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                 items: _buildProgramDropdownItems(),
                 onChanged: (value) {
                   if (value != null) {
-                    final selected = _programOptions.firstWhere((option) => option.label == value);
+                    final selected = _programOptions.firstWhere(
+                      (option) => option.label == value,
+                    );
                     setState(() {
                       _selectedDepartment = value;
                       _selectedProgramId = selected.id;
@@ -797,7 +1228,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                         height: 22,
                         child: CircularProgressIndicator(
                           strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFF6C914)),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Color(0xFFF6C914),
+                          ),
                         ),
                       ),
                       SizedBox(width: 12),
@@ -812,10 +1245,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                   ),
                 )
               else
-                _PrimaryButton(
-                  label: 'SAVE',
-                  onPressed: _attemptSignUp,
-                ),
+                _PrimaryButton(label: 'SAVE', onPressed: _attemptSignUp),
             ],
           ),
         );
@@ -861,7 +1291,10 @@ class _AuthCard extends StatelessWidget {
               alignment: Alignment.centerLeft,
               child: IconButton(
                 onPressed: onBack,
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white),
+                icon: const Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: Colors.white,
+                ),
                 padding: EdgeInsets.zero,
                 constraints: const BoxConstraints(),
                 tooltip: 'Back',
@@ -1063,7 +1496,9 @@ class _CodeDigitField extends StatelessWidget {
         textAlign: TextAlign.center,
         keyboardType: TextInputType.number,
         maxLength: 1,
-        textInputAction: nextFocusNode != null ? TextInputAction.next : TextInputAction.done,
+        textInputAction: nextFocusNode != null
+            ? TextInputAction.next
+            : TextInputAction.done,
         onChanged: (value) {
           if (value.isNotEmpty) {
             if (value.length > 1) {

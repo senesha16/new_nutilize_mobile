@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:new_nutilize_mobile/features/auth/sign_in_flow.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
+import 'package:new_nutilize_mobile/features/calendar/calendar_page.dart';
+import 'package:new_nutilize_mobile/features/home/home_page.dart';
+import 'package:new_nutilize_mobile/request.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
+import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
+import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
 
 class ProfilePage extends StatelessWidget {
-  const ProfilePage({super.key});
+  const ProfilePage({super.key, this.showBottomNavigation = true});
+
+  final bool showBottomNavigation;
 
   @override
   Widget build(BuildContext context) {
@@ -206,6 +213,27 @@ class ProfilePage extends StatelessWidget {
           ),
         ),
       ),
+      bottomNavigationBar: showBottomNavigation
+          ? AppBottomNav(
+        selectedIndex: AppShellScope.maybeOf(context)?.currentIndex ?? 3,
+        onTap: (index) {
+          final shell = AppShellScope.maybeOf(context);
+          if (shell != null) {
+            shell.onTabSelected(index);
+            return;
+          }
+          final pages = [
+            const HomePage(),
+            const CalendarPage(),
+            const RequestPage(),
+            const ProfilePage(),
+          ];
+          Navigator.of(context).pushReplacement(
+            MaterialPageRoute(builder: (_) => pages[index]),
+          );
+        },
+            )
+          : null,
     );
   }
 }

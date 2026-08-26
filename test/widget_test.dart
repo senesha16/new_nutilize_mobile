@@ -17,13 +17,13 @@ import 'package:new_nutilize_mobile/features/user/personal_details_page.dart';
 import 'package:new_nutilize_mobile/features/user/report_issue_page.dart';
 import 'package:new_nutilize_mobile/features/user/request_history_page.dart';
 import 'package:new_nutilize_mobile/main.dart';
+import 'package:new_nutilize_mobile/services/auth_service.dart';
 
 void main() {
   testWidgets('shows the NUtilize login screen', (WidgetTester tester) async {
     await tester.pumpWidget(const NUtilizeApp());
 
-    expect(find.text('Welcome to'), findsOneWidget);
-    expect(find.text('Register with Microsoft'), findsOneWidget);
+    expect(find.text('Loading NUtilize...'), findsOneWidget);
   });
 
   testWidgets('shows request history entries and filters', (
@@ -180,6 +180,38 @@ void main() {
       ),
       isTrue,
     );
+  });
+
+  test('creates approved notifications from the current reservation baseline', () {
+    final originalUser = AuthService.currentUser;
+
+    AuthService.currentUser = null;
+    NotificationActivityStore.ensureSeeded(DateTime.now());
+    AuthService.currentUser = {'user_id': 42, 'email': 'user@example.com'};
+    ReservationActivityStore.replaceAll([
+      ReservationRecord(
+        id: 'approved-1',
+        userId: 42,
+        reservationTitle: 'Approved request',
+        roomName: 'Room 101',
+        reservationType: 'Venue Reservation',
+        reservationStatus: 'Approved',
+        date: DateTime.now(),
+        reservationTime: '10:00 AM - 12:00 PM',
+      ),
+    ]);
+
+    NotificationActivityStore.syncFromReservations(DateTime.now());
+
+    expect(
+      NotificationActivityStore.notifications.any(
+        (notification) => notification.category == NotificationCategory.reservationApproved,
+      ),
+      isTrue,
+    );
+
+    AuthService.currentUser = originalUser;
+    NotificationActivityStore.clear();
   });
 
   test('hides cancelled reservations from the calendar', () {

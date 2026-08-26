@@ -105,7 +105,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       if (!mounted) {
         return;
       }
-      ReservationActivityStore.replaceAll(records);
+      final fetchedIds = records.map((record) => record.stableId).toSet();
+      final locallyKnown = ReservationActivityStore.reservations
+          .where((record) => !fetchedIds.contains(record.stableId))
+          .toList();
+      ReservationActivityStore.replaceAll([...records, ...locallyKnown]);
       NotificationActivityStore.syncFromReservations(DateTime.now());
     } catch (_) {
       // Ignore refresh failures and keep the shell responsive.
@@ -228,7 +232,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                 HomePage(),
                 CalendarPage(),
                 RequestPage(),
-                ProfilePage(),
+                ProfilePage(showBottomNavigation: false),
               ],
             ),
           ),
