@@ -203,6 +203,8 @@ class ReservationService {
   ReservationService._internal();
 
   SupabaseClient get _client => Supabase.instance.client;
+  final Map<String, Map<String, dynamic>?> _officeByNameCache = {};
+  final Map<int, Map<String, dynamic>?> _officeByIdCache = {};
 
   static String resolveApprovalStatusFromRows({
     required String overallStatus,
@@ -299,10 +301,7 @@ class ReservationService {
         }
 
         if (nextStatus != null && status.trim().toLowerCase() != nextStatus.toLowerCase()) {
-          await _client
-              .from('reservations')
-              .update({'overall_status': nextStatus})
-              .eq('reservation_id', reservationId);
+          returnRequired.add('__update__:$reservationId:$nextStatus');
         }
 
         final effectiveStatus = nextStatus ?? status;
@@ -314,8 +313,22 @@ class ReservationService {
         }
       }
 
-      if (returnRequired.isEmpty) return null;
-      return 'Please return the following request(s) before making a new reservation:\n\n${returnRequired.join('\n')}';
+        final updates = returnRequired
+          .where((entry) => entry.startsWith('__update__:'))
+          .map((entry) {
+          final parts = entry.split(':');
+          return _client
+            .from('reservations')
+            .update({'overall_status': parts[2]})
+            .eq('reservation_id', int.parse(parts[1]));
+          });
+        await Future.wait(updates);
+
+        final deadlines = returnRequired
+          .where((entry) => !entry.startsWith('__update__:'))
+          .toList();
+        if (deadlines.isEmpty) return null;
+        return 'Please return the following request(s) before making a new reservation:\n\n${deadlines.join('\n')}';
     } catch (e) {
       print('Error enforcing reservation lifecycle: $e');
       return null;
@@ -922,9 +935,15 @@ class ReservationService {
   }
 
   /// Fetch reservations created by a specific user.
-  Future<List<ReservationRecord>> getReservationRecordsForUser(int userId) async {
+  Future<List<ReservationRecord>> getReservationRecordsForUser(
+    int userId, {
+    bool includeDetails = true,
+    bool updateLifecycle = true,
+  }) async {
     try {
-      await enforceReservationLifecycle(userId);
+      if (updateLifecycle) {
+        await enforceReservationLifecycle(userId);
+      }
       final reservationsResponse = await _client
           .from('reservations')
           .select('reservation_id, activity_name, overall_status, created_at, updated_at, Date_of_Activity, Start_of_activity, End_of_Activity')
@@ -988,6 +1007,23 @@ class ReservationService {
             if (parsed != null) databaseTimestamps.add(parsed);
           }
           databaseTimestamps.sort();
+
+          if (!includeDetails) {
+            return ReservationRecord(
+              id: reservationId.toString(),
+              userId: userId,
+              reservationTitle:
+                  res['activity_name'] as String? ?? 'Reservation Request',
+              roomName: 'Reservation',
+              reservationType: 'Reservation',
+              reservationStatus: effectiveStatus,
+              date: date,
+              reservationTime: reservationTime,
+              lastUpdatedAt: databaseTimestamps.isEmpty
+                  ? null
+                  : databaseTimestamps.last,
+            );
+          }
 
           final roomNameFuture = _fetchReservationRoomName(reservationId);
           final timelineFuture = _buildApprovalTimeline(reservationId, date);
@@ -1114,9 +1150,9 @@ class ReservationService {
           .select('reservation_items_id')
           .eq('reservation_id', reservationId);
       if (details == null) return names;
-      for (final det in details as List) {
+      final itemNames = await Future.wait((details as List).map((det) async {
         final reservationItemsId = det['reservation_items_id'] as int?;
-        if (reservationItemsId == null) continue;
+        if (reservationItemsId == null) return null;
 
         final itemLink = await _client
             .from('reservation_items')
@@ -1124,7 +1160,7 @@ class ReservationService {
             .eq('reservation_items_id', reservationItemsId)
             .maybeSingle();
         final itemId = itemLink?['item_id'] as int?;
-        if (itemId == null) continue;
+        if (itemId == null) return null;
 
         final itemRow = await _client
             .from('items')
@@ -1132,10 +1168,9 @@ class ReservationService {
             .eq('item_id', itemId)
             .maybeSingle();
         final itemName = itemRow?['item_name'] as String?;
-        if (itemName != null && itemName.isNotEmpty) {
-          names.add(itemName);
-        }
-      }
+        return itemName != null && itemName.isNotEmpty ? itemName : null;
+      }));
+      names.addAll(itemNames.whereType<String>());
     } catch (e) {
       print('Error fetching reservation item names: $e');
     }
@@ -1410,6 +1445,11 @@ class ReservationService {
 
   /// Get office ID by name
   Future<Map<String, dynamic>?> _getOfficeByName(String departmentName) async {
+    final cacheKey = departmentName.trim().toLowerCase();
+    if (_officeByNameCache.containsKey(cacheKey)) {
+      return _officeByNameCache[cacheKey];
+    }
+
     try {
       final response = await _client
           .from('offices')
@@ -1417,9 +1457,12 @@ class ReservationService {
           .ilike('department_name', departmentName)
           .maybeSingle();
 
-      return response as Map<String, dynamic>?;
+      final office = response as Map<String, dynamic>?;
+      _officeByNameCache[cacheKey] = office;
+      return office;
     } catch (e) {
       print('Error fetching office: $e');
+      _officeByNameCache[cacheKey] = null;
       return null;
     }
   }
@@ -1615,15 +1658,22 @@ class ReservationService {
   }
 
   Future<Map<String, dynamic>?> _getOfficeById(int officeId) async {
+    if (_officeByIdCache.containsKey(officeId)) {
+      return _officeByIdCache[officeId];
+    }
+
     try {
       final response = await _client
           .from('offices')
           .select('department_name')
           .eq('office_id', officeId)
           .maybeSingle();
-      return response as Map<String, dynamic>?;
+      final office = response as Map<String, dynamic>?;
+      _officeByIdCache[officeId] = office;
+      return office;
     } catch (e) {
       print('Error fetching office by id: $e');
+      _officeByIdCache[officeId] = null;
       return null;
     }
   }
@@ -1646,36 +1696,41 @@ class ReservationService {
       int reservationId, DateTime date) async {
     try {
       // Use canonical chain to force UI order, but read DB rows for status/timestamps.
-      final itemOwnerNames = await _getReservationItemOwnerNames(reservationId);
+      final prerequisites = await Future.wait([
+        _getReservationItemOwnerNames(reservationId),
+        _getReservationRoomType(reservationId),
+        _getReservationItemIds(reservationId),
+      ]);
+      final itemOwnerNames = prerequisites[0] as List<String>;
+      final roomType = prerequisites[1] as String?;
+      final itemIds = prerequisites[2] as List<int>;
 
-      final roomType = await _getReservationRoomType(reservationId);
-      final itemIds = await _getReservationItemIds(reservationId);
-
-      final approvalChain = await calculateApprovalChain(
-        roomType: roomType ?? '',
-        itemIds: itemIds.isEmpty ? null : itemIds,
-      );
-
-      final approvalsResponse = await _client
-          .from('reservation_approvals')
-          .select('office_id, status, created_at, updated_at')
-          .eq('reservation_id', reservationId)
-          .order('created_at', ascending: true);
+      final timelineData = await Future.wait([
+        calculateApprovalChain(
+          roomType: roomType ?? '',
+          itemIds: itemIds.isEmpty ? null : itemIds,
+        ),
+        _client
+            .from('reservation_approvals')
+            .select('office_id, status, created_at, updated_at')
+            .eq('reservation_id', reservationId)
+          .order('created_at', ascending: true) as Future<dynamic>,
+      ]);
+      final approvalChain = timelineData[0] as ApprovalChain;
+      final approvalsResponse = timelineData[1];
 
       final rawApprovals = <Map<String, dynamic>>[];
       if (approvalsResponse != null) {
-        for (final a in approvalsResponse as List) {
-          final row = Map<String, dynamic>.from(a as Map<String, dynamic>);
-          // Augment with office_name when possible for robust matching
-          final officeId = row['office_id'] as int?;
-          if (officeId != null) {
-            final office = await _getOfficeById(officeId);
+        final augmentedApprovals = await Future.wait(
+          (approvalsResponse as List).map((a) async {
+            final row = Map<String, dynamic>.from(a as Map<String, dynamic>);
+            final officeId = row['office_id'] as int?;
+            final office = officeId == null ? null : await _getOfficeById(officeId);
             row['office_name'] = office?['department_name'] as String?;
-          } else {
-            row['office_name'] = null;
-          }
-          rawApprovals.add(row);
-        }
+            return row;
+          }),
+        );
+        rawApprovals.addAll(augmentedApprovals);
       }
 
       // Debug: print canonical approval chain and raw approval rows
@@ -1959,9 +2014,9 @@ class ReservationService {
           .select('reservation_items_id')
           .eq('reservation_id', reservationId);
       if (details == null) return ids;
-      for (final det in details as List) {
+      final itemIds = await Future.wait((details as List).map((det) async {
         final reservationItemsId = det['reservation_items_id'] as int?;
-        if (reservationItemsId == null) continue;
+        if (reservationItemsId == null) return null;
 
         final itemLink = await _client
             .from('reservation_items')
@@ -1969,8 +2024,9 @@ class ReservationService {
             .eq('reservation_items_id', reservationItemsId)
             .maybeSingle();
         final itemId = itemLink?['item_id'] as int?;
-        if (itemId != null) ids.add(itemId);
-      }
+        return itemId;
+      }));
+      ids.addAll(itemIds.whereType<int>());
     } catch (e) {
       print('Error fetching reservation item ids: $e');
     }

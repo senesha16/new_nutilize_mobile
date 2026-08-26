@@ -45,7 +45,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _currentIndex = widget.initialIndex;
     _scheduleRefresh();
     _initRealtimeSubscriptions();
-    unawaited(_refreshReservations());
+    unawaited(_refreshReservations(includeDetails: false));
   }
 
   @override
@@ -69,14 +69,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   void _scheduleRefresh() {
     _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) {
         unawaited(_refreshReservations());
       }
     });
   }
 
-  Future<void> _refreshReservations() async {
+  Future<void> _refreshReservations({bool includeDetails = true}) async {
     if (_isRefreshing) {
       return;
     }
@@ -88,7 +88,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     _isRefreshing = true;
     try {
-      final profile = await AuthService.restoreCurrentUser();
+        final profile =
+          AuthService.currentUser ?? await AuthService.restoreCurrentUser();
       final rawUserId = profile?['user_id'];
       final userId = rawUserId is int
           ? rawUserId
@@ -101,6 +102,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
       final records = await ReservationService().getReservationRecordsForUser(
         userId,
+        includeDetails: includeDetails,
+        updateLifecycle: includeDetails,
       );
       if (!mounted) {
         return;
@@ -115,6 +118,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       // Ignore refresh failures and keep the shell responsive.
     } finally {
       _isRefreshing = false;
+      if (mounted && !includeDetails) {
+        unawaited(_refreshReservations());
+      }
     }
   }
 

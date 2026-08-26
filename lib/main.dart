@@ -3,8 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:new_nutilize_mobile/features/auth/sign_in_flow.dart';
-import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
-import 'package:new_nutilize_mobile/services/reservation_service.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell.dart';
 import 'package:new_nutilize_mobile/services/supabase_service.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
@@ -87,10 +85,7 @@ Future<void> _repairPersistedSession() async {
   final userId = profile['user_id'] is int
       ? profile['user_id'] as int
       : int.tryParse(profile['user_id']?.toString() ?? '');
-  if (userId != null) {
-    final records = await ReservationService().getReservationRecordsForUser(userId);
-    ReservationActivityStore.replaceAll(records);
-  } else {
+  if (userId == null) {
     await AuthService.signOut();
   }
 }

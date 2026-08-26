@@ -11,7 +11,6 @@ import 'package:new_nutilize_mobile/widgets/secondary_header.dart';
 
 const Color _brandBlue = Color(0xFF35489A);
 const Color _brandRed = Color(0xFFE53935);
-const Color _brandAmber = Color(0xFFF6A700);
 
 Future<T?> _showReservationDialog<T>(
   BuildContext context,
@@ -99,25 +98,6 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
     }
   }
 
-  Future<void> _handleDownloadPermit() async {
-    final sent = await _showReservationDialog<bool>(
-      context,
-      (dialogContext) => _DownloadPermitDialog(
-        reservation: _reservation,
-        onSendPdf: _sendPermitPdf,
-      ),
-    );
-
-    if (!mounted || sent != true) {
-      return;
-    }
-
-    await _showReservationDialog<void>(
-      context,
-      (dialogContext) => const _PermitSuccessDialog(),
-    );
-  }
-
   Future<void> _handleReportIssue() async {
     final draft = await _showReservationDialog<_ReportIssueDraft>(
       context,
@@ -142,10 +122,6 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       context,
       (dialogContext) => const _ReportSuccessDialog(),
     );
-  }
-
-  Future<void> _sendPermitPdf(ReservationRecord reservation) async {
-    await Future<void>.delayed(const Duration(seconds: 2));
   }
 
   Future<void> _submitReport(_ReportIssueDraft draft) async {
@@ -317,29 +293,6 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                             ),
                           ),
                         ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: _handleDownloadPermit,
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: _brandAmber,
-                              side: const BorderSide(color: _brandAmber),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
-                            child: const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 13),
-                              child: Text(
-                                'Print / Download',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
                       ],
                     ),
                     const SizedBox(height: 12),
@@ -385,163 +338,6 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
             shell.onTabSelected(index);
           }
         },
-      ),
-    );
-  }
-}
-
-class _DownloadPermitDialog extends StatefulWidget {
-  const _DownloadPermitDialog({
-    required this.reservation,
-    required this.onSendPdf,
-  });
-
-  final ReservationRecord reservation;
-  final Future<void> Function(ReservationRecord reservation) onSendPdf;
-
-  @override
-  State<_DownloadPermitDialog> createState() => _DownloadPermitDialogState();
-}
-
-class _DownloadPermitDialogState extends State<_DownloadPermitDialog> {
-  bool _isSending = false;
-
-  Future<void> _sendPdf() async {
-    if (_isSending) {
-      return;
-    }
-
-    setState(() {
-      _isSending = true;
-    });
-
-    try {
-      await widget.onSendPdf(widget.reservation);
-      if (!mounted) {
-        return;
-      }
-      Navigator.of(context).pop(true);
-    } catch (_) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _isSending = false;
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Failed to send the reservation permit.'),
-          action: SnackBarAction(label: 'Retry', onPressed: _sendPdf),
-        ),
-      );
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final onSurface = Theme.of(context).colorScheme.onSurface;
-
-    return _DialogShell(
-      child: Padding(
-        padding: EdgeInsets.fromLTRB(22, 20, 22, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Download Reservation Permit',
-              style: TextStyle(
-                color: _brandBlue,
-                fontSize: 16,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              'A copy of your reservation permit will be sent to your registered email address. You can print the PDF attachment and present it to the appropriate office if required.',
-              style: TextStyle(color: onSurface, fontSize: 13, height: 1.45),
-            ),
-            const SizedBox(height: 22),
-            _DialogButtonRow(
-              secondaryLabel: 'Cancel',
-              primaryLabel: 'Send PDF',
-              secondaryOnPressed: _isSending
-                  ? null
-                  : () => Navigator.of(context).pop(false),
-              primaryOnPressed: _isSending ? null : _sendPdf,
-              primaryColor: _brandBlue,
-              primaryIsBusy: _isSending,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _PermitSuccessDialog extends StatelessWidget {
-  const _PermitSuccessDialog();
-
-  @override
-  Widget build(BuildContext context) {
-    return _DialogShell(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('🎉', style: TextStyle(fontSize: 28)),
-            const SizedBox(height: 10),
-            const Text(
-              "You're All Set!",
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: _brandBlue,
-                fontSize: 18,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 14),
-            Text(
-              'Your reservation permit has been sent to your registered email.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurface,
-                fontSize: 13,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              'Please check your Inbox or Spam folder if you do not receive it within a few minutes.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-                fontSize: 12,
-                height: 1.45,
-              ),
-            ),
-            const SizedBox(height: 22),
-            SizedBox(
-              width: 130,
-              child: ElevatedButton(
-                onPressed: () => Navigator.of(context).pop(),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _brandBlue,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: const Text(
-                  'Done',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700),
-                ),
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

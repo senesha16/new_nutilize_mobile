@@ -191,7 +191,6 @@ class AuthService {
 
       // Registration succeeded but the function did not create a session.
       // Try one fast sign-in immediately so the user still gets a session.
-      await Future<void>.delayed(const Duration(milliseconds: 250));
       final fallbackToken = await signIn(email: email, password: password);
       if (fallbackToken != null) {
         debugPrint('[AuthService] Fast sign-in succeeded after registration.');

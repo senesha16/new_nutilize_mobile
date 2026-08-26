@@ -137,20 +137,12 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     try {
       final token = await AuthService.signIn(email: email, password: password);
       if (token != null) {
-        await Future<void>.delayed(const Duration(milliseconds: 500));
-        final userId = AuthService.currentUser?['user_id'] as int?;
-        if (userId != null) {
-          final records = await ReservationService()
-              .getReservationRecordsForUser(userId);
-          ReservationActivityStore.replaceAll(records);
-        }
         if (!mounted) return;
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(builder: (_) => const AppShell()),
         );
       } else {
-        await Future<void>.delayed(const Duration(milliseconds: 300));
         final error =
             AuthService.lastAuthError ?? 'Login failed. Check credentials.';
         if (!mounted) return;
@@ -159,7 +151,6 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         ).showSnackBar(SnackBar(content: Text(error)));
       }
     } catch (e) {
-      await Future<void>.delayed(const Duration(milliseconds: 300));
       if (!mounted) return;
       ScaffoldMessenger.of(
         context,
