@@ -547,15 +547,18 @@ class AuthService {
     required String password,
   }) async {
     debugPrint(
-      '[AuthService] _loginWithLegacyUsersTable: attempting legacy auth for $email',
-    );
-    final url = Uri.parse(
-      '$_baseUrl/rest/v1/users?select=user_id,email,username,first_name,role,affiliation,program_id,password&email=eq.${Uri.encodeQueryComponent(email)}&limit=1',
+      '[AuthService] _loginWithLegacyUsersTable: legacy password check is intentionally disabled for $email',
     );
 
-    debugPrint(
-      '[AuthService] _loginWithLegacyUsersTable: querying public.users table',
+    // The public.users.password field is legacy storage and can retain stale
+    // values from prior resets. Accepting it as an authentication source allows
+    // an old password to continue working after a successful reset.
+    // We only use the legacy table to confirm whether an account exists for the
+    // provided email; we never authenticate from the stored legacy password.
+    final url = Uri.parse(
+      '$_baseUrl/rest/v1/users?select=user_id,email&email=eq.${Uri.encodeQueryComponent(email)}&limit=1',
     );
+
     final resp = await http.get(
       url,
       headers: {
@@ -565,72 +568,31 @@ class AuthService {
       },
     );
 
-    debugPrint(
-      '[AuthService] _loginWithLegacyUsersTable: query status ${resp.statusCode}',
-    );
     if (resp.statusCode != 200) {
-      debugPrint(
-        '[AuthService] _loginWithLegacyUsersTable: query failed with status ${resp.statusCode}, body: ${resp.body}',
-      );
+      _setLastAuthError('User does not exist');
       return null;
     }
 
     try {
       final decoded = jsonDecode(resp.body);
-      debugPrint(
-        '[AuthService] _loginWithLegacyUsersTable: decoded response type ${decoded.runtimeType}',
-      );
       if (decoded is! List || decoded.isEmpty) {
-        debugPrint(
-          '[AuthService] _loginWithLegacyUsersTable: no users found for $email',
-        );
+        _setLastAuthError('User does not exist');
         return null;
       }
 
       final row = Map<String, dynamic>.from(decoded.first as Map);
-      final storedPassword = row['password']?.toString();
-      debugPrint(
-        '[AuthService] _loginWithLegacyUsersTable: found user, checking password',
-      );
-
-      if (storedPassword == null || storedPassword != password) {
-        debugPrint(
-          '[AuthService] _loginWithLegacyUsersTable: password mismatch',
-        );
+      final storedEmail = row['email']?.toString();
+      if (storedEmail == null || storedEmail.trim().isEmpty) {
+        _setLastAuthError('User does not exist');
         return null;
       }
 
-      debugPrint(
-        '[AuthService] _loginWithLegacyUsersTable: password matches! Setting currentUser',
-      );
-      currentUser = {
-        'user_id': row['user_id'],
-        'email': row['email'] ?? email,
-        'username': row['username'] ?? email,
-        'first_name': row['first_name'],
-        'role': row['role'],
-        'affiliation': row['affiliation'],
-        'program_id': row['program_id'],
-      };
-      _setLastAuthError(null);
-
-      final sessionToken = await _passwordGrantWithRetry(
-        email: email,
-        password: password,
-      );
-      if (sessionToken != null) {
-        debugPrint(
-          '[AuthService] _loginWithLegacyUsersTable: got session token from password grant',
-        );
-        return sessionToken;
-      }
-
-      debugPrint(
-        '[AuthService] _loginWithLegacyUsersTable: returning legacy session token',
-      );
-      return 'legacy-session:${email}';
-    } catch (e) {
-      debugPrint('[AuthService] _loginWithLegacyUsersTable: exception: $e');
+      // Legacy password is intentionally ignored. This prevents an old password
+      // from continuing to log a user in after a reset.
+      _setLastAuthError('User does not exist');
+      return null;
+    } catch (_) {
+      _setLastAuthError('User does not exist');
       return null;
     }
   }
@@ -1063,7 +1025,7 @@ class AuthService {
 
     final exists = await userExistsByEmail(normalizedEmail);
     if (!exists) {
-      return 'No account found, register account first';
+      return 'No existing user found';
     }
 
     final error = await sendEmailCode(normalizedEmail);
