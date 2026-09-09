@@ -61,6 +61,8 @@ class ReservationRecord {
     this.lastUpdatedAt,
     this.timeline = const [],
     this.reservedItems = const [],
+    this.rejectionReason,
+    this.rejectedBy,
   });
 
   final String? id;
@@ -74,6 +76,8 @@ class ReservationRecord {
   final DateTime? lastUpdatedAt;
   final List<ReservationTimelineEntry> timeline;
   final List<String> reservedItems;
+  final String? rejectionReason;
+  final String? rejectedBy;
 
   String get stableId =>
       id ??

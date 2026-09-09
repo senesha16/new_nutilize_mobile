@@ -964,7 +964,7 @@ class ReservationService {
           ? const <Map<String, dynamic>>[]
           : await _client
               .from('reservation_approvals')
-              .select('reservation_id, status, approved_at, created_at, updated_at')
+              .select('reservation_id, office_id, status, approved_at, created_at, updated_at, rejection_reason')
               .in_('reservation_id', reservationIds);
 
       final approvalRowsByReservation = <int, List<Map<String, dynamic>>>{};
@@ -991,6 +991,26 @@ class ReservationService {
             overallStatus: (res['overall_status'] as String?) ?? 'Pending Approval',
             approvalRows: approvalRowsByReservation[reservationId] ?? const [],
           );
+          final rejectedApproval = (approvalRowsByReservation[reservationId] ?? const <Map<String, dynamic>>[])
+              .where((approval) {
+                final status = (approval['status'] as String? ?? '').trim().toLowerCase();
+                return status == 'rejected' || status == 'denied';
+              })
+              .toList()
+            ..sort((a, b) {
+              final aCreated = DateTime.tryParse(a['created_at']?.toString() ?? '');
+              final bCreated = DateTime.tryParse(b['created_at']?.toString() ?? '');
+              if (aCreated == null && bCreated == null) return 0;
+              if (aCreated == null) return 1;
+              if (bCreated == null) return -1;
+              return aCreated.compareTo(bCreated);
+            });
+          final rejectionReason = rejectedApproval.isEmpty
+              ? null
+              : rejectedApproval.first['rejection_reason']?.toString().trim();
+          final rejectingOffice = rejectedApproval.isEmpty
+              ? null
+              : await _getOfficeNameById(rejectedApproval.first['office_id'] as int?);
           final databaseTimestamps = <DateTime>[];
           for (final rawTimestamp in [
             res['updated_at'],
@@ -1066,6 +1086,12 @@ class ReservationService {
               : databaseTimestamps.last,
             timeline: timeline,
             reservedItems: reservedItems,
+            rejectionReason: effectiveStatus == 'Rejected' && rejectionReason?.isNotEmpty == true
+                ? rejectionReason
+                : null,
+            rejectedBy: effectiveStatus == 'Rejected' && rejectingOffice?.isNotEmpty == true
+                ? rejectingOffice
+                : null,
           );
         } catch (e) {
           print('Error processing reservation entry: $e');
@@ -1678,6 +1704,12 @@ class ReservationService {
     }
   }
 
+  Future<String?> _getOfficeNameById(int? officeId) async {
+    if (officeId == null) return null;
+    final office = await _getOfficeById(officeId);
+    return office?['department_name'] as String?;
+  }
+
   /// Check whether a table has a specific column by querying the table directly.
   Future<bool> _tableHasColumn(String tableName, String columnName) async {
     try {
@@ -2046,6 +2078,7 @@ class ReservationService {
     required List<int>? chairsQuantity,
     required List<int>? itemIds,
     Map<int, int>? itemQuantities,
+    required bool hasOutsideParticipants,
     required List<int> approvalChain,
     String? proofOfConsentUrl,
   }) async {
@@ -2106,6 +2139,7 @@ class ReservationService {
         'End_of_Activity': endTime.toIso8601String(),
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
+        'outside_participants': hasOutsideParticipants,
       };
 
       // Add proof of consent URL if provided (for students)
@@ -2373,6 +2407,7 @@ class ReservationService {
     required DateTime startTime,
     required DateTime endTime,
     required Map<int, int> itemQuantities, // item_id -> quantity
+    required bool hasOutsideParticipants,
     String? proofOfConsentUrl,
     DateTime? requestStart,
     DateTime? requestEnd,
@@ -2387,6 +2422,7 @@ class ReservationService {
         'End_of_Activity': endTime.toIso8601String(),
         'created_at': DateTime.now().toIso8601String(),
         'updated_at': DateTime.now().toIso8601String(),
+        'outside_participants': hasOutsideParticipants,
       };
 
       if (proofOfConsentUrl != null) {

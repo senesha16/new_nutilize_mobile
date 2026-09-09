@@ -208,6 +208,8 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
             reservationTime: _reservation.reservationTime,
             timeline: updatedTimeline,
             reservedItems: _reservation.reservedItems,
+            rejectionReason: _reservation.rejectionReason,
+            rejectedBy: _reservation.rejectedBy,
           );
           _isCancelling = false;
         });
@@ -267,6 +269,11 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                     ),
                     const SizedBox(height: 18),
                     _ApprovalTimelineCard(reservation: _reservation),
+                    if (_reservation.reservationStatus.toLowerCase().contains('rejected') &&
+                        _reservation.rejectionReason?.isNotEmpty == true) ...[
+                      const SizedBox(height: 16),
+                      _RejectionReasonCard(reservation: _reservation),
+                    ],
                     const SizedBox(height: 16),
                     Row(
                       children: [
@@ -1281,6 +1288,58 @@ class _ApprovalTimelineCard extends StatelessWidget {
               ),
             )
             .toList(),
+      ),
+    );
+  }
+}
+
+class _RejectionReasonCard extends StatelessWidget {
+  const _RejectionReasonCard({required this.reservation});
+
+  final ReservationRecord reservation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF1F1),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE53935)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Rejection Reason',
+            style: TextStyle(
+              color: Color(0xFFC62828),
+              fontSize: 15,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (reservation.rejectedBy?.isNotEmpty == true) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Rejected by: ${reservation.rejectedBy}',
+              style: const TextStyle(
+                color: Color(0xFF111111),
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          Text(
+            reservation.rejectionReason!,
+            style: const TextStyle(
+              color: Color(0xFF4A4A4A),
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ],
       ),
     );
   }

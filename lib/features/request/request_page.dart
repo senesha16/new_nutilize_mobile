@@ -1,5 +1,6 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
 import 'dart:io';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/features/request/reservation_history_page.dart';
@@ -175,6 +176,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   DateTime? _selectedDate;
   TimeOfDay? _selectedStartTime;
   TimeOfDay? _selectedEndTime;
+  bool _hasOutsideParticipants = false;
   Room? _selectedRoom;
   List<Room> _availableRooms = [];
   List<ItemModel> _equipmentItems = [];
@@ -185,6 +187,8 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   String? _loadError;
   File? _proofOfConsentFile;
   String? _proofOfConsentUrl;
+  List<File> _proofOfConsentFiles = [];
+  List<String> _proofOfConsentUrls = [];
   bool _isUploadingProof = false;
 
   static const _roomTypes = [
@@ -265,58 +269,75 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   Future<void> _pickProofOfConsent() async {
     final picker = ImagePicker();
     try {
-      final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-      if (pickedFile != null) {
-        setState(() {
-          _proofOfConsentFile = File(pickedFile.path);
-        });
-        // Upload immediately after selection
-        await _uploadProofOfConsent();
+      final pickedFiles = await picker.pickMultiImage(
+        imageQuality: 85,
+        maxWidth: 1600,
+      );
+
+      if (pickedFiles.isEmpty) {
+        return;
       }
+
+      setState(() {
+        _isUploadingProof = true;
+      });
+
+      final uploadedUrls = <String>[];
+      final uploadedFiles = <File>[];
+
+      for (final pickedFile in pickedFiles) {
+        final uploadedUrl = await _uploadSingleProofOfConsent(File(pickedFile.path));
+        if (uploadedUrl != null) {
+          uploadedFiles.add(File(pickedFile.path));
+          uploadedUrls.add(uploadedUrl);
+        }
+      }
+
+      if (uploadedUrls.isEmpty) {
+        setState(() {
+          _isUploadingProof = false;
+        });
+        _showError('No proof of consent was uploaded.');
+        return;
+      }
+
+      setState(() {
+        _proofOfConsentFiles.addAll(uploadedFiles);
+        _proofOfConsentUrls.addAll(uploadedUrls);
+        _proofOfConsentUrl = jsonEncode(uploadedUrls);
+        _isUploadingProof = false;
+      });
+
+      _showError(
+        uploadedUrls.length == 1
+            ? 'Proof of consent uploaded successfully!'
+            : 'Proof of consent photos uploaded successfully!',
+      );
     } catch (e) {
-      _showError('Error picking image: $e');
+      setState(() {
+        _isUploadingProof = false;
+      });
+      _showError('Error picking proof of consent: $e');
     }
   }
 
-  Future<void> _uploadProofOfConsent() async {
-    if (_proofOfConsentFile == null) {
-      _showError('No file selected');
-      return;
-    }
-
-    setState(() {
-      _isUploadingProof = true;
-    });
-
+  Future<String?> _uploadSingleProofOfConsent(File file) async {
     try {
       final user = AuthService.currentUser;
       final userId = user?['user_id'].toString();
       if (userId == null) {
-        _showError('User not authenticated');
-        return;
+        throw Exception('User not authenticated');
       }
 
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = 'proof_of_consent_${timestamp}.jpg';
       final filePath = 'proof_of_consent/$userId/$fileName';
 
-      // Upload to Supabase Storage
-      await _reservationService.uploadProofOfConsent(_proofOfConsentFile!, filePath);
-
-      // Get the public URL
-      final publicUrl = _reservationService.getProofOfConsentUrl(filePath);
-
-      setState(() {
-        _proofOfConsentUrl = publicUrl;
-        _isUploadingProof = false;
-      });
-
-      _showError('Proof of consent uploaded successfully!');
+      await _reservationService.uploadProofOfConsent(file, filePath);
+      return _reservationService.getProofOfConsentUrl(filePath);
     } catch (e) {
-      setState(() {
-        _isUploadingProof = false;
-      });
-      _showError('Error uploading proof of consent: $e');
+      print('Error uploading proof of consent: $e');
+      return null;
     }
   }
 
@@ -514,12 +535,17 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         _showError('Select a classroom table type.');
         return;
       }
-      // Check proof of consent for students
+      // Require proof of consent for students and faculty/teachers on venue requests
       final user = AuthService.currentUser;
       final role = user?['role'] as String?;
-      final isStudent = role?.toLowerCase() == 'student';
-      if (isStudent && _proofOfConsentUrl == null) {
-        _showError('Please upload proof of consent.');
+      final normalizedRole = role?.toLowerCase() ?? '';
+      final requiresConsent = normalizedRole == 'student' ||
+          normalizedRole == 'teacher' ||
+          normalizedRole == 'faculty' ||
+          normalizedRole == 'faculty_member';
+
+      if (requiresConsent && _proofOfConsentUrls.isEmpty) {
+        _showError('Please upload proof of consent before submitting.');
         return;
       }
       await _loadEquipmentItems();
@@ -685,6 +711,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         chairsQuantity: _selectedChairs != null ? [_selectedChairs!] : null,
         itemIds: selectedItemIds.isEmpty ? null : selectedItemIds,
         itemQuantities: _selectedItemQuantities.isEmpty ? null : Map<int, int>.from(_selectedItemQuantities),
+        hasOutsideParticipants: _hasOutsideParticipants,
         approvalChain: approvalChain.officeIds,
         proofOfConsentUrl: _proofOfConsentUrl,
       );
@@ -809,7 +836,11 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   Widget _buildStepOne() {
     final user = AuthService.currentUser;
     final role = user?['role'] as String?;
-    final isStudent = role?.toLowerCase() == 'student';
+    final normalizedRole = role?.toLowerCase() ?? '';
+    final requiresConsent = normalizedRole == 'student' ||
+        normalizedRole == 'teacher' ||
+        normalizedRole == 'faculty' ||
+        normalizedRole == 'faculty_member';
 
     return _buildFormCard(children: [
       _buildDropdownField(
@@ -848,6 +879,18 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         items: _attendanceOptions,
         onChanged: (value) => setState(() => _selectedAttendance = value),
       ),
+      const SizedBox(height: 8),
+      CheckboxListTile(
+        contentPadding: EdgeInsets.zero,
+        value: _hasOutsideParticipants,
+        onChanged: (value) => setState(() => _hasOutsideParticipants = value ?? false),
+        title: const Text(
+          'There will be outside participants',
+          style: TextStyle(color: Color(0xFF111111), fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        activeColor: const Color(0xFF35489A),
+        controlAffinity: ListTileControlAffinity.leading,
+      ),
       if (_selectedRoomType == 'Classroom') ...[
         const SizedBox(height: 16),
         _buildDropdownField(
@@ -858,7 +901,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
           onChanged: (value) => setState(() => _selectedRoomTableType = value),
         ),
       ],
-      if (isStudent) ...[
+      if (requiresConsent) ...[
         const SizedBox(height: 16),
         _buildProofOfConsentUpload(),
       ],
@@ -870,11 +913,11 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text(
-          'Attach Your Proof of Consent',
+          'Attach Proof of Consent',
           style: TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 12),
-        if (_proofOfConsentFile != null) ...[
+        if (_proofOfConsentFiles.isNotEmpty) ...[
           Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
@@ -892,7 +935,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Text(
-                        'File Selected',
+                        'Files Selected',
                         style: TextStyle(
                           color: Color(0xFF2E9D50),
                           fontSize: 12,
@@ -900,13 +943,11 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                         ),
                       ),
                       Text(
-                        _proofOfConsentFile!.path.split('/').last,
+                        '${_proofOfConsentFiles.length} photo(s) selected',
                         style: const TextStyle(
                           color: Color(0xFF2E9D50),
                           fontSize: 11,
                         ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
                       ),
                     ],
                   ),
@@ -927,7 +968,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
               ),
               child: Center(
                 child: Text(
-                  _isUploadingProof ? 'Uploading...' : 'Change Photo',
+                  _isUploadingProof ? 'Uploading...' : 'Add More Photos',
                   style: const TextStyle(
                     color: Color(0xFFD79700),
                     fontSize: 12,
@@ -951,13 +992,13 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
               child: Column(
                 children: [
                   Icon(
-                    _isUploadingProof ? Icons.hourglass_top : Icons.image_outlined,
+                    _isUploadingProof ? Icons.hourglass_top : Icons.add_photo_alternate_outlined,
                     color: const Color(0xFFF6C914),
                     size: 32,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _isUploadingProof ? 'Uploading...' : 'Tap to Upload Photo',
+                    _isUploadingProof ? 'Uploading...' : 'Tap to Upload Photo(s)',
                     style: const TextStyle(
                       color: Color(0xFF111111),
                       fontSize: 13,
