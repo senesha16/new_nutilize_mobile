@@ -19,6 +19,11 @@ import 'package:new_nutilize_mobile/features/user/request_history_page.dart';
 import 'package:new_nutilize_mobile/main.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
 
+bool canProceedFromProfilePage({String? selectedDepartment}) {
+  final department = selectedDepartment?.trim();
+  return department != null && department.isNotEmpty;
+}
+
 void main() {
   testWidgets('shows the NUtilize login screen', (WidgetTester tester) async {
     await tester.pumpWidget(const NUtilizeApp());
@@ -212,6 +217,15 @@ void main() {
 
     AuthService.currentUser = originalUser;
     NotificationActivityStore.clear();
+  });
+
+  test('profile requires a department before proceeding', () {
+    expect(canProceedFromProfilePage(selectedDepartment: null), isFalse);
+    expect(canProceedFromProfilePage(selectedDepartment: '   '), isFalse);
+    expect(
+      canProceedFromProfilePage(selectedDepartment: 'BS Computer Science'),
+      isTrue,
+    );
   });
 
   test('hides cancelled reservations from the calendar', () {

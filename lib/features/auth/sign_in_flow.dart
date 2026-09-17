@@ -60,6 +60,11 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     _ProgramOption(id: 14, label: 'BS Nursing'),
   ];
 
+  bool canProceedFromProfilePage({String? selectedDepartment}) {
+    final department = (selectedDepartment ?? _selectedDepartment)?.trim();
+    return department != null && department.isNotEmpty;
+  }
+
   List<DropdownMenuItem<String?>> _buildProgramDropdownItems() {
     return [
       const DropdownMenuItem<String?>(
@@ -1128,7 +1133,19 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               const SizedBox(height: 18),
               _PrimaryButton(
                 label: 'PROCEED',
-                onPressed: () => _goToStep(SignInStep.setPassword),
+                onPressed: () {
+                  if (!canProceedFromProfilePage()) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Please select your department before continuing.',
+                        ),
+                      ),
+                    );
+                    return;
+                  }
+                  _goToStep(SignInStep.setPassword);
+                },
               ),
             ],
           ),

@@ -343,7 +343,16 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
           if (shell != null) {
             Navigator.of(context).pop();
             shell.onTabSelected(index);
+            return;
           }
+
+          Navigator.of(context).pop();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            final currentScope = AppShellScope.maybeOf(context);
+            if (currentScope != null) {
+              currentScope.onTabSelected(index);
+            }
+          });
         },
       ),
     );

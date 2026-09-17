@@ -493,10 +493,45 @@ class AuthService {
     return null;
   }
 
+  static Future<bool> _userExistsInUsersTable(String email) async {
+    final url = Uri.parse(
+      '$_baseUrl/rest/v1/users?select=user_id,email&email=eq.${Uri.encodeQueryComponent(email)}&limit=1',
+    );
+
+    try {
+      final resp = await http.get(
+        url,
+        headers: {
+          'apikey': _anonKey,
+          'Authorization': 'Bearer $_anonKey',
+          'Accept': 'application/json',
+        },
+      );
+
+      if (resp.statusCode != 200) {
+        return false;
+      }
+
+      final decoded = jsonDecode(resp.body);
+      return decoded is List && decoded.isNotEmpty;
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<String?> _recoverLoginWithEdgeFunction({
     required String email,
     required String password,
   }) async {
+    final exists = await _userExistsInUsersTable(email);
+    if (!exists) {
+      debugPrint(
+        '[AuthService] _recoverLoginWithEdgeFunction: email not found in users table, skipping registration fallback for $email',
+      );
+      _setLastAuthError('User does not exist');
+      return null;
+    }
+
     debugPrint(
       '[AuthService] Attempting edge-function login recovery for $email',
     );
