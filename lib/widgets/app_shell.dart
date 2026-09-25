@@ -32,6 +32,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   bool _hasSeenInitialNotifications = false;
   List<NotificationRecord> _lastNotifications = [];
   String? _lastShownNotificationId;
+  OverlayEntry? _notificationOverlayEntry;
   RealtimeChannel? _approvalsChannel;
   RealtimeChannel? _reservationsChannel;
 
@@ -52,6 +53,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
+    _dismissNotificationOverlay();
     _approvalsChannel?.unsubscribe();
     _reservationsChannel?.unsubscribe();
     NotificationActivityStore.listenable.removeListener(
@@ -88,7 +90,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     _isRefreshing = true;
     try {
-        final profile =
+      final profile =
           AuthService.currentUser ?? await AuthService.restoreCurrentUser();
       final rawUserId = profile?['user_id'];
       final userId = rawUserId is int
@@ -130,7 +132,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _approvalsChannel = client.channel('public:reservation_approvals');
     _approvalsChannel?.on(
       RealtimeListenTypes.postgresChanges,
-      ChannelFilter(event: '*', schema: 'public', table: 'reservation_approvals'),
+      ChannelFilter(
+        event: '*',
+        schema: 'public',
+        table: 'reservation_approvals',
+      ),
       (payload, [_]) {
         unawaited(_refreshReservations());
       },
@@ -178,32 +184,35 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   void _showNotificationSnackBar(NotificationRecord notification) {
-    final messenger = ScaffoldMessenger.maybeOf(context);
-    if (messenger == null) {
+    final overlay = Overlay.maybeOf(context);
+    if (overlay == null) {
       return;
     }
 
     _lastShownNotificationId = null;
-    messenger.hideCurrentSnackBar();
-    messenger.showSnackBar(
-      SnackBar(
-        key: ValueKey(notification.id),
-        behavior: SnackBarBehavior.floating,
-        duration: const Duration(seconds: 2),
-        dismissDirection: DismissDirection.vertical,
-        content: Text(notification.title),
-        action: SnackBarAction(
-          label: 'View',
-          onPressed: () {
-            messenger.hideCurrentSnackBar();
-            _lastShownNotificationId = null;
-            Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const NotificationPage()));
-          },
-        ),
+    _dismissNotificationOverlay();
+
+    late final OverlayEntry entry;
+    entry = OverlayEntry(
+      builder: (_) => _TopNotificationBanner(
+        notification: notification,
+        onDismiss: _dismissNotificationOverlay,
+        onView: () {
+          _dismissNotificationOverlay();
+          _lastShownNotificationId = null;
+          Navigator.of(
+            context,
+          ).push(MaterialPageRoute(builder: (_) => const NotificationPage()));
+        },
       ),
     );
+    _notificationOverlayEntry = entry;
+    overlay.insert(entry);
+  }
+
+  void _dismissNotificationOverlay() {
+    _notificationOverlayEntry?.remove();
+    _notificationOverlayEntry = null;
   }
 
   void _selectTab(int index) {
@@ -245,6 +254,128 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           bottomNavigationBar: AppBottomNav(
             selectedIndex: _currentIndex,
             onTap: _selectTab,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TopNotificationBanner extends StatefulWidget {
+  const _TopNotificationBanner({
+    required this.notification,
+    required this.onDismiss,
+    required this.onView,
+  });
+
+  final NotificationRecord notification;
+  final VoidCallback onDismiss;
+  final VoidCallback onView;
+
+  @override
+  State<_TopNotificationBanner> createState() => _TopNotificationBannerState();
+}
+
+class _TopNotificationBannerState extends State<_TopNotificationBanner> {
+  Timer? _dismissTimer;
+  bool _visible = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _visible = true);
+      }
+    });
+    _dismissTimer = Timer(const Duration(seconds: 4), widget.onDismiss);
+  }
+
+  @override
+  void dispose() {
+    _dismissTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      top: 10,
+      left: 16,
+      right: 16,
+      child: SafeArea(
+        child: AnimatedSlide(
+          offset: _visible ? Offset.zero : const Offset(0, -1.2),
+          duration: const Duration(milliseconds: 320),
+          curve: Curves.easeOutCubic,
+          child: Material(
+            color: Colors.transparent,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x24000000),
+                    blurRadius: 14,
+                    offset: Offset(0, 5),
+                  ),
+                ],
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 9, 6, 9),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE9EDFF),
+                        borderRadius: BorderRadius.circular(9),
+                      ),
+                      child: Icon(
+                        Icons.notifications_active_rounded,
+                        color: Color(0xFF35489A),
+                        size: 18,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        widget.notification.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: Color(0xFF24304C),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: widget.onView,
+                      style: TextButton.styleFrom(
+                        foregroundColor: const Color(0xFFF6C914),
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                      ),
+                      child: const Text(
+                        'View',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: widget.onDismiss,
+                      tooltip: 'Dismiss notification',
+                      icon: const Icon(
+                        Icons.close,
+                        color: Color(0xFF7A8199),
+                        size: 18,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ),
       ),

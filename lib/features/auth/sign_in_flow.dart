@@ -180,6 +180,10 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       return;
     }
 
+    for (final controller in _codeControllers) {
+      controller.clear();
+    }
+
     setState(() {
       _isSendingResetCode = true;
     });
@@ -432,6 +436,13 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
   }
 
   void _goToStep(SignInStep step) {
+    if (step == SignInStep.email ||
+        step == SignInStep.forgotPasswordEmail ||
+        step == SignInStep.loginEmail) {
+      for (final controller in _codeControllers) {
+        controller.clear();
+      }
+    }
     setState(() {
       _step = step;
     });
@@ -858,6 +869,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                     );
                     return;
                   }
+                  for (final controller in _codeControllers) {
+                    controller.clear();
+                  }
                   final error = await AuthService.sendEmailCode(email);
                   if (error == null) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -911,6 +925,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                       ),
                     );
                     return;
+                  }
+                  for (final controller in _codeControllers) {
+                    controller.clear();
                   }
                   final error = await AuthService.sendEmailCode(email);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -1454,7 +1471,7 @@ class _ColorSquare extends StatelessWidget {
   }
 }
 
-class _InputField extends StatelessWidget {
+class _InputField extends StatefulWidget {
   const _InputField({
     required this.hintText,
     this.prefix,
@@ -1470,13 +1487,45 @@ class _InputField extends StatelessWidget {
   final bool obscureText;
 
   @override
+  State<_InputField> createState() => _InputFieldState();
+}
+
+class _InputFieldState extends State<_InputField> {
+  late bool _isObscured;
+
+  @override
+  void initState() {
+    super.initState();
+    _isObscured = widget.obscureText;
+  }
+
+  @override
   Widget build(BuildContext context) {
     return TextField(
-      controller: controller,
-      keyboardType: keyboardType,
-      obscureText: obscureText,
+      controller: widget.controller,
+      keyboardType: widget.keyboardType,
+      obscureText: _isObscured,
       style: const TextStyle(color: Color(0xFF24304C)),
-      decoration: _fieldDecoration(hintText: hintText, prefix: prefix),
+      decoration:
+          _fieldDecoration(
+            hintText: widget.hintText,
+            prefix: widget.prefix,
+          ).copyWith(
+            suffixIcon: widget.obscureText
+                ? IconButton(
+                    tooltip: _isObscured ? 'Show password' : 'Hide password',
+                    icon: Icon(
+                      _isObscured ? Icons.visibility_off : Icons.visibility,
+                      color: const Color(0xFF24304C),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _isObscured = !_isObscured;
+                      });
+                    },
+                  )
+                : null,
+          ),
     );
   }
 }

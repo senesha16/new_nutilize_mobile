@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'dart:io';
@@ -8,6 +8,7 @@ import 'package:new_nutilize_mobile/features/request/item_reservation_page.dart'
 import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/services/reservation_service.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
+import 'package:new_nutilize_mobile/widgets/top_message_banner.dart';
 
 class _ReservationCard extends StatelessWidget {
   const _ReservationCard({
@@ -205,12 +206,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
     'Accounting Table',
   ];
 
-  static const _attendanceOptions = [
-    '1 - 20',
-    '21 - 50',
-    '51 - 100',
-    '101+',
-  ];
+  static const _attendanceOptions = ['1 - 20', '21 - 50', '51 - 100', '101+'];
 
   static final _timeOptions = List.generate(
     32,
@@ -286,7 +282,9 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       final uploadedFiles = <File>[];
 
       for (final pickedFile in pickedFiles) {
-        final uploadedUrl = await _uploadSingleProofOfConsent(File(pickedFile.path));
+        final uploadedUrl = await _uploadSingleProofOfConsent(
+          File(pickedFile.path),
+        );
         if (uploadedUrl != null) {
           uploadedFiles.add(File(pickedFile.path));
           uploadedUrls.add(uploadedUrl);
@@ -308,10 +306,12 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         _isUploadingProof = false;
       });
 
-      _showError(
+      showTopMessage(
+        context,
         uploadedUrls.length == 1
             ? 'Proof of consent uploaded successfully!'
             : 'Proof of consent photos uploaded successfully!',
+        icon: Icons.cloud_done_rounded,
       );
     } catch (e) {
       setState(() {
@@ -378,7 +378,9 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   }
 
   String _formatTimestamp(DateTime date) {
-    final hour = date.hour == 0 ? 12 : (date.hour > 12 ? date.hour - 12 : date.hour);
+    final hour = date.hour == 0
+        ? 12
+        : (date.hour > 12 ? date.hour - 12 : date.hour);
     final minute = date.minute.toString().padLeft(2, '0');
     final period = date.hour >= 12 ? 'PM' : 'AM';
     return '${date.month}/${date.day}/${date.year} $hour:$minute $period';
@@ -392,6 +394,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
     final picked = await showTimePicker(
       context: context,
       initialTime: initial,
+      initialEntryMode: TimePickerEntryMode.input,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           timePickerTheme: const TimePickerThemeData(
@@ -406,7 +409,8 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       setState(() {
         if (isStart) {
           _selectedStartTime = picked;
-          if (_selectedEndTime != null && _isBeforeOrEqual(_selectedEndTime!, picked)) {
+          if (_selectedEndTime != null &&
+              _isBeforeOrEqual(_selectedEndTime!, picked)) {
             _selectedEndTime = null;
           }
         } else {
@@ -441,7 +445,10 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   }
 
   Future<void> _loadAvailableRooms() async {
-    if (_selectedRoomType == null || _selectedDate == null || _selectedStartTime == null || _selectedEndTime == null) {
+    if (_selectedRoomType == null ||
+        _selectedDate == null ||
+        _selectedStartTime == null ||
+        _selectedEndTime == null) {
       return;
     }
 
@@ -454,12 +461,15 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
 
     try {
       // Fetch rooms directly by type, using table type filter for classrooms
-      final rooms = _selectedRoomType == 'Classroom' && _selectedRoomTableType != null
-          ? await _reservationService.getClassroomsByTableType(_selectedRoomTableType!)
+      final rooms =
+          _selectedRoomType == 'Classroom' && _selectedRoomTableType != null
+          ? await _reservationService.getClassroomsByTableType(
+              _selectedRoomTableType!,
+            )
           : await _reservationService.getRoomsByType(_selectedRoomType!);
-      
+
       print('DEBUG _loadAvailableRooms: Fetched ${rooms.length} rooms');
-      
+
       final available = <Room>[];
       for (final room in rooms) {
         final hasConflict = await _reservationService.hasTimeConflict(
@@ -485,10 +495,14 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
           print('DEBUG _loadAvailableRooms: Adding room ${room.roomNumber}');
           available.add(room);
         } else {
-          print('DEBUG _loadAvailableRooms: Filtering out room ${room.roomNumber} (conflict: $hasConflict, matches attendance: ${_matchesAttendance(room)})');
+          print(
+            'DEBUG _loadAvailableRooms: Filtering out room ${room.roomNumber} (conflict: $hasConflict, matches attendance: ${_matchesAttendance(room)})',
+          );
         }
       }
-      print('DEBUG _loadAvailableRooms: Final available rooms: ${available.length}');
+      print(
+        'DEBUG _loadAvailableRooms: Final available rooms: ${available.length}',
+      );
       setState(() {
         _availableRooms = available;
       });
@@ -539,7 +553,8 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       final user = AuthService.currentUser;
       final role = user?['role'] as String?;
       final normalizedRole = role?.toLowerCase() ?? '';
-      final requiresConsent = normalizedRole == 'student' ||
+      final requiresConsent =
+          normalizedRole == 'student' ||
           normalizedRole == 'teacher' ||
           normalizedRole == 'faculty' ||
           normalizedRole == 'faculty_member';
@@ -608,7 +623,9 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _showReturnLock(String message) async {
@@ -633,7 +650,10 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       _showError('Please agree to the terms and conditions.');
       return;
     }
-    if (_selectedRoom == null || _selectedDate == null || _selectedStartTime == null || _selectedEndTime == null) {
+    if (_selectedRoom == null ||
+        _selectedDate == null ||
+        _selectedStartTime == null ||
+        _selectedEndTime == null) {
       _showError('Reservation is incomplete.');
       return;
     }
@@ -687,7 +707,9 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
           final available = details?.availableQuantity ?? 0;
           final itemName = details?.itemName ?? 'Item $itemId';
           if (requested > available) {
-            insufficient.add('$itemName: requested $requested, available $available');
+            insufficient.add(
+              '$itemName: requested $requested, available $available',
+            );
           }
         }
         if (insufficient.isNotEmpty) {
@@ -710,14 +732,17 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         endTime: endDateTime,
         chairsQuantity: _selectedChairs != null ? [_selectedChairs!] : null,
         itemIds: selectedItemIds.isEmpty ? null : selectedItemIds,
-        itemQuantities: _selectedItemQuantities.isEmpty ? null : Map<int, int>.from(_selectedItemQuantities),
+        itemQuantities: _selectedItemQuantities.isEmpty
+            ? null
+            : Map<int, int>.from(_selectedItemQuantities),
         hasOutsideParticipants: _hasOutsideParticipants,
         approvalChain: approvalChain.officeIds,
         proofOfConsentUrl: _proofOfConsentUrl,
       );
 
       if (reservationId != null) {
-        final reservationTime = '${_timeLabel(_selectedStartTime)} - ${_timeLabel(_selectedEndTime)}';
+        final reservationTime =
+            '${_timeLabel(_selectedStartTime)} - ${_timeLabel(_selectedEndTime)}';
         final timeline = approvalChain.offices.map((office) {
           return ReservationTimelineEntry(
             title: office,
@@ -761,7 +786,8 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
               status: 'Completed',
               date: _selectedDate!,
               timestamp: _formatTimestamp(_selectedDate!),
-              description: 'Your reservation request was submitted successfully.',
+              description:
+                  'Your reservation request was submitted successfully.',
             ),
             ...timeline,
           ],
@@ -770,7 +796,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         ReservationActivityStore.add(newRecord);
 
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Room reservation submitted successfully.')));
+          showTopMessage(context, 'Room reservation submitted successfully.');
           Navigator.of(context).pop();
         }
       } else {
@@ -810,7 +836,11 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       children: [
         Text(
           'Step $_currentStep out of 5',
-          style: const TextStyle(color: Color(0xFF35489A), fontSize: 14, fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            color: Color(0xFF35489A),
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 10),
         _buildProgressIndicator(),
@@ -826,7 +856,11 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         color: Colors.white,
         borderRadius: BorderRadius.circular(24),
         boxShadow: const [
-          BoxShadow(color: Color(0x14000000), blurRadius: 26, offset: Offset(0, 10)),
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 26,
+            offset: Offset(0, 10),
+          ),
         ],
       ),
       child: Column(children: children),
@@ -837,75 +871,120 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
     final user = AuthService.currentUser;
     final role = user?['role'] as String?;
     final normalizedRole = role?.toLowerCase() ?? '';
-    final requiresConsent = normalizedRole == 'student' ||
+    final requiresConsent =
+        normalizedRole == 'student' ||
         normalizedRole == 'teacher' ||
         normalizedRole == 'faculty' ||
         normalizedRole == 'faculty_member';
 
-    return _buildFormCard(children: [
-      _buildDropdownField(
-        label: 'Room Type',
-        hint: 'Select Room Type',
-        value: _selectedRoomType,
-        items: _roomTypes,
-        onChanged: (value) => setState(() {
-          _selectedRoomType = value;
-          if (value != 'Classroom') {
-            _selectedRoomTableType = null;
-          }
-        }),
-      ),
-      const SizedBox(height: 16),
-      _ReservationInputField(label: 'Title of Activity', controller: _activityController, hintText: 'Enter title of activity'),
-      const SizedBox(height: 16),
-      const Align(alignment: Alignment.centerLeft, child: Text('Time of Activity', style: TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700))),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          Expanded(child: _buildTimeBox('From', _selectedStartTime, () => _showTimePicker(isStart: true))),
-          const SizedBox(width: 12),
-          Expanded(child: _buildTimeBox('To', _selectedEndTime, () => _showTimePicker(isStart: false))),
-        ],
-      ),
-      const SizedBox(height: 16),
-      const Align(alignment: Alignment.centerLeft, child: Text('Date of Activity', style: TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700))),
-      const SizedBox(height: 12),
-      _buildDateBox(),
-      const SizedBox(height: 16),
-      _buildDropdownField(
-        label: 'Expected Attendance',
-        hint: 'Select expected attendees',
-        value: _selectedAttendance,
-        items: _attendanceOptions,
-        onChanged: (value) => setState(() => _selectedAttendance = value),
-      ),
-      const SizedBox(height: 8),
-      CheckboxListTile(
-        contentPadding: EdgeInsets.zero,
-        value: _hasOutsideParticipants,
-        onChanged: (value) => setState(() => _hasOutsideParticipants = value ?? false),
-        title: const Text(
-          'There will be outside participants',
-          style: TextStyle(color: Color(0xFF111111), fontSize: 13, fontWeight: FontWeight.w600),
+    return _buildFormCard(
+      children: [
+        _buildDropdownField(
+          label: 'Room Type',
+          hint: 'Select Room Type',
+          value: _selectedRoomType,
+          items: _roomTypes,
+          onChanged: (value) => setState(() {
+            _selectedRoomType = value;
+            if (value != 'Classroom') {
+              _selectedRoomTableType = null;
+            }
+          }),
         ),
-        activeColor: const Color(0xFF35489A),
-        controlAffinity: ListTileControlAffinity.leading,
-      ),
-      if (_selectedRoomType == 'Classroom') ...[
+        const SizedBox(height: 16),
+        _ReservationInputField(
+          label: 'Title of Activity',
+          controller: _activityController,
+          hintText: 'Enter title of activity',
+        ),
+        const SizedBox(height: 16),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Date of Activity',
+            style: TextStyle(
+              color: Color(0xFF111111),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _buildDateBox(),
+        const SizedBox(height: 16),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Time of Activity',
+            style: TextStyle(
+              color: Color(0xFF111111),
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildTimeBox(
+                'From',
+                _selectedStartTime,
+                () => _showTimePicker(isStart: true),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildTimeBox(
+                'To',
+                _selectedEndTime,
+                () => _showTimePicker(isStart: false),
+              ),
+            ),
+          ],
+        ),
         const SizedBox(height: 16),
         _buildDropdownField(
-          label: 'Room Table Type',
-          hint: 'Select table layout',
-          value: _selectedRoomTableType,
-          items: _roomTableTypes,
-          onChanged: (value) => setState(() => _selectedRoomTableType = value),
+          label: 'Expected Attendance',
+          hint: 'Select expected attendees',
+          value: _selectedAttendance,
+          items: _attendanceOptions,
+          onChanged: (value) => setState(() => _selectedAttendance = value),
         ),
+        const SizedBox(height: 8),
+        CheckboxListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _hasOutsideParticipants,
+          onChanged: (value) =>
+              setState(() => _hasOutsideParticipants = value ?? false),
+          title: const Text(
+            'There will be outside participants',
+            style: TextStyle(
+              color: Color(0xFF111111),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          activeColor: const Color(0xFF35489A),
+          controlAffinity: ListTileControlAffinity.leading,
+        ),
+        if (_selectedRoomType == 'Classroom') ...[
+          const SizedBox(height: 16),
+          _buildDropdownField(
+            label: 'Room Table Type',
+            hint: 'Select table layout',
+            value: _selectedRoomTableType,
+            items: _roomTableTypes,
+            onChanged: (value) =>
+                setState(() => _selectedRoomTableType = value),
+          ),
+        ],
+        if (requiresConsent) ...[
+          const SizedBox(height: 16),
+          _buildProofOfConsentUpload(),
+        ],
       ],
-      if (requiresConsent) ...[
-        const SizedBox(height: 16),
-        _buildProofOfConsentUpload(),
-      ],
-    ]);
+    );
   }
 
   Widget _buildProofOfConsentUpload() {
@@ -914,7 +993,11 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       children: [
         const Text(
           'Attach Proof of Consent',
-          style: TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: Color(0xFF111111),
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 12),
         if (_proofOfConsentFiles.isNotEmpty) ...[
@@ -928,7 +1011,11 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle, color: Color(0xFF2E9D50), size: 24),
+                const Icon(
+                  Icons.check_circle,
+                  color: Color(0xFF2E9D50),
+                  size: 24,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -992,13 +1079,17 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
               child: Column(
                 children: [
                   Icon(
-                    _isUploadingProof ? Icons.hourglass_top : Icons.add_photo_alternate_outlined,
+                    _isUploadingProof
+                        ? Icons.hourglass_top
+                        : Icons.add_photo_alternate_outlined,
                     color: const Color(0xFFF6C914),
                     size: 32,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _isUploadingProof ? 'Uploading...' : 'Tap to Upload Photo(s)',
+                    _isUploadingProof
+                        ? 'Uploading...'
+                        : 'Tap to Upload Photo(s)',
                     style: const TextStyle(
                       color: Color(0xFF111111),
                       fontSize: 13,
@@ -1008,10 +1099,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                   const SizedBox(height: 4),
                   const Text(
                     'Choose from gallery',
-                    style: TextStyle(
-                      color: Color(0xFFB0B6D7),
-                      fontSize: 11,
-                    ),
+                    style: TextStyle(color: Color(0xFFB0B6D7), fontSize: 11),
                   ),
                 ],
               ),
@@ -1037,8 +1125,13 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
           children: [
             Expanded(
               child: Text(
-                value == null ? 'Select' : _timeLabel(value),
-                style: TextStyle(color: value == null ? const Color(0xFFB0B6D7) : const Color(0xFF111111), fontWeight: FontWeight.w600),
+                value == null ? label : _timeLabel(value),
+                style: TextStyle(
+                  color: value == null
+                      ? const Color(0xFFB0B6D7)
+                      : const Color(0xFF111111),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             const Icon(Icons.watch_later_outlined, color: Color(0xFF35489A)),
@@ -1063,8 +1156,15 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
           children: [
             Expanded(
               child: Text(
-                _selectedDate == null ? 'MM / DD / YYYY' : '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}',
-                style: TextStyle(color: _selectedDate == null ? const Color(0xFFB0B6D7) : const Color(0xFF111111), fontWeight: FontWeight.w600),
+                _selectedDate == null
+                    ? 'MM / DD / YYYY'
+                    : '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}',
+                style: TextStyle(
+                  color: _selectedDate == null
+                      ? const Color(0xFFB0B6D7)
+                      : const Color(0xFF111111),
+                  fontWeight: FontWeight.w600,
+                ),
               ),
             ),
             const Icon(Icons.calendar_today, color: Color(0xFF35489A)),
@@ -1084,7 +1184,14 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF111111),
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 8),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -1096,10 +1203,20 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
           child: DropdownButtonHideUnderline(
             child: DropdownButton<String>(
               value: value,
-              hint: Text(hint, style: const TextStyle(color: Color(0xFFB0B6D7))),
+              hint: Text(
+                hint,
+                style: const TextStyle(color: Color(0xFFB0B6D7)),
+              ),
               isExpanded: true,
-              icon: const Icon(Icons.keyboard_arrow_down, color: Color(0xFF35489A)),
-              items: items.map((item) => DropdownMenuItem(value: item, child: Text(item))).toList(),
+              icon: const Icon(
+                Icons.keyboard_arrow_down,
+                color: Color(0xFF35489A),
+              ),
+              items: items
+                  .map(
+                    (item) => DropdownMenuItem(value: item, child: Text(item)),
+                  )
+                  .toList(),
               onChanged: onChanged,
             ),
           ),
@@ -1131,7 +1248,9 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
             color: selectedQty > 0 ? const Color(0xFFE4E7FB) : Colors.white,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
-              color: selectedQty > 0 ? const Color(0xFFF6C914) : const Color(0xFFE4E7FB),
+              color: selectedQty > 0
+                  ? const Color(0xFFF6C914)
+                  : const Color(0xFFE4E7FB),
               width: 2,
             ),
           ),
@@ -1142,9 +1261,22 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(item.itemName, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16, color: Color(0xFF111111))),
+                    Text(
+                      item.itemName,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                        color: Color(0xFF111111),
+                      ),
+                    ),
                     const SizedBox(height: 4),
-                    Text('Available: $remaining / ${item.quantityTotal}', style: const TextStyle(color: Color(0xFF6A6F86), fontSize: 12)),
+                    Text(
+                      'Available: $remaining / ${item.quantityTotal}',
+                      style: const TextStyle(
+                        color: Color(0xFF6A6F86),
+                        fontSize: 12,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -1166,10 +1298,16 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: selectedQty > 0 ? const Color(0xFFF6C914) : const Color(0xFFE4E7FB),
+                      color: selectedQty > 0
+                          ? const Color(0xFFF6C914)
+                          : const Color(0xFFE4E7FB),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Icon(Icons.remove, color: Colors.white, size: 18),
+                    child: const Icon(
+                      Icons.remove,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1178,7 +1316,11 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                   child: Text(
                     selectedQty.toString(),
                     textAlign: TextAlign.center,
-                    style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 18, color: Color(0xFF111111)),
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w700,
+                      fontSize: 18,
+                      color: Color(0xFF111111),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1186,7 +1328,8 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                   onTap: selectedQty < remaining
                       ? () {
                           setState(() {
-                            _selectedItemQuantities[item.itemId] = selectedQty + 1;
+                            _selectedItemQuantities[item.itemId] =
+                                selectedQty + 1;
                           });
                         }
                       : null,
@@ -1194,14 +1337,22 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                     width: 32,
                     height: 32,
                     decoration: BoxDecoration(
-                      color: selectedQty < remaining ? const Color(0xFF35489A) : const Color(0xFFE4E7FB),
+                      color: selectedQty < remaining
+                          ? const Color(0xFF35489A)
+                          : const Color(0xFFE4E7FB),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Icon(Icons.add, color: Colors.white, size: 18),
                   ),
                 ),
               ] else ...[
-                const Text('Out of stock', style: TextStyle(color: Color(0xFFD22828), fontWeight: FontWeight.w700)),
+                const Text(
+                  'Out of stock',
+                  style: TextStyle(
+                    color: Color(0xFFD22828),
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ],
           ),
@@ -1211,44 +1362,113 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   }
 
   Widget _buildStepTwo() {
-    return _buildFormCard(children: [
-      const Align(alignment: Alignment.centerLeft, child: Text('Do you want to add chairs?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111111)))),
-      const SizedBox(height: 14),
-      _buildYesNoRow(value: _chairsNeeded, onChanged: (value) => setState(() => _chairsNeeded = value)),
-      if (_chairsNeeded) ...[
-        const SizedBox(height: 16),
-        _ReservationInputField(label: 'Number of chairs', controller: _chairController, hintText: 'Enter number of chairs', keyboardType: TextInputType.number),
-      ],
-      const SizedBox(height: 24),
-      const Align(alignment: Alignment.centerLeft, child: Text('Do you want to add other equipment?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111111)))),
-      const SizedBox(height: 14),
-      _buildYesNoRow(value: _equipmentNeeded, onChanged: (value) => setState(() => _equipmentNeeded = value)),
-      if (_equipmentNeeded) ...[
-        const SizedBox(height: 16),
-        _buildEquipmentSelection(),
-      ],
-      const SizedBox(height: 24),
-      const Align(alignment: Alignment.centerLeft, child: Text('Any extra request?', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Color(0xFF111111)))),
-      const SizedBox(height: 14),
-      _buildYesNoRow(value: _miscNeeded, onChanged: (value) => setState(() => _miscNeeded = value)),
-      if (_miscNeeded) ...[
-        const SizedBox(height: 16),
-        _ReservationInputField(label: 'Miscellaneous details', controller: _miscController, hintText: 'Describe the item'),
-      ],
-    ]);
-  }
-
-  Widget _buildYesNoRow({required bool value, required ValueChanged<bool> onChanged}) {
-    return Row(
+    return _buildFormCard(
       children: [
-        Expanded(child: _buildSelectionOption('Yes, I want to add', value, () => onChanged(true))),
-        const SizedBox(width: 12),
-        Expanded(child: _buildSelectionOption('No need', !value, () => onChanged(false))),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Do you want to add chairs?',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111111),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _buildYesNoRow(
+          value: _chairsNeeded,
+          onChanged: (value) => setState(() => _chairsNeeded = value),
+        ),
+        if (_chairsNeeded) ...[
+          const SizedBox(height: 16),
+          _ReservationInputField(
+            label: 'Number of chairs',
+            controller: _chairController,
+            hintText: 'Enter number of chairs',
+            keyboardType: TextInputType.number,
+          ),
+        ],
+        const SizedBox(height: 24),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Do you want to add other equipment?',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111111),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _buildYesNoRow(
+          value: _equipmentNeeded,
+          onChanged: (value) => setState(() => _equipmentNeeded = value),
+        ),
+        if (_equipmentNeeded) ...[
+          const SizedBox(height: 16),
+          _buildEquipmentSelection(),
+        ],
+        const SizedBox(height: 24),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Any extra request?',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111111),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        _buildYesNoRow(
+          value: _miscNeeded,
+          onChanged: (value) => setState(() => _miscNeeded = value),
+        ),
+        if (_miscNeeded) ...[
+          const SizedBox(height: 16),
+          _ReservationInputField(
+            label: 'Miscellaneous details',
+            controller: _miscController,
+            hintText: 'Describe the item',
+          ),
+        ],
       ],
     );
   }
 
-  Widget _buildSelectionOption(String label, bool isSelected, VoidCallback onTap) {
+  Widget _buildYesNoRow({
+    required bool value,
+    required ValueChanged<bool> onChanged,
+  }) {
+    return Row(
+      children: [
+        Expanded(
+          child: _buildSelectionOption(
+            'Yes, I want to add',
+            value,
+            () => onChanged(true),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: _buildSelectionOption(
+            'No need',
+            !value,
+            () => onChanged(false),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSelectionOption(
+    String label,
+    bool isSelected,
+    VoidCallback onTap,
+  ) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1257,7 +1477,9 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? const Color(0xFFF6C914) : const Color(0xFFD9DCE8),
+            color: isSelected
+                ? const Color(0xFFF6C914)
+                : const Color(0xFFD9DCE8),
             width: 1.5,
           ),
         ),
@@ -1269,14 +1491,20 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
               height: 22,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isSelected ? const Color(0xFFF6C914) : Colors.transparent,
+                color: isSelected
+                    ? const Color(0xFFF6C914)
+                    : Colors.transparent,
                 border: Border.all(
-                  color: isSelected ? const Color(0xFFF6C914) : const Color(0xFF9A9A9A),
+                  color: isSelected
+                      ? const Color(0xFFF6C914)
+                      : const Color(0xFF9A9A9A),
                   width: 2,
                 ),
               ),
               child: isSelected
-                  ? const Center(child: Icon(Icons.circle, size: 12, color: Colors.white))
+                  ? const Center(
+                      child: Icon(Icons.circle, size: 12, color: Colors.white),
+                    )
                   : null,
             ),
             const SizedBox(width: 12),
@@ -1297,28 +1525,44 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   }
 
   Widget _buildStepThree() {
-    return _buildFormCard(children: [
-      const Align(alignment: Alignment.centerLeft, child: Text('Choose Available Room', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111111)))),
-      const SizedBox(height: 8),
-      Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          _selectedRoomType == 'Classroom'
-              ? 'Showing rooms with ${_selectedRoomTableType ?? 'selected'} layout and no active reservations.'
-              : 'Showing available ${_selectedRoomType ?? 'rooms'} with no active reservations.',
-          style: const TextStyle(fontSize: 14, color: Color(0xFF6A6F86)),
+    return _buildFormCard(
+      children: [
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Choose Available Room',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111111),
+            ),
+          ),
         ),
-      ),
-      const SizedBox(height: 16),
-      if (_isLoadingRooms) ...[
-        const Center(child: CircularProgressIndicator()),
-      ] else if (_loadError != null) ...[
-        Text(_loadError!, style: const TextStyle(color: Colors.red)),
-      ] else if (_availableRooms.isEmpty) ...[
-        const SizedBox(height: 24),
-        const Text('No rooms are available for your scheduled time. Try another time or room type.', style: TextStyle(color: Color(0xFF6A6F86))),
-      ] else ..._availableRooms.map(_buildRoomCard).toList(),
-    ]);
+        const SizedBox(height: 8),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            _selectedRoomType == 'Classroom'
+                ? 'Showing rooms with ${_selectedRoomTableType ?? 'selected'} layout and no active reservations.'
+                : 'Showing available ${_selectedRoomType ?? 'rooms'} with no active reservations.',
+            style: const TextStyle(fontSize: 14, color: Color(0xFF6A6F86)),
+          ),
+        ),
+        const SizedBox(height: 16),
+        if (_isLoadingRooms) ...[
+          const Center(child: CircularProgressIndicator()),
+        ] else if (_loadError != null) ...[
+          Text(_loadError!, style: const TextStyle(color: Colors.red)),
+        ] else if (_availableRooms.isEmpty) ...[
+          const SizedBox(height: 24),
+          const Text(
+            'No rooms are available for your scheduled time. Try another time or room type.',
+            style: TextStyle(color: Color(0xFF6A6F86)),
+          ),
+        ] else
+          ..._availableRooms.map(_buildRoomCard).toList(),
+      ],
+    );
   }
 
   Widget _buildRoomCard(Room room) {
@@ -1332,7 +1576,9 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         decoration: BoxDecoration(
           color: selected ? const Color(0xFFF6C914) : Colors.white,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: selected ? const Color(0xFFF6C914) : const Color(0xFFD9DCE8)),
+          border: Border.all(
+            color: selected ? const Color(0xFFF6C914) : const Color(0xFFD9DCE8),
+          ),
         ),
         child: Row(
           children: [
@@ -1350,11 +1596,25 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(room.roomNumber, style: TextStyle(color: selected ? Colors.white : const Color(0xFF111111), fontSize: 16, fontWeight: FontWeight.w700)),
+                  Text(
+                    room.roomNumber,
+                    style: TextStyle(
+                      color: selected ? Colors.white : const Color(0xFF111111),
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
                   const SizedBox(height: 4),
                   Text(
-                    room.roomTableType != null ? room.roomTableType! : room.roomType,
-                    style: TextStyle(color: selected ? Colors.white70 : const Color(0xFF6A6F86), fontSize: 13),
+                    room.roomTableType != null
+                        ? room.roomTableType!
+                        : room.roomType,
+                    style: TextStyle(
+                      color: selected
+                          ? Colors.white70
+                          : const Color(0xFF6A6F86),
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -1365,7 +1625,14 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                 color: selected ? Colors.white24 : const Color(0xFFE9F7EF),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Text('Available', style: TextStyle(color: selected ? Colors.white : const Color(0xFF27A35F), fontSize: 12, fontWeight: FontWeight.w700)),
+              child: Text(
+                'Available',
+                style: TextStyle(
+                  color: selected ? Colors.white : const Color(0xFF27A35F),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ),
@@ -1374,42 +1641,91 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   }
 
   Widget _buildStepFour() {
-    return _buildFormCard(children: [
-      Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
-        decoration: BoxDecoration(
-          color: const Color(0xFF35489A),
-          borderRadius: BorderRadius.circular(20),
-        ),
-        child: Row(
-          children: const [
-            Icon(Icons.check_circle_outline, color: Colors.white, size: 24),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Confirmation',
-                style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w700),
+    return _buildFormCard(
+      children: [
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 16),
+          decoration: BoxDecoration(
+            color: const Color(0xFF35489A),
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Row(
+            children: const [
+              Icon(Icons.check_circle_outline, color: Colors.white, size: 24),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Confirmation',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
-      ),
-      const SizedBox(height: 18),
-      const Align(
-        alignment: Alignment.centerLeft,
-        child: Text('Review and confirm details', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111111))),
-      ),
-      const SizedBox(height: 20),
-      _buildReviewRow(Icons.meeting_room, 'Room', _selectedRoom?.roomNumber ?? 'Not selected'),
-      _buildReviewRow(Icons.description, 'Purpose', _activityController.text.trim()),
-      _buildReviewRow(Icons.watch_later_outlined, 'Time', '${_timeLabel(_selectedStartTime)} - ${_timeLabel(_selectedEndTime)}'),
-      _buildReviewRow(Icons.calendar_today, 'Date', _selectedDate == null ? 'Not selected' : '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}'),
-      _buildReviewRow(Icons.people_alt_outlined, 'Capacity', _selectedAttendance ?? 'Not selected'),
-      _buildReviewRow(Icons.chair_alt, 'Chair', _chairsNeeded ? '${_selectedChairs ?? 'Requested'}' : 'None'),
-      _buildReviewRow(Icons.tv, 'Equipment', _equipmentNeeded ? '${_selectedItemQuantities.values.fold<int>(0, (sum, qty) => sum + qty)} selected' : 'None'),
-      _buildReviewRow(Icons.miscellaneous_services, 'Miscellaneous', _miscNeeded ? _miscController.text.trim() : 'None'),
-    ]);
+        const SizedBox(height: 18),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Review and confirm details',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+              color: Color(0xFF111111),
+            ),
+          ),
+        ),
+        const SizedBox(height: 20),
+        _buildReviewRow(
+          Icons.meeting_room,
+          'Room',
+          _selectedRoom?.roomNumber ?? 'Not selected',
+        ),
+        _buildReviewRow(
+          Icons.description,
+          'Purpose',
+          _activityController.text.trim(),
+        ),
+        _buildReviewRow(
+          Icons.watch_later_outlined,
+          'Time',
+          '${_timeLabel(_selectedStartTime)} - ${_timeLabel(_selectedEndTime)}',
+        ),
+        _buildReviewRow(
+          Icons.calendar_today,
+          'Date',
+          _selectedDate == null
+              ? 'Not selected'
+              : '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}',
+        ),
+        _buildReviewRow(
+          Icons.people_alt_outlined,
+          'Capacity',
+          _selectedAttendance ?? 'Not selected',
+        ),
+        _buildReviewRow(
+          Icons.chair_alt,
+          'Chair',
+          _chairsNeeded ? '${_selectedChairs ?? 'Requested'}' : 'None',
+        ),
+        _buildReviewRow(
+          Icons.tv,
+          'Equipment',
+          _equipmentNeeded
+              ? '${_selectedItemQuantities.values.fold<int>(0, (sum, qty) => sum + qty)} selected'
+              : 'None',
+        ),
+        _buildReviewRow(
+          Icons.miscellaneous_services,
+          'Miscellaneous',
+          _miscNeeded ? _miscController.text.trim() : 'None',
+        ),
+      ],
+    );
   }
 
   Widget _buildReviewRow(IconData icon, String label, String value) {
@@ -1432,9 +1748,22 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(color: Color(0xFF6A6F86), fontSize: 13)),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Color(0xFF6A6F86),
+                    fontSize: 13,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(value, style: const TextStyle(color: Color(0xFF111111), fontSize: 15, fontWeight: FontWeight.w700)),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    color: Color(0xFF111111),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1444,28 +1773,47 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   }
 
   Widget _buildStepFive() {
-    return _buildFormCard(children: [
-      const Text('Terms and Conditions', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Color(0xFF111111))),
-      const SizedBox(height: 12),
-      Container(
-        height: 240,
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(color: const Color(0xFFF7F8FC), borderRadius: BorderRadius.circular(18)),
-        child: SingleChildScrollView(
-          child: const Text(
-            'By proceeding, you agree to the room and equipment rental policies. You must maintain cleanliness, return any borrowed equipment on time, and report any damage immediately. Rooms must be vacated on or before the approved end time. Unauthorized materials, disruptive behavior, or damage to facilities are not permitted.',
-            style: TextStyle(color: Color(0xFF6A6F86), fontSize: 14, height: 1.5),
+    return _buildFormCard(
+      children: [
+        const Text(
+          'Terms and Conditions',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w700,
+            color: Color(0xFF111111),
           ),
         ),
-      ),
-      const SizedBox(height: 16),
-      CheckboxListTile(
-        value: _agreedToTerms,
-        onChanged: (value) => setState(() => _agreedToTerms = value ?? false),
-        title: const Text('I agree to the terms and conditions.', style: TextStyle(fontWeight: FontWeight.w700)),
-        controlAffinity: ListTileControlAffinity.leading,
-      ),
-    ]);
+        const SizedBox(height: 12),
+        Container(
+          height: 240,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF7F8FC),
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: SingleChildScrollView(
+            child: const Text(
+              'By proceeding, you agree to the room and equipment rental policies. You must maintain cleanliness, return any borrowed equipment on time, and report any damage immediately. Rooms must be vacated on or before the approved end time. Unauthorized materials, disruptive behavior, or damage to facilities are not permitted.',
+              style: TextStyle(
+                color: Color(0xFF6A6F86),
+                fontSize: 14,
+                height: 1.5,
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        CheckboxListTile(
+          value: _agreedToTerms,
+          onChanged: (value) => setState(() => _agreedToTerms = value ?? false),
+          title: const Text(
+            'I agree to the terms and conditions.',
+            style: TextStyle(fontWeight: FontWeight.w700),
+          ),
+          controlAffinity: ListTileControlAffinity.leading,
+        ),
+      ],
+    );
   }
 
   @override
@@ -1482,30 +1830,52 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                 children: [
                   _buildStepHeader(),
                   const SizedBox(height: 22),
-                  if (_currentStep == 1) _buildStepOne() else if (_currentStep == 2) _buildStepTwo() else if (_currentStep == 3) _buildStepThree() else if (_currentStep == 4) _buildStepFour() else _buildStepFive(),
+                  if (_currentStep == 1)
+                    _buildStepOne()
+                  else if (_currentStep == 2)
+                    _buildStepTwo()
+                  else if (_currentStep == 3)
+                    _buildStepThree()
+                  else if (_currentStep == 4)
+                    _buildStepFour()
+                  else
+                    _buildStepFive(),
                   const SizedBox(height: 28),
                   Row(
                     children: [
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: _isSubmitting || _currentStep == 0 ? null : _goToPreviousStep,
+                          onPressed: _isSubmitting || _currentStep == 0
+                              ? null
+                              : _goToPreviousStep,
                           style: ElevatedButton.styleFrom(
                             backgroundColor: Colors.white,
                             foregroundColor: const Color(0xFF35489A),
                             side: const BorderSide(color: Color(0xFF35489A)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
-                          child: const Text('Back', style: TextStyle(fontWeight: FontWeight.w700)),
+                          child: const Text(
+                            'Back',
+                            style: TextStyle(fontWeight: FontWeight.w700),
+                          ),
                         ),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
                         child: ElevatedButton(
-                          onPressed: _isSubmitting ? null : (_currentStep == 5 ? _submitReservation : _goToNextStep),
+                          onPressed: _isSubmitting
+                              ? null
+                              : (_currentStep == 5
+                                    ? _submitReservation
+                                    : _goToNextStep),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFFF6C914),
                             foregroundColor: const Color(0xFF35489A),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
                           ),
                           child: _isSubmitting && _currentStep == 5
                               ? const SizedBox(
@@ -1513,10 +1883,17 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                                   height: 18,
                                   child: CircularProgressIndicator(
                                     strokeWidth: 2,
-                                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFF35489A)),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      Color(0xFF35489A),
+                                    ),
                                   ),
                                 )
-                              : Text(_currentStep == 5 ? 'Submit' : 'Next', style: const TextStyle(fontWeight: FontWeight.w700)),
+                              : Text(
+                                  _currentStep == 5 ? 'Submit' : 'Next',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                         ),
                       ),
                     ],
@@ -1530,8 +1907,6 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
     );
   }
 }
-
-
 
 class _ReservationInputField extends StatelessWidget {
   const _ReservationInputField({

@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/services/reservation_service.dart';
+import 'package:new_nutilize_mobile/widgets/top_message_banner.dart';
 
 class ItemReservationPage extends StatefulWidget {
   const ItemReservationPage({super.key});
@@ -46,7 +47,9 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
   }
 
   DateTime? _getRequestStart() {
-    if (_selectedDate == null || _selectedStartTime == null || _selectedEndTime == null) {
+    if (_selectedDate == null ||
+        _selectedStartTime == null ||
+        _selectedEndTime == null) {
       return null;
     }
     return DateTime(
@@ -59,7 +62,9 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
   }
 
   DateTime? _getRequestEnd() {
-    if (_selectedDate == null || _selectedStartTime == null || _selectedEndTime == null) {
+    if (_selectedDate == null ||
+        _selectedStartTime == null ||
+        _selectedEndTime == null) {
       return null;
     }
     return DateTime(
@@ -107,7 +112,9 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
       final uploadedFiles = <File>[];
 
       for (final pickedFile in pickedFiles) {
-        final uploadedUrl = await _uploadSingleProofOfConsent(File(pickedFile.path));
+        final uploadedUrl = await _uploadSingleProofOfConsent(
+          File(pickedFile.path),
+        );
         if (uploadedUrl != null) {
           uploadedFiles.add(File(pickedFile.path));
           uploadedUrls.add(uploadedUrl);
@@ -127,10 +134,12 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
         _isUploadingProof = false;
       });
 
-      _showError(
+      showTopMessage(
+        context,
         uploadedUrls.length == 1
             ? 'Proof of consent uploaded successfully!'
             : 'Proof of consent photos uploaded successfully!',
+        icon: Icons.cloud_done_rounded,
       );
     } catch (e) {
       setState(() => _isUploadingProof = false);
@@ -191,6 +200,7 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
     final picked = await showTimePicker(
       context: context,
       initialTime: initial,
+      initialEntryMode: TimePickerEntryMode.input,
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
           timePickerTheme: const TimePickerThemeData(
@@ -205,7 +215,8 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
       setState(() {
         if (isStart) {
           _selectedStartTime = picked;
-          if (_selectedEndTime != null && _isBeforeOrEqual(_selectedEndTime!, picked)) {
+          if (_selectedEndTime != null &&
+              _isBeforeOrEqual(_selectedEndTime!, picked)) {
             _selectedEndTime = null;
           }
         } else {
@@ -239,7 +250,11 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
       children: [
         Text(
           'Step $_currentStep out of 4',
-          style: const TextStyle(color: Color(0xFF35489A), fontSize: 14, fontWeight: FontWeight.w700),
+          style: const TextStyle(
+            color: Color(0xFF35489A),
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 10),
         _buildProgressIndicator(),
@@ -280,7 +295,8 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
       final user = AuthService.currentUser;
       final role = user?['role'] as String?;
       final normalizedRole = role?.toLowerCase() ?? '';
-      final requiresConsent = normalizedRole == 'student' ||
+      final requiresConsent =
+          normalizedRole == 'student' ||
           normalizedRole == 'teacher' ||
           normalizedRole == 'faculty' ||
           normalizedRole == 'faculty_member';
@@ -317,7 +333,9 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
   }
 
   void _showError(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _showReturnLock(String message) async {
@@ -387,7 +405,11 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
         );
         final available = details?.availableQuantity ?? 0;
         final localMatch = _allItems.where((i) => i.itemId == itemId).toList();
-        final name = details?.itemName ?? (localMatch.isNotEmpty ? localMatch.first.itemName : 'Item $itemId');
+        final name =
+            details?.itemName ??
+            (localMatch.isNotEmpty
+                ? localMatch.first.itemName
+                : 'Item $itemId');
         if (requested > available) {
           insufficient.add('$name: requested $requested, available $available');
         }
@@ -412,7 +434,7 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
       );
 
       if (reservationId != null) {
-        _showError('Item reservation submitted successfully!');
+        showTopMessage(context, 'Item reservation submitted successfully!');
         Future.delayed(const Duration(seconds: 1), () {
           if (mounted) Navigator.of(context).pop();
         });
@@ -453,7 +475,9 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     GestureDetector(
-                      onTap: _currentStep == 1 ? () => Navigator.of(context).pop() : _goToPreviousStep,
+                      onTap: _currentStep == 1
+                          ? () => Navigator.of(context).pop()
+                          : _goToPreviousStep,
                       child: const Icon(
                         Icons.arrow_back_ios_new_rounded,
                         color: Colors.white,
@@ -504,7 +528,10 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(16),
-                            border: Border.all(color: const Color(0xFFF6C914), width: 2),
+                            border: Border.all(
+                              color: const Color(0xFFF6C914),
+                              width: 2,
+                            ),
                           ),
                           child: const Center(
                             child: Text(
@@ -522,7 +549,9 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: GestureDetector(
-                        onTap: _currentStep == 4 ? _submitReservation : _goToNextStep,
+                        onTap: _currentStep == 4
+                            ? _submitReservation
+                            : _goToNextStep,
                         child: Container(
                           height: 56,
                           decoration: BoxDecoration(
@@ -556,53 +585,91 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
     final user = AuthService.currentUser;
     final role = user?['role'] as String?;
     final normalizedRole = role?.toLowerCase() ?? '';
-    final requiresConsent = normalizedRole == 'student' ||
-      normalizedRole == 'teacher' ||
-      normalizedRole == 'faculty' ||
-      normalizedRole == 'faculty_member';
+    final requiresConsent =
+        normalizedRole == 'student' ||
+        normalizedRole == 'teacher' ||
+        normalizedRole == 'faculty' ||
+        normalizedRole == 'faculty_member';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildFormCard(children: [
-          _buildInputField('Activity Name', _activityController, 'Enter activity name'),
-          const SizedBox(height: 16),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text('Date', style: TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700)),
-          ),
-          const SizedBox(height: 12),
-          _buildDateBox(),
-          const SizedBox(height: 16),
-          const Align(
-            alignment: Alignment.centerLeft,
-            child: Text('Time Range', style: TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700)),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(child: _buildTimeBox('From', _selectedStartTime, () => _showTimePicker(isStart: true))),
-              const SizedBox(width: 12),
-              Expanded(child: _buildTimeBox('To', _selectedEndTime, () => _showTimePicker(isStart: false))),
-            ],
-          ),
-          const SizedBox(height: 8),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            value: _hasOutsideParticipants,
-            onChanged: (value) => setState(() => _hasOutsideParticipants = value ?? false),
-            title: const Text(
-              'There will be outside participants',
-              style: TextStyle(color: Color(0xFF111111), fontSize: 13, fontWeight: FontWeight.w600),
+        _buildFormCard(
+          children: [
+            _buildInputField(
+              'Activity Name',
+              _activityController,
+              'Enter activity name',
             ),
-            activeColor: const Color(0xFF35489A),
-            controlAffinity: ListTileControlAffinity.leading,
-          ),
-          if (requiresConsent) ...[
             const SizedBox(height: 16),
-            _buildProofOfConsentUpload(),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Date',
+                style: TextStyle(
+                  color: Color(0xFF111111),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            _buildDateBox(),
+            const SizedBox(height: 16),
+            const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'Time of Activity',
+                style: TextStyle(
+                  color: Color(0xFF111111),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildTimeBox(
+                    'From',
+                    _selectedStartTime,
+                    () => _showTimePicker(isStart: true),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _buildTimeBox(
+                    'To',
+                    _selectedEndTime,
+                    () => _showTimePicker(isStart: false),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            CheckboxListTile(
+              contentPadding: EdgeInsets.zero,
+              value: _hasOutsideParticipants,
+              onChanged: (value) =>
+                  setState(() => _hasOutsideParticipants = value ?? false),
+              title: const Text(
+                'There will be outside participants',
+                style: TextStyle(
+                  color: Color(0xFF111111),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              activeColor: const Color(0xFF35489A),
+              controlAffinity: ListTileControlAffinity.leading,
+            ),
+            if (requiresConsent) ...[
+              const SizedBox(height: 16),
+              _buildProofOfConsentUpload(),
+            ],
           ],
-        ]),
+        ),
       ],
     );
   }
@@ -613,7 +680,11 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
       children: [
         const Text(
           'Select Items to Borrow',
-          style: TextStyle(color: Color(0xFF111111), fontSize: 16, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: Color(0xFF111111),
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 16),
         if (_isLoadingItems)
@@ -637,7 +708,9 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
-                    color: selectedQty > 0 ? const Color(0xFFF6C914) : const Color(0xFFE4E7FB),
+                    color: selectedQty > 0
+                        ? const Color(0xFFF6C914)
+                        : const Color(0xFFE4E7FB),
                     width: 2,
                   ),
                 ),
@@ -672,7 +745,10 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
                         ),
                         if (remaining > 0)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFF2E9D50),
                               borderRadius: BorderRadius.circular(8),
@@ -688,7 +764,10 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
                           )
                         else
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
                             decoration: BoxDecoration(
                               color: const Color(0xFFD22828),
                               borderRadius: BorderRadius.circular(8),
@@ -713,9 +792,14 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
                             onTap: selectedQty > 0
                                 ? () {
                                     setState(() {
-                                      _selectedItemQuantities[item.itemId] = selectedQty - 1;
-                                      if (_selectedItemQuantities[item.itemId] == 0) {
-                                        _selectedItemQuantities.remove(item.itemId);
+                                      _selectedItemQuantities[item.itemId] =
+                                          selectedQty - 1;
+                                      if (_selectedItemQuantities[item
+                                              .itemId] ==
+                                          0) {
+                                        _selectedItemQuantities.remove(
+                                          item.itemId,
+                                        );
                                       }
                                     });
                                   }
@@ -729,7 +813,11 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
                                     : const Color(0xFFE4E7FB),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Icon(Icons.remove, color: Colors.white, size: 18),
+                              child: const Icon(
+                                Icons.remove,
+                                color: Colors.white,
+                                size: 18,
+                              ),
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -746,7 +834,8 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
                             onTap: selectedQty < remaining
                                 ? () {
                                     setState(() {
-                                      _selectedItemQuantities[item.itemId] = selectedQty + 1;
+                                      _selectedItemQuantities[item.itemId] =
+                                          selectedQty + 1;
                                     });
                                   }
                                 : null,
@@ -759,7 +848,11 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
                                     : const Color(0xFFE4E7FB),
                                 borderRadius: BorderRadius.circular(8),
                               ),
-                              child: const Icon(Icons.add, color: Colors.white, size: 18),
+                              child: const Icon(
+                                Icons.add,
+                                color: Colors.white,
+                                size: 18,
+                              ),
                             ),
                           ),
                         ],
@@ -775,27 +868,45 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
   }
 
   Widget _buildStepThree() {
-    final selectedItems = _allItems.where((item) => _selectedItemQuantities.containsKey(item.itemId)).toList();
+    final selectedItems = _allItems
+        .where((item) => _selectedItemQuantities.containsKey(item.itemId))
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildFormCard(children: [
-          const Text(
-            'Review Your Request',
-            style: TextStyle(color: Color(0xFF111111), fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 16),
-          _buildReviewSection('Activity Details', [
-            ('Activity Name', _activityController.text),
-            ('Date', '${_selectedDate?.month}/${_selectedDate?.day}/${_selectedDate?.year}'),
-            ('Time', '${_timeLabel(_selectedStartTime)} - ${_timeLabel(_selectedEndTime)}'),
-          ]),
-          const SizedBox(height: 20),
-          _buildReviewSection('Items', [
-            for (final item in selectedItems) ('${item.itemName}', '${_selectedItemQuantities[item.itemId]} unit(s)'),
-          ]),
-        ]),
+        _buildFormCard(
+          children: [
+            const Text(
+              'Review Your Request',
+              style: TextStyle(
+                color: Color(0xFF111111),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildReviewSection('Activity Details', [
+              ('Activity Name', _activityController.text),
+              (
+                'Date',
+                '${_selectedDate?.month}/${_selectedDate?.day}/${_selectedDate?.year}',
+              ),
+              (
+                'Time',
+                '${_timeLabel(_selectedStartTime)} - ${_timeLabel(_selectedEndTime)}',
+              ),
+            ]),
+            const SizedBox(height: 20),
+            _buildReviewSection('Items', [
+              for (final item in selectedItems)
+                (
+                  '${item.itemName}',
+                  '${_selectedItemQuantities[item.itemId]} unit(s)',
+                ),
+            ]),
+          ],
+        ),
       ],
     );
   }
@@ -804,23 +915,28 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildFormCard(children: [
-          const Text(
-            'Terms and Conditions',
-            style: TextStyle(color: Color(0xFF111111), fontSize: 16, fontWeight: FontWeight.w700),
-          ),
-          const SizedBox(height: 16),
-          Container(
-            height: 200,
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: const Color(0xFFF3F5FB),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: const Color(0xFFE4E7FB), width: 1),
+        _buildFormCard(
+          children: [
+            const Text(
+              'Terms and Conditions',
+              style: TextStyle(
+                color: Color(0xFF111111),
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
             ),
-            child: SingleChildScrollView(
-              child: Text(
-                '''By submitting this item reservation request, you acknowledge and agree to the following:
+            const SizedBox(height: 16),
+            Container(
+              height: 200,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF3F5FB),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE4E7FB), width: 1),
+              ),
+              child: SingleChildScrollView(
+                child: Text(
+                  '''By submitting this item reservation request, you acknowledge and agree to the following:
 
 1. You are responsible for the safekeeping of all borrowed items.
 2. Items must be returned in the same condition as borrowed.
@@ -828,49 +944,54 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
 4. Late returns may result in penalties as per institutional policy.
 5. The institution reserves the right to deny future reservations for violation of terms.
 6. You agree to follow all posted rules and regulations regarding borrowed items.''',
-                style: const TextStyle(
-                  color: Color(0xFF6A6F86),
-                  fontSize: 12,
-                  height: 1.6,
+                  style: const TextStyle(
+                    color: Color(0xFF6A6F86),
+                    fontSize: 12,
+                    height: 1.6,
+                  ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () => setState(() => _agreedToTerms = !_agreedToTerms),
-                child: Container(
-                  width: 20,
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: _agreedToTerms ? const Color(0xFF35489A) : Colors.white,
-                    borderRadius: BorderRadius.circular(4),
-                    border: Border.all(
-                      color: _agreedToTerms ? const Color(0xFF35489A) : const Color(0xFFB0B6D7),
-                      width: 2,
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                GestureDetector(
+                  onTap: () => setState(() => _agreedToTerms = !_agreedToTerms),
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: _agreedToTerms
+                          ? const Color(0xFF35489A)
+                          : Colors.white,
+                      borderRadius: BorderRadius.circular(4),
+                      border: Border.all(
+                        color: _agreedToTerms
+                            ? const Color(0xFF35489A)
+                            : const Color(0xFFB0B6D7),
+                        width: 2,
+                      ),
+                    ),
+                    child: _agreedToTerms
+                        ? const Icon(Icons.check, color: Colors.white, size: 14)
+                        : null,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'I agree to the terms and conditions',
+                    style: TextStyle(
+                      color: Color(0xFF111111),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
-                  child: _agreedToTerms
-                      ? const Icon(Icons.check, color: Colors.white, size: 14)
-                      : null,
                 ),
-              ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Text(
-                  'I agree to the terms and conditions',
-                  style: TextStyle(
-                    color: Color(0xFF111111),
-                    fontSize: 12,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ]),
+              ],
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -882,24 +1003,44 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
-        boxShadow: const [BoxShadow(color: Color(0x14000000), blurRadius: 26, offset: Offset(0, 10))],
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x14000000),
+            blurRadius: 26,
+            offset: Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(children: children),
     );
   }
 
-  Widget _buildInputField(String label, TextEditingController controller, String hint) {
+  Widget _buildInputField(
+    String label,
+    TextEditingController controller,
+    String hint,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: const TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700)),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Color(0xFF111111),
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 8),
         TextField(
           controller: controller,
           decoration: InputDecoration(
             hintText: hint,
             hintStyle: const TextStyle(color: Color(0xFFB0B6D7), fontSize: 13),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 14,
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: Color(0xFFF6C914), width: 2),
@@ -933,9 +1074,13 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
           children: [
             Expanded(
               child: Text(
-                _selectedDate == null ? 'MM / DD / YYYY' : '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}',
+                _selectedDate == null
+                    ? 'MM / DD / YYYY'
+                    : '${_selectedDate!.month}/${_selectedDate!.day}/${_selectedDate!.year}',
                 style: TextStyle(
-                  color: _selectedDate == null ? const Color(0xFFB0B6D7) : const Color(0xFF111111),
+                  color: _selectedDate == null
+                      ? const Color(0xFFB0B6D7)
+                      : const Color(0xFF111111),
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -962,9 +1107,11 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
           children: [
             Expanded(
               child: Text(
-                value == null ? 'Select' : _timeLabel(value),
+                value == null ? label : _timeLabel(value),
                 style: TextStyle(
-                  color: value == null ? const Color(0xFFB0B6D7) : const Color(0xFF111111),
+                  color: value == null
+                      ? const Color(0xFFB0B6D7)
+                      : const Color(0xFF111111),
                   fontWeight: FontWeight.w600,
                 ),
               ),
@@ -982,7 +1129,11 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
       children: [
         const Text(
           'Attach Proof of Consent',
-          style: TextStyle(color: Color(0xFF111111), fontSize: 14, fontWeight: FontWeight.w700),
+          style: TextStyle(
+            color: Color(0xFF111111),
+            fontSize: 14,
+            fontWeight: FontWeight.w700,
+          ),
         ),
         const SizedBox(height: 12),
         if (_proofOfConsentFiles.isNotEmpty) ...[
@@ -996,14 +1147,31 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
             ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle, color: Color(0xFF2E9D50), size: 24),
+                const Icon(
+                  Icons.check_circle,
+                  color: Color(0xFF2E9D50),
+                  size: 24,
+                ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Files Selected', style: TextStyle(color: Color(0xFF2E9D50), fontSize: 12, fontWeight: FontWeight.w700)),
-                      Text('${_proofOfConsentFiles.length} photo(s) selected', style: const TextStyle(color: Color(0xFF2E9D50), fontSize: 11)),
+                      const Text(
+                        'Files Selected',
+                        style: TextStyle(
+                          color: Color(0xFF2E9D50),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        '${_proofOfConsentFiles.length} photo(s) selected',
+                        style: const TextStyle(
+                          color: Color(0xFF2E9D50),
+                          fontSize: 11,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1022,7 +1190,14 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
                 border: Border.all(color: const Color(0xFFD79700), width: 1),
               ),
               child: Center(
-                child: Text(_isUploadingProof ? 'Uploading...' : 'Add More Photos', style: const TextStyle(color: Color(0xFFD79700), fontSize: 12, fontWeight: FontWeight.w700)),
+                child: Text(
+                  _isUploadingProof ? 'Uploading...' : 'Add More Photos',
+                  style: const TextStyle(
+                    color: Color(0xFFD79700),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
           ),
@@ -1040,17 +1215,28 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
               child: Column(
                 children: [
                   Icon(
-                    _isUploadingProof ? Icons.hourglass_top : Icons.add_photo_alternate_outlined,
+                    _isUploadingProof
+                        ? Icons.hourglass_top
+                        : Icons.add_photo_alternate_outlined,
                     color: const Color(0xFFF6C914),
                     size: 32,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    _isUploadingProof ? 'Uploading...' : 'Tap to Upload Photo(s)',
-                    style: const TextStyle(color: Color(0xFF111111), fontSize: 13, fontWeight: FontWeight.w600),
+                    _isUploadingProof
+                        ? 'Uploading...'
+                        : 'Tap to Upload Photo(s)',
+                    style: const TextStyle(
+                      color: Color(0xFF111111),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                   const SizedBox(height: 4),
-                  const Text('Choose from gallery', style: TextStyle(color: Color(0xFFB0B6D7), fontSize: 11)),
+                  const Text(
+                    'Choose from gallery',
+                    style: TextStyle(color: Color(0xFFB0B6D7), fontSize: 11),
+                  ),
                 ],
               ),
             ),
@@ -1064,14 +1250,31 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: const TextStyle(color: Color(0xFF111111), fontSize: 13, fontWeight: FontWeight.w700)),
+        Text(
+          title,
+          style: const TextStyle(
+            color: Color(0xFF111111),
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
         const SizedBox(height: 12),
         for (final (label, value) in items) ...[
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(label, style: const TextStyle(color: Color(0xFF6A6F86), fontSize: 12)),
-              Text(value, style: const TextStyle(color: Color(0xFF111111), fontSize: 12, fontWeight: FontWeight.w600)),
+              Text(
+                label,
+                style: const TextStyle(color: Color(0xFF6A6F86), fontSize: 12),
+              ),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: Color(0xFF111111),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 8),
