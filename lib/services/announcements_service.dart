@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'dart:async';
 
 /// Represents an announcement record from the announcements table.
 class AnnouncementRecord {
@@ -29,9 +30,15 @@ class AnnouncementRecord {
       title: json['title'] as String? ?? '',
       body: json['body'] as String? ?? '',
       isActive: json['is_active'] as bool? ?? false,
-      createdAt: DateTime.parse(json['created_at'] as String? ?? DateTime.now().toIso8601String()),
-      publishedAt: json['published_at'] != null ? DateTime.parse(json['published_at'] as String) : null,
-      expiresAt: json['expires_at'] != null ? DateTime.parse(json['expires_at'] as String) : null,
+      createdAt: DateTime.parse(
+        json['created_at'] as String? ?? DateTime.now().toIso8601String(),
+      ),
+      publishedAt: json['published_at'] != null
+          ? DateTime.parse(json['published_at'] as String)
+          : null,
+      expiresAt: json['expires_at'] != null
+          ? DateTime.parse(json['expires_at'] as String)
+          : null,
       announcerName: json['announcer_name'] as String?,
     );
   }
@@ -64,7 +71,8 @@ class AnnouncementRecord {
 }
 
 class AnnouncementsService extends ChangeNotifier {
-  static final AnnouncementsService _instance = AnnouncementsService._internal();
+  static final AnnouncementsService _instance =
+      AnnouncementsService._internal();
 
   factory AnnouncementsService() {
     return _instance;
@@ -74,25 +82,38 @@ class AnnouncementsService extends ChangeNotifier {
 
   final List<AnnouncementRecord> _announcements = [];
   RealtimeChannel? _subscription;
+  Timer? _refreshTimer;
+  bool _isFetching = false;
 
-  List<AnnouncementRecord> get announcements => List.unmodifiable(_announcements);
+  List<AnnouncementRecord> get announcements =>
+      List.unmodifiable(_announcements);
 
   /// Fetch all active announcements from the database, sorted by created_at descending (latest first)
   Future<List<AnnouncementRecord>> fetchAnnouncements() async {
+    if (_isFetching) {
+      return _announcements;
+    }
+
+    _isFetching = true;
     try {
       final client = Supabase.instance.client;
-      
+
       final response = await client
           .from('announcements')
-          .select()
+          .select(
+            'announcement_id, title, body, is_active, created_at, '
+            'published_at, expires_at, announcer_name',
+          )
           .eq('is_active', true)
           .order('created_at', ascending: false);
 
       _announcements.clear();
       for (final item in response as List) {
-        _announcements.add(AnnouncementRecord.fromJson(item as Map<String, dynamic>));
+        _announcements.add(
+          AnnouncementRecord.fromJson(item as Map<String, dynamic>),
+        );
       }
-      
+
       notifyListeners();
       return _announcements;
     } catch (e) {
@@ -100,6 +121,8 @@ class AnnouncementsService extends ChangeNotifier {
         print('Error fetching announcements: $e');
       }
       return [];
+    } finally {
+      _isFetching = false;
     }
   }
 
@@ -107,7 +130,7 @@ class AnnouncementsService extends ChangeNotifier {
   Future<void> subscribeToAnnouncements() async {
     try {
       final client = Supabase.instance.client;
-      
+
       // Unsubscribe from previous subscription if any
       if (_subscription != null) {
         await client.removeChannel(_subscription!);
@@ -116,17 +139,17 @@ class AnnouncementsService extends ChangeNotifier {
       _subscription = client.channel('announcements');
       _subscription!.on(
         RealtimeListenTypes.postgresChanges,
-        ChannelFilter(
-          event: '*',
-          schema: 'public',
-          table: 'announcements',
-        ),
+        ChannelFilter(event: '*', schema: 'public', table: 'announcements'),
         (payload, [ref]) async {
           // Refetch announcements when any change is detected
           await fetchAnnouncements();
         },
       );
       _subscription!.subscribe();
+      _refreshTimer?.cancel();
+      _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        fetchAnnouncements();
+      });
     } catch (e) {
       if (kDebugMode) {
         print('Error subscribing to announcements: $e');
@@ -141,6 +164,8 @@ class AnnouncementsService extends ChangeNotifier {
         await Supabase.instance.client.removeChannel(_subscription!);
         _subscription = null;
       }
+      _refreshTimer?.cancel();
+      _refreshTimer = null;
     } catch (e) {
       if (kDebugMode) {
         print('Error unsubscribing from announcements: $e');

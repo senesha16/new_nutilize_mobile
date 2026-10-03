@@ -4,8 +4,16 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 class SupabaseService {
   static Map<String, String> _envVars = <String, String>{};
+  static const bool _securityTestMode = bool.fromEnvironment(
+    'NUTILIZE_SECURITY_TEST',
+    defaultValue: false,
+  );
 
   static String get supabaseUrl {
+    if (_securityTestMode) {
+      return _envVars['SUPABASE_URL']?.trim() ?? '';
+    }
+
     // First check _envVars
     if (_envVars.containsKey('SUPABASE_URL')) {
       final value = _envVars['SUPABASE_URL']?.trim();
@@ -29,6 +37,10 @@ class SupabaseService {
 
   // Read the anon/public key from runtime environment (dotenv or dart-define).
   static String get supabaseKey {
+    if (_securityTestMode) {
+      return _envVars['SUPABASE_ANON']?.trim() ?? '';
+    }
+
     // First check _envVars
     if (_envVars.containsKey('SUPABASE_ANON')) {
       final value = _envVars['SUPABASE_ANON']?.trim();
@@ -44,13 +56,14 @@ class SupabaseService {
       }
     } catch (_) {}
 
-    return String.fromEnvironment(
-      'SUPABASE_ANON',
-      defaultValue: '',
-    );
+    return String.fromEnvironment('SUPABASE_ANON', defaultValue: '');
   }
 
   static String get serviceRoleKey {
+    if (_securityTestMode) {
+      return '';
+    }
+
     if (_envVars.containsKey('SUPABASE_SERVICE_ROLE_KEY')) {
       final value = _envVars['SUPABASE_SERVICE_ROLE_KEY']?.trim();
       if (value != null && value.isNotEmpty) {
@@ -80,12 +93,15 @@ class SupabaseService {
   static Future<void> init() async {
     final url = supabaseUrl;
     final key = supabaseKey;
+    final localStorage = _securityTestMode ? const EmptyLocalStorage() : null;
 
     try {
       if (key.isEmpty) {
         await Supabase.initialize(
           url: url,
           anonKey: 'sb_publishable_dummy_key',
+          localStorage: localStorage,
+          debug: false,
         );
         return;
       }
@@ -93,6 +109,8 @@ class SupabaseService {
       await Supabase.initialize(
         url: url,
         anonKey: key,
+        localStorage: localStorage,
+        debug: false,
       );
     } on Exception catch (e) {
       debugPrint('[SupabaseService] Init error (continuing anyway): $e');
@@ -103,11 +121,14 @@ class SupabaseService {
         await Supabase.initialize(
           url: url,
           anonKey: key,
+          localStorage: localStorage,
+          debug: false,
         );
       } catch (_) {
-        debugPrint('[SupabaseService] Second init attempt also failed, but proceeding');
+        debugPrint(
+          '[SupabaseService] Second init attempt also failed, but proceeding',
+        );
       }
     }
   }
-
 }

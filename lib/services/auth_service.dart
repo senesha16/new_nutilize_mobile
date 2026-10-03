@@ -51,8 +51,7 @@ class AuthService {
     final normalized = Map<String, dynamic>.from(profile);
     normalized.remove('password');
     normalized.remove('confirm_password');
-    final programId = normalized['program_id'];
-    if (programId == null) {
+    if (normalized['program_id'] == null) {
       final mappedProgramId = programIdForAffiliation(
         normalized['affiliation']?.toString(),
       );
@@ -63,44 +62,29 @@ class AuthService {
     return normalized;
   }
 
-  // Read anon/publishable key from a build-time environment variable so
-  // it isn't checked into source control. Run the app with:
-  //   flutter run --dart-define=SUPABASE_ANON="<anon_key>"
-  // If the variable is not provided, the existing placeholder is used.
   static String get _anonKey {
-    // First, check the environment variables passed from main.dart
-    if (_envVars.containsKey('SUPABASE_ANON')) {
-      final value = _envVars['SUPABASE_ANON']?.trim();
-      if (value != null && value.isNotEmpty) {
-        debugPrint(
-          '[AuthService] Using SUPABASE_ANON from _envVars, length=${value.length}',
-        );
-        return value;
-      }
+    if (const bool.fromEnvironment(
+      'NUTILIZE_SECURITY_TEST',
+      defaultValue: false,
+    )) {
+      return _envVars['SUPABASE_ANON']?.trim() ?? '';
     }
 
-    // Then try dotenv
+    final configuredKey = _envVars['SUPABASE_ANON']?.trim();
+    if (configuredKey != null && configuredKey.isNotEmpty) {
+      return configuredKey;
+    }
+
     try {
-      final value = dotenv.env['SUPABASE_ANON']?.trim();
-      debugPrint(
-        '[AuthService] dotenv.env[SUPABASE_ANON] = ${value?.substring(0, 20) ?? 'null'}...',
-      );
-      if (value != null && value.isNotEmpty) {
-        return value;
+      final dotenvKey = dotenv.env['SUPABASE_ANON']?.trim();
+      if (dotenvKey != null && dotenvKey.isNotEmpty) {
+        return dotenvKey;
       }
-    } catch (e) {
-      debugPrint('[AuthService] Error reading dotenv: $e');
-    }
+    } catch (_) {}
 
-    // Finally, fall back to dart-define
-    final fallback = String.fromEnvironment('SUPABASE_ANON', defaultValue: '');
-    debugPrint(
-      '[AuthService] Using dart-define fallback, length=${fallback.length}',
-    );
-    return fallback;
+    return const String.fromEnvironment('SUPABASE_ANON', defaultValue: '');
   }
 
-  /// Call this from main.dart to pass environment variables
   static void setEnvironment(Map<String, String> env) {
     _envVars = env;
     debugPrint(
@@ -110,11 +94,7 @@ class AuthService {
 
   static bool get _hasValidAnonKey {
     final key = _anonKey;
-    final isValid = key.isNotEmpty && !key.contains('dummy');
-    debugPrint(
-      '[AuthService] Checking anon key: length=${key.length}, contains_dummy=${key.contains('dummy')}, valid=$isValid',
-    );
-    return isValid;
+    return key.isNotEmpty && !key.contains('dummy');
   }
 
   static void _setLastAuthError(String? error) {
@@ -124,7 +104,6 @@ class AuthService {
     }
   }
 
-  // Sign up: prefer server-side function, fall back to legacy signup.
   static Future<Map<String, dynamic>> signUp({
     required String email,
     required String password,
@@ -133,14 +112,13 @@ class AuthService {
     if (!_hasValidAnonKey) {
       return {
         'error':
-            'Missing SUPABASE_ANON. Create a .env file or pass --dart-define=SUPABASE_ANON=<anon_key> before running the app.',
+            'Missing SUPABASE_ANON. Configure the project anon key for this environment.',
         'access_token': null,
       };
     }
 
     final normalizedProfile = normalizeProfile(profile) ?? {};
     final funcUrl = Uri.parse('$_baseUrl/functions/v1/register_user');
-
     final requestBody = {
       'email': email,
       'password': password,
@@ -148,11 +126,6 @@ class AuthService {
       'program_id': normalizedProfile['program_id'],
       'profile': normalizedProfile,
     };
-    final bodyStr = jsonEncode(requestBody);
-
-    debugPrint('[AuthService] Sending signup request to: $funcUrl');
-    debugPrint('[AuthService] Request body length: ${bodyStr.length}');
-    debugPrint('[AuthService] Request body: $bodyStr');
 
     final resp = await http.post(
       funcUrl,
@@ -161,15 +134,10 @@ class AuthService {
         'apikey': _anonKey,
         'Authorization': 'Bearer $_anonKey',
       },
-      body: bodyStr,
+      body: jsonEncode(requestBody),
     );
 
     debugPrint('[AuthService] Signup response status: ${resp.statusCode}');
-    debugPrint('[AuthService] Signup response body: ${resp.body}');
-
-    // Success from function: treat any 200/201 as success and return the
-    // session token if available. The function already inserts the profile,
-    // so no additional profile writes are needed here.
     if (resp.statusCode == 200 || resp.statusCode == 201) {
       final body = jsonDecode(resp.body);
       final session = body['session'];
@@ -318,23 +286,6 @@ class AuthService {
 
     debugPrint('[AuthService] signIn: attempting for $normalizedEmail');
 
-    // TEMPORARY: Log but don't block on email validation to diagnose Supabase connectivity
-    // The email validation was returning false due to RLS permissions, blocking all logins
-    // TODO: Fix RLS policies on users table so anon key can read emails
-    try {
-      unawaited(
-        _validateEmailCaseSensitivity(normalizedEmail).then((valid) {
-          debugPrint(
-            '[AuthService] Email validation result (non-blocking): $valid for $normalizedEmail',
-          );
-        }),
-      );
-    } catch (e) {
-      debugPrint(
-        '[AuthService] Email validation error (caught, non-blocking): $e',
-      );
-    }
-
     debugPrint('[AuthService] signIn: using Supabase URL $_baseUrl');
     debugPrint(
       '[AuthService] signIn: bypassing email validation check, attempting Supabase auth directly',
@@ -348,13 +299,8 @@ class AuthService {
           .signInWithPassword(email: email, password: password);
       final session = authResponse.session;
       if (session == null) {
-        debugPrint(
-          '[AuthService] signIn: no session from Supabase, attempting recovery',
-        );
-        return await _recoverLoginWithEdgeFunction(
-          email: email,
-          password: password,
-        );
+        _setLastAuthError('Login failed. Please check your credentials.');
+        return null;
       }
       debugPrint(
         '[AuthService] signIn: Supabase auth success, session obtained',
@@ -384,25 +330,11 @@ class AuthService {
     } on AuthException catch (e) {
       debugPrint('[AuthService] signIn: AuthException: ${e.message}');
       _setLastAuthError(e.message);
-      final recovered = await _recoverLoginWithEdgeFunction(
-        email: email,
-        password: password,
-      );
-      if (recovered != null) {
-        return recovered;
-      }
-      return await _loginWithLegacyUsersTable(email: email, password: password);
+      return null;
     } catch (e) {
-      debugPrint('[AuthService] signIn: exception: $e');
-      _setLastAuthError(e.toString());
-      final recovered = await _recoverLoginWithEdgeFunction(
-        email: email,
-        password: password,
-      );
-      if (recovered != null) {
-        return recovered;
-      }
-      return await _loginWithLegacyUsersTable(email: email, password: password);
+      debugPrint('[AuthService] signIn failed unexpectedly.');
+      _setLastAuthError('Login failed. Please try again.');
+      return null;
     }
   }
 
@@ -555,7 +487,6 @@ class AuthService {
     debugPrint(
       '[AuthService] Edge-function login recovery status: ${resp.statusCode}',
     );
-    debugPrint('[AuthService] Edge-function login recovery body: ${resp.body}');
 
     if (resp.statusCode == 200 || resp.statusCode == 201) {
       try {
@@ -793,77 +724,6 @@ class AuthService {
     await Supabase.instance.client.auth.signOut();
   }
 
-  // Load the profile row for the signed-in user.
-  // Treat email matching as case-insensitive so users do not get false
-  // "Invalid credentials" failures when the row is stored with a different case.
-  static Future<bool> _validateEmailCaseSensitivity(String email) async {
-    final normalizedEmail = email.trim();
-    if (normalizedEmail.isEmpty) {
-      debugPrint('[AuthService] _validateEmailCaseSensitivity: empty email');
-      return false;
-    }
-
-    try {
-      final url = Uri.parse('$_baseUrl/rest/v1/users?select=email&limit=10000');
-
-      debugPrint(
-        '[AuthService] _validateEmailCaseSensitivity: querying users table',
-      );
-
-      final resp = await http.get(
-        url,
-        headers: {'apikey': _anonKey, 'Accept': 'application/json'},
-      );
-
-      debugPrint(
-        '[AuthService] _validateEmailCaseSensitivity: response status ${resp.statusCode}',
-      );
-
-      if (resp.statusCode != 200) {
-        debugPrint(
-          '[AuthService] _validateEmailCaseSensitivity: query failed with status ${resp.statusCode}',
-        );
-        debugPrint(
-          '[AuthService] _validateEmailCaseSensitivity: response body: ${resp.body}',
-        );
-        return false;
-      }
-
-      final decoded = jsonDecode(resp.body);
-      if (decoded is! List) {
-        debugPrint(
-          '[AuthService] _validateEmailCaseSensitivity: response is not a list',
-        );
-        return false;
-      }
-
-      debugPrint(
-        '[AuthService] _validateEmailCaseSensitivity: checking ${decoded.length} users',
-      );
-
-      for (final user in decoded) {
-        if (user is Map) {
-          final storedEmail = user['email']?.toString();
-          if (storedEmail != null &&
-              storedEmail.toLowerCase() == normalizedEmail.toLowerCase()) {
-            debugPrint(
-              '[AuthService] _validateEmailCaseSensitivity: found matching email',
-            );
-            return true;
-          }
-        }
-      }
-
-      debugPrint(
-        '[AuthService] _validateEmailCaseSensitivity: no matching email found for $normalizedEmail',
-      );
-      return false;
-    } catch (e) {
-      debugPrint('[AuthService] _validateEmailCaseSensitivity error: $e');
-      return false;
-    }
-  }
-
   static Future<Map<String, dynamic>?> _fetchUserProfile({
     required String email,
     required String accessToken,
@@ -942,7 +802,10 @@ class AuthService {
   }
 
   // Request server to send a 6-digit verification code to the provided email.
-  static Future<String?> sendEmailCode(String email) async {
+  static Future<String?> sendEmailCode(
+    String email, {
+    bool requireExistingAccount = false,
+  }) async {
     final normalizedEmail = email.trim();
     if (normalizedEmail.isEmpty) {
       return 'Please enter your email.';
@@ -957,9 +820,6 @@ class AuthService {
     debugPrint(
       '[AuthService] sendEmailCode: calling $funcUrl for $normalizedEmail',
     );
-    debugPrint(
-      '[AuthService] sendEmailCode: using anon key = ${_anonKey.substring(0, 20)}...',
-    );
 
     try {
       final resp = await http
@@ -970,7 +830,10 @@ class AuthService {
               'apikey': _anonKey,
               'Authorization': 'Bearer $_anonKey',
             },
-            body: jsonEncode({'email': normalizedEmail}),
+            body: jsonEncode({
+              'email': normalizedEmail,
+              if (requireExistingAccount) 'purpose': 'password_reset',
+            }),
           )
           .timeout(
             const Duration(seconds: 10),
@@ -984,10 +847,6 @@ class AuthService {
       debugPrint(
         '[AuthService] sendEmailCode response: status=${resp.statusCode}',
       );
-      debugPrint(
-        '[AuthService] sendEmailCode response headers: ${resp.headers}',
-      );
-      debugPrint('[AuthService] sendEmailCode response body: ${resp.body}');
 
       if (resp.statusCode == 200 || resp.statusCode == 201) {
         debugPrint('[AuthService] sendEmailCode: success');
@@ -1015,60 +874,13 @@ class AuthService {
     }
   }
 
-  static Future<bool> userExistsByEmail(String email) async {
-    final normalizedEmail = email.trim();
-    if (normalizedEmail.isEmpty) {
-      return false;
-    }
-
-    try {
-      final url = Uri.parse(
-        '$_baseUrl/rest/v1/users?select=user_id&email=ilike.${Uri.encodeQueryComponent(normalizedEmail)}&limit=1',
-      );
-      final resp = await http.get(
-        url,
-        headers: {
-          'apikey': _anonKey,
-          'Authorization': 'Bearer $_anonKey',
-          'Accept': 'application/json',
-        },
-      );
-
-      if (resp.statusCode != 200) {
-        debugPrint(
-          '[AuthService] userExistsByEmail failed: ${resp.statusCode} ${resp.body}',
-        );
-        return false;
-      }
-
-      final decoded = jsonDecode(resp.body);
-      if (decoded is! List) {
-        return false;
-      }
-      return decoded.isNotEmpty;
-    } catch (e) {
-      debugPrint('[AuthService] userExistsByEmail exception: $e');
-      return false;
-    }
-  }
-
   static Future<String?> sendForgotPasswordCode(String email) async {
     final normalizedEmail = email.trim();
     if (normalizedEmail.isEmpty) {
       return 'Please enter your email.';
     }
 
-    final exists = await userExistsByEmail(normalizedEmail);
-    if (!exists) {
-      return 'No existing user found';
-    }
-
-    final error = await sendEmailCode(normalizedEmail);
-    if (error != null) {
-      return error;
-    }
-
-    return null;
+    return sendEmailCode(normalizedEmail, requireExistingAccount: true);
   }
 
   // Verify a code previously sent to the email. Expects `verify_email_code` function.
@@ -1153,17 +965,18 @@ class AuthService {
           }
           return true;
         }
-        debugPrint('[AuthService] resetPassword response body: ${resp.body}');
         return false;
       }
 
       try {
         final body = jsonDecode(resp.body);
         debugPrint(
-          '[AuthService] resetPassword error: ${body['message'] ?? body['error'] ?? resp.body}',
+          '[AuthService] resetPassword failed: ${body['error'] ?? 'unknown error'}',
         );
       } catch (_) {
-        debugPrint('[AuthService] resetPassword error: ${resp.body}');
+        debugPrint(
+          '[AuthService] resetPassword failed with status ${resp.statusCode}',
+        );
       }
       return false;
     } catch (e) {

@@ -35,6 +35,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   OverlayEntry? _notificationOverlayEntry;
   RealtimeChannel? _approvalsChannel;
   RealtimeChannel? _reservationsChannel;
+  AppShellScope? _registeredScope;
 
   @override
   void initState() {
@@ -56,6 +57,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _dismissNotificationOverlay();
     _approvalsChannel?.unsubscribe();
     _reservationsChannel?.unsubscribe();
+    final registeredScope = _registeredScope;
+    if (registeredScope != null) {
+      AppShellScope.unregister(registeredScope);
+    }
     NotificationActivityStore.listenable.removeListener(
       _handleNotificationStoreChange,
     );
@@ -71,7 +76,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   void _scheduleRefresh() {
     _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       if (mounted) {
         unawaited(_refreshReservations());
       }
@@ -226,6 +231,31 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final shellScope = AppShellScope(
+      currentIndex: _currentIndex,
+      onTabSelected: _selectTab,
+      child: Scaffold(
+        backgroundColor: const Color(0xFFF3F5FB),
+        body: SafeArea(
+          child: IndexedStack(
+            index: _currentIndex,
+            children: const [
+              HomePage(),
+              CalendarPage(),
+              RequestPage(),
+              ProfilePage(showBottomNavigation: false),
+            ],
+          ),
+        ),
+        bottomNavigationBar: AppBottomNav(
+          selectedIndex: _currentIndex,
+          onTap: _selectTab,
+        ),
+      ),
+    );
+    AppShellScope.register(shellScope);
+    _registeredScope = shellScope;
+
     return PopScope(
       canPop: false,
       onPopInvokedWithResult: (didPop, result) {
@@ -235,28 +265,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           _selectTab(0);
         }
       },
-      child: AppShellScope(
-        currentIndex: _currentIndex,
-        onTabSelected: _selectTab,
-        child: Scaffold(
-          backgroundColor: const Color(0xFFF3F5FB),
-          body: SafeArea(
-            child: IndexedStack(
-              index: _currentIndex,
-              children: const [
-                HomePage(),
-                CalendarPage(),
-                RequestPage(),
-                ProfilePage(showBottomNavigation: false),
-              ],
-            ),
-          ),
-          bottomNavigationBar: AppBottomNav(
-            selectedIndex: _currentIndex,
-            onTap: _selectTab,
-          ),
-        ),
-      ),
+      child: shellScope,
     );
   }
 }

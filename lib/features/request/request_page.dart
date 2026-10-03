@@ -331,7 +331,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
 
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = 'proof_of_consent_${timestamp}.jpg';
-      final filePath = 'proof_of_consent/$userId/$fileName';
+      final filePath = '$userId/$fileName';
 
       await _reservationService.uploadProofOfConsent(file, filePath);
       return _reservationService.getProofOfConsentUrl(filePath);

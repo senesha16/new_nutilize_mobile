@@ -79,25 +79,11 @@ serve(async (req) => {
       }
     }
 
-    const patchUrl = `${PROJECT_URL}/rest/v1/users?email=eq.${encodeURIComponent(email)}`;
-    const patchResp = await fetch(patchUrl, {
-      method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-        Prefer: 'return=representation',
-      },
-      body: JSON.stringify({ password }),
-    });
-
-    if (!patchResp.ok) {
-      const text = await patchResp.text();
-      console.error('Reset password update failed:', patchResp.status, text);
-      if (!authUserId) {
-        return new Response(JSON.stringify({ ok: false, error: 'update_failed' }), { status: 500 });
-      }
-      console.warn('Legacy public.users password update failed, but auth password update succeeded.');
+    if (!authUserId) {
+      return new Response(
+        JSON.stringify({ ok: false, error: 'auth_user_not_found' }),
+        { status: 404 },
+      );
     }
 
     return new Response(JSON.stringify({ ok: true }), { status: 200 });

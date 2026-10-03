@@ -9,6 +9,10 @@ import 'package:new_nutilize_mobile/services/auth_service.dart';
 
 /// Global map to store environment variables loaded from .env on desktop platforms
 final globalEnv = <String, String>{};
+const bool _useSecurityDatabase = bool.fromEnvironment(
+  'NUTILIZE_SECURITY_TEST',
+  defaultValue: false,
+);
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -18,13 +22,13 @@ Future<void> main() async {
 Future<void> _initializeApplication() async {
   // Try to load .env from assets (works on all platforms)
   try {
-    await dotenv.load();  // No fileName - uses pubspec.yaml assets by default
+    final envFileName = _useSecurityDatabase ? '.env.security' : '.env';
+    await dotenv.load(fileName: envFileName);
     for (final entry in dotenv.env.entries) {
       globalEnv[entry.key] = entry.value;
     }
 
-    final anonKey = globalEnv['SUPABASE_ANON'];
-    debugPrint('[main] Loaded SUPABASE_ANON from assets, length: ${anonKey?.length}');
+    debugPrint('[main] Loaded Supabase config from $envFileName');
 
     AuthService.setEnvironment(globalEnv);
     SupabaseService.setEnvironment(globalEnv);
@@ -33,7 +37,8 @@ Future<void> _initializeApplication() async {
 
     // Fallback: try loading from Windows file path (for desktop development)
     try {
-      final envPath = 'c:\\Users\\Joshueee\\new_nutilize_mobile\\.env';
+      final envFileName = _useSecurityDatabase ? '.env.security' : '.env';
+      final envPath = 'c:\\Users\\Joshueee\\new_nutilize_mobile\\$envFileName';
       final envFile = File(envPath);
       if (envFile.existsSync()) {
         final contents = await envFile.readAsString();
@@ -61,7 +66,7 @@ Future<void> _initializeApplication() async {
   } catch (e) {
     debugPrint('[main] Supabase init error (continuing anyway): $e');
   }
-  
+
   try {
     await _repairPersistedSession();
   } catch (e) {

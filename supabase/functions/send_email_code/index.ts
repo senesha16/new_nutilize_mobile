@@ -164,6 +164,7 @@ serve(async (req) => {
   try {
     const payload = await req.json();
     const email = payload.email?.toString().trim();
+    const purpose = payload.purpose?.toString();
     if (!email) {
       return new Response(JSON.stringify({ ok: false, error: 'missing_email' }), { status: 400 });
     }
@@ -180,6 +181,39 @@ serve(async (req) => {
         JSON.stringify({ ok: false, error: 'missing_service_role_key', message: 'SERVICE_ROLE_KEY is not configured.' }),
         { status: 500 },
       );
+    }
+
+    if (purpose === 'password_reset') {
+      const profileResponse = await fetch(
+        `${PROJECT_URL}/rest/v1/users?select=user_id&email=ilike.${encodeURIComponent(email)}&limit=1`,
+        {
+          headers: {
+            apikey: SERVICE_ROLE_KEY,
+            Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+            Accept: 'application/json',
+          },
+        },
+      );
+
+      if (!profileResponse.ok) {
+        console.error('Password reset account lookup failed:', profileResponse.status);
+        return new Response(
+          JSON.stringify({ ok: false, error: 'account_lookup_failed' }),
+          { status: 500 },
+        );
+      }
+
+      const profiles = await profileResponse.json().catch(() => null);
+      if (!Array.isArray(profiles) || profiles.length === 0) {
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: 'no_account',
+            message: 'No account found, register account first',
+          }),
+          { status: 404 },
+        );
+      }
     }
 
     if (!SMTP_USER || !SMTP_PASS) {

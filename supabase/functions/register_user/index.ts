@@ -152,46 +152,86 @@ serve(async (req) => {
     } else {
       const errCode = createBody?.error_code || createBody?.code;
       const msg = createBody?.msg || createBody?.message || '';
-      // If the user already exists, try to fetch the existing user and proceed.
-      if (errCode === 'email_exists' || msg.toString().toLowerCase().includes('already been registered') || msg.toString().toLowerCase().includes('already exists')) {
-        // Fetch existing user and ensure the password is set to the provided
-        // value so registration results in a usable credential.
-        const listResp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?email=${encodeURIComponent(email)}`, {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-            'apikey': SERVICE_ROLE_KEY,
-          },
-        });
-        const listBody = await listResp.json().catch(() => null);
-        if (listResp.ok && Array.isArray(listBody) && listBody.length > 0) {
-          user = listBody[0];
-        } else if (listResp.ok && listBody && listBody.id) {
-          user = listBody;
-        } else {
-          return new Response(JSON.stringify({ error: 'Existing auth user found but could not be resolved.' }), { status: 500 });
+      const normalizedMessage = msg.toString().toLowerCase();
+      if (
+        errCode === 'email_exists' ||
+        normalizedMessage.includes('already been registered') ||
+        normalizedMessage.includes('already exists')
+      ) {
+        if (!ANON_KEY) {
+          return new Response(
+            JSON.stringify({
+              error: 'account_already_exists',
+              message:
+                'An account with this email already exists. Please log in or reset your password.',
+            }),
+            { status: 409 },
+          );
         }
 
-        const existingId = user?.id;
-        if (!existingId) {
-          return new Response(JSON.stringify({ error: 'Existing auth user found but missing user id.' }), { status: 500 });
+        // A prior signup may have created the Auth user but failed to save its
+        // public.users profile. Recover only when the submitted password proves
+        // ownership and no application profile exists yet.
+        const { session } = await createSessionWithRetry(email, password, ANON_KEY);
+        if (!session?.access_token) {
+          return new Response(
+            JSON.stringify({
+              error: 'account_already_exists',
+              message:
+                'An account with this email already exists. Please log in or reset your password.',
+            }),
+            { status: 409 },
+          );
         }
 
-        const upd = await fetch(`${SUPABASE_URL}/auth/v1/admin/users/${existingId}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-            'apikey': SERVICE_ROLE_KEY,
+        const profileCheck = await fetch(
+          `${SUPABASE_URL}/rest/v1/users?select=user_id&email=eq.${encodeURIComponent(email)}&limit=1`,
+          {
+            headers: {
+              'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+              'apikey': SERVICE_ROLE_KEY,
+              'Accept': 'application/json',
+            },
           },
-          body: JSON.stringify({ password, email_confirm: true }),
-        });
-        const updBody = await upd.json().catch(() => null);
-        if (!upd.ok) {
-          return new Response(JSON.stringify({ error: 'Failed to update password for existing auth user.', details: updBody }), { status: upd.status || 500 });
+        );
+        const profileRows = await profileCheck.json().catch(() => null);
+        if (!profileCheck.ok || !Array.isArray(profileRows)) {
+          return new Response(
+            JSON.stringify({
+              error: 'profile_lookup_failed',
+              message: 'Could not verify whether the application profile exists.',
+            }),
+            { status: 500 },
+          );
         }
-        user = updBody || user;
+        if (profileRows.length > 0) {
+          return new Response(
+            JSON.stringify({
+              error: 'account_already_exists',
+              message:
+                'An account with this email already exists. Please log in or reset your password.',
+            }),
+            { status: 409 },
+          );
+        }
+
+        const authUserResponse = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': ANON_KEY,
+          },
+        });
+        const authUser = await authUserResponse.json().catch(() => null);
+        if (!authUserResponse.ok || !authUser?.id) {
+          return new Response(
+            JSON.stringify({
+              error: 'existing_auth_user_unresolved',
+              message: 'Could not verify the existing account. Please log in.',
+            }),
+            { status: 409 },
+          );
+        }
+        user = authUser;
       } else {
         return new Response(JSON.stringify({ error: createBody?.message || createBody }), { status: createResp.status || 400 });
       }
@@ -248,6 +288,7 @@ serve(async (req) => {
     if (!insertAttempt.resp.ok) {
       return new Response(JSON.stringify({
         error: 'Failed saving registration profile',
+        message: insertBody?.message || insertBody?.details || 'The profile could not be saved.',
         details: insertBody,
       }), { status: insertAttempt.resp.status || 400 });
     }

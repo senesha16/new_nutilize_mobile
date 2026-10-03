@@ -11,7 +11,8 @@ class Room {
   final int roomId;
   final String roomNumber;
   final String roomType; // Classroom, Gym, AVR, Lobby, Student Lounge
-  final String? roomTableType; // For classrooms: arm chair, trapezoidal, accounting table
+  final String?
+  roomTableType; // For classrooms: arm chair, trapezoidal, accounting table
   final int? roomCapacity;
   final int? roomChairQuantity;
   final int? roomTableCount;
@@ -65,7 +66,8 @@ class ItemModel {
     return (safeTotal - usage).clamp(0, safeTotal);
   }
 
-  int get availableQuantity => normalizeAvailableQuantity(quantityTotal, quantityInUse);
+  int get availableQuantity =>
+      normalizeAvailableQuantity(quantityTotal, quantityInUse);
 
   ItemModel({
     required this.itemId,
@@ -117,7 +119,13 @@ class ApprovalChain {
 
 bool _isUnitAvailableStatus(String? status) {
   final normalized = (status ?? '').trim().toLowerCase();
-  return normalized == 'available' || normalized == 'free' || normalized == 'ready' || normalized == 'active' || normalized == 'new' || normalized == 'in_stock' || normalized == 'instock';
+  return normalized == 'available' ||
+      normalized == 'free' ||
+      normalized == 'ready' ||
+      normalized == 'active' ||
+      normalized == 'new' ||
+      normalized == 'in_stock' ||
+      normalized == 'instock';
 }
 
 bool _isUnitAvailableForRequest(
@@ -188,7 +196,8 @@ bool _reservationOverlapsWindow({
   required DateTime requestStart,
   required DateTime requestEnd,
 }) {
-  return reservationStart.isBefore(requestEnd) && reservationEnd.isAfter(requestStart);
+  return reservationStart.isBefore(requestEnd) &&
+      reservationEnd.isAfter(requestStart);
 }
 
 // MARK: - ReservationService
@@ -217,7 +226,9 @@ class ReservationService {
     }
 
     if (approvalRows.isEmpty) {
-      return overallStatus.trim().isNotEmpty ? overallStatus : 'Pending Approval';
+      return overallStatus.trim().isNotEmpty
+          ? overallStatus
+          : 'Pending Approval';
     }
 
     var completedCount = 0;
@@ -232,7 +243,8 @@ class ReservationService {
 
       if (normalized.contains('rejected') || normalized.contains('denied')) {
         hasRejected = true;
-      } else if (normalized.contains('cancelled') || normalized.contains('canceled')) {
+      } else if (normalized.contains('cancelled') ||
+          normalized.contains('canceled')) {
         hasCancelled = true;
       } else if (normalized.contains('returned')) {
         hasReturned = true;
@@ -261,7 +273,8 @@ class ReservationService {
 
     final hasCompleted = approvalRows.any((row) {
       final normalized = (row['status'] as String? ?? '').trim().toLowerCase();
-      return normalized.contains('completed') || normalized.contains('complete');
+      return normalized.contains('completed') ||
+          normalized.contains('complete');
     });
     return hasCompleted ? 'Completed' : 'Approved';
   }
@@ -278,7 +291,9 @@ class ReservationService {
     try {
       final response = await _client
           .from('reservations')
-          .select('reservation_id, activity_name, overall_status, Date_of_Activity, Start_of_activity, End_of_activity')
+          .select(
+            'reservation_id, activity_name, overall_status, Date_of_Activity, Start_of_activity, End_of_Activity',
+          )
           .eq('user_id', userId);
       final now = DateTime.now();
       final returnRequired = <String>[];
@@ -288,9 +303,14 @@ class ReservationService {
         final reservationId = reservation['reservation_id'] as int?;
         if (reservationId == null) continue;
 
-        final status = (reservation['overall_status'] as String?) ?? 'Pending Approval';
-        final start = DateTime.tryParse((reservation['Start_of_activity'] ?? '').toString());
-        final end = DateTime.tryParse((reservation['End_of_activity'] ?? '').toString());
+        final status =
+            (reservation['overall_status'] as String?) ?? 'Pending Approval';
+        final start = DateTime.tryParse(
+          (reservation['Start_of_activity'] ?? '').toString(),
+        );
+        final end = DateTime.tryParse(
+          (reservation['End_of_Activity'] ?? '').toString(),
+        );
         if (start == null || end == null) continue;
 
         String? nextStatus;
@@ -300,7 +320,8 @@ class ReservationService {
           nextStatus = 'To Return';
         }
 
-        if (nextStatus != null && status.trim().toLowerCase() != nextStatus.toLowerCase()) {
+        if (nextStatus != null &&
+            status.trim().toLowerCase() != nextStatus.toLowerCase()) {
           returnRequired.add('__update__:$reservationId:$nextStatus');
         }
 
@@ -309,26 +330,28 @@ class ReservationService {
             !now.isBefore(end.add(const Duration(hours: 24)))) {
           final title = (reservation['activity_name'] as String?)?.trim();
           final deadline = _formatDateTime(end.add(const Duration(hours: 24)));
-          returnRequired.add('${title?.isNotEmpty == true ? title : 'Reservation #$reservationId'} (return deadline: $deadline)');
+          returnRequired.add(
+            '${title?.isNotEmpty == true ? title : 'Reservation #$reservationId'} (return deadline: $deadline)',
+          );
         }
       }
 
-        final updates = returnRequired
+      final updates = returnRequired
           .where((entry) => entry.startsWith('__update__:'))
           .map((entry) {
-          final parts = entry.split(':');
-          return _client
-            .from('reservations')
-            .update({'overall_status': parts[2]})
-            .eq('reservation_id', int.parse(parts[1]));
+            final parts = entry.split(':');
+            return _client
+                .from('reservations')
+                .update({'overall_status': parts[2]})
+                .eq('reservation_id', int.parse(parts[1]));
           });
-        await Future.wait(updates);
+      await Future.wait(updates);
 
-        final deadlines = returnRequired
+      final deadlines = returnRequired
           .where((entry) => !entry.startsWith('__update__:'))
           .toList();
-        if (deadlines.isEmpty) return null;
-        return 'Please return the following request(s) before making a new reservation:\n\n${deadlines.join('\n')}';
+      if (deadlines.isEmpty) return null;
+      return 'Please return the following request(s) before making a new reservation:\n\n${deadlines.join('\n')}';
     } catch (e) {
       print('Error enforcing reservation lifecycle: $e');
       return null;
@@ -342,7 +365,9 @@ class ReservationService {
           .select('unit_id, status')
           .eq('item_id', itemId);
 
-      final units = (unitsResp as List?)?.cast<Map<String, dynamic>>() ?? const <Map<String, dynamic>>[];
+      final units =
+          (unitsResp as List?)?.cast<Map<String, dynamic>>() ??
+          const <Map<String, dynamic>>[];
       final totalUnits = units.length;
       final availableUnits = units.where((unit) {
         final unitId = unit['unit_id'] as int?;
@@ -350,11 +375,17 @@ class ReservationService {
         return _isUnitAvailableStatus(unit['status'] as String?);
       }).length;
 
-      final normalizedInUse = normalizeItemUsage(totalUnits, totalUnits - availableUnits);
-      await _client.from('items').update({
-        'quantity_in_use': normalizedInUse,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('item_id', itemId);
+      final normalizedInUse = normalizeItemUsage(
+        totalUnits,
+        totalUnits - availableUnits,
+      );
+      await _client
+          .from('items')
+          .update({
+            'quantity_in_use': normalizedInUse,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('item_id', itemId);
     } catch (_) {
       // Best-effort recalculation; do not fail a reservation flow because of stale counters.
     }
@@ -392,23 +423,18 @@ class ReservationService {
           .eq('maintenance_status', false)
           .eq('availability_status', true);
 
-
-      
       // Normalize for comparison: remove spaces and convert to lowercase
       final normalizedTableType = tableType.replaceAll(' ', '').toLowerCase();
-      
+
       // Filter results by table type (case-insensitive, space-insensitive)
-      final filteredRooms = (response as List)
-          .where((room) {
-            final roomTableType = room['room_table_type'] as String?;
-            final normalizedRoomType = roomTableType?.replaceAll(' ', '').toLowerCase() ?? '';
-            final matches = normalizedRoomType == normalizedTableType;
+      final filteredRooms = (response as List).where((room) {
+        final roomTableType = room['room_table_type'] as String?;
+        final normalizedRoomType =
+            roomTableType?.replaceAll(' ', '').toLowerCase() ?? '';
+        final matches = normalizedRoomType == normalizedTableType;
 
-            return matches;
-          })
-          .toList();
-
-
+        return matches;
+      }).toList();
 
       return filteredRooms
           .map((room) => Room.fromJson(room as Map<String, dynamic>))
@@ -439,15 +465,14 @@ class ReservationService {
       // Only check reservations with blocking statuses: Pending, Approved, Completed
       final response = await _client
           .from('reservations')
-          .select('reservation_id, Date_of_Activity, Start_of_activity, End_of_Activity, overall_status')
+          .select(
+            'reservation_id, Date_of_Activity, Start_of_activity, End_of_Activity, overall_status',
+          )
           .gte('Date_of_Activity', dayStart.toIso8601String())
           .lt('Date_of_Activity', dayEnd.toIso8601String())
           .in_('overall_status', ['Pending Approval', 'Approved', 'Completed']);
 
-
-
       if (response.isEmpty) {
-
         return false;
       }
 
@@ -481,13 +506,11 @@ class ReservationService {
                 .maybeSingle();
 
             if (roomSelection != null && roomSelection['room_id'] == roomId) {
-
               return true;
             }
           }
         }
       }
-
 
       return false;
     } catch (e) {
@@ -507,7 +530,9 @@ class ReservationService {
 
       final response = await _client
           .from('reservations')
-          .select('reservation_id, Date_of_Activity, Start_of_activity, End_of_Activity, overall_status')
+          .select(
+            'reservation_id, Date_of_Activity, Start_of_activity, End_of_Activity, overall_status',
+          )
           .gte('Date_of_Activity', dayStart.toIso8601String())
           .lt('Date_of_Activity', dayEnd.toIso8601String())
           .neq('overall_status', 'Cancelled');
@@ -575,7 +600,8 @@ class ReservationService {
 
       if (reservationItemsResponse == null) return unavailableByItem;
 
-      final reservationItems = (reservationItemsResponse as List).cast<Map<String, dynamic>>();
+      final reservationItems = (reservationItemsResponse as List)
+          .cast<Map<String, dynamic>>();
       if (reservationItems.isEmpty) return unavailableByItem;
 
       final reservationItemsIdToItemId = <int, int>{};
@@ -597,7 +623,8 @@ class ReservationService {
 
       if (reservationDetailsResponse == null) return unavailableByItem;
 
-      final reservationDetails = (reservationDetailsResponse as List).cast<Map<String, dynamic>>();
+      final reservationDetails = (reservationDetailsResponse as List)
+          .cast<Map<String, dynamic>>();
       final reservationIds = <int>[];
       final reservationIdToReservationItemsIds = <int, List<int>>{};
 
@@ -605,7 +632,9 @@ class ReservationService {
         final reservationId = row['reservation_id'] as int?;
         final reservationItemsId = row['reservation_items_id'] as int?;
         if (reservationId == null || reservationItemsId == null) continue;
-        reservationIdToReservationItemsIds.putIfAbsent(reservationId, () => <int>[]).add(reservationItemsId);
+        reservationIdToReservationItemsIds
+            .putIfAbsent(reservationId, () => <int>[])
+            .add(reservationItemsId);
         reservationIds.add(reservationId);
       }
 
@@ -613,18 +642,22 @@ class ReservationService {
 
       final reservationsResponse = await _client
           .from('reservations')
-          .select('reservation_id, overall_status, Date_of_Activity, Start_of_activity, End_of_Activity')
+          .select(
+            'reservation_id, overall_status, Date_of_Activity, Start_of_activity, End_of_Activity',
+          )
           .in_('reservation_id', reservationIds);
 
       if (reservationsResponse == null) return unavailableByItem;
 
-      final reservations = (reservationsResponse as List).cast<Map<String, dynamic>>();
+      final reservations = (reservationsResponse as List)
+          .cast<Map<String, dynamic>>();
       final approvalStatusesByReservation = <int, List<String>>{};
       final approvalResponse = await _client
           .from('reservation_approvals')
           .select('reservation_id, status')
           .in_('reservation_id', reservationIds);
-      for (final rawApproval in (approvalResponse as List).cast<Map<String, dynamic>>()) {
+      for (final rawApproval
+          in (approvalResponse as List).cast<Map<String, dynamic>>()) {
         final reservationId = rawApproval['reservation_id'] as int?;
         if (reservationId == null) continue;
         approvalStatusesByReservation
@@ -636,10 +669,13 @@ class ReservationService {
       for (final row in reservations) {
         final reservationId = row['reservation_id'] as int?;
         final status = row['overall_status'] as String?;
-        if (reservationId == null || !_isBlockingReservationStatus(status)) continue;
-        final approvalStatuses = approvalStatusesByReservation[reservationId] ?? const <String>[];
+        if (reservationId == null || !_isBlockingReservationStatus(status))
+          continue;
+        final approvalStatuses =
+            approvalStatusesByReservation[reservationId] ?? const <String>[];
         if (approvalStatuses.any(
-          (approvalStatus) => approvalStatus.contains('cancelled') ||
+          (approvalStatus) =>
+              approvalStatus.contains('cancelled') ||
               approvalStatus.contains('canceled') ||
               approvalStatus.contains('rejected') ||
               approvalStatus.contains('denied') ||
@@ -667,7 +703,9 @@ class ReservationService {
           continue;
         }
 
-        for (final reservationItemsId in reservationIdToReservationItemsIds[reservationId] ?? const <int>[]) {
+        for (final reservationItemsId
+            in reservationIdToReservationItemsIds[reservationId] ??
+                const <int>[]) {
           activeReservationItemIds.add(reservationItemsId);
         }
       }
@@ -681,7 +719,8 @@ class ReservationService {
 
       if (reservationUnitsResponse == null) return unavailableByItem;
 
-      for (final row in (reservationUnitsResponse as List).cast<Map<String, dynamic>>()) {
+      for (final row
+          in (reservationUnitsResponse as List).cast<Map<String, dynamic>>()) {
         final reservationItemsId = row['reservation_items_id'] as int?;
         final unitId = row['unit_id'] as int?;
         final itemId = reservationItemsIdToItemId[reservationItemsId];
@@ -733,13 +772,18 @@ class ReservationService {
       return itemsList.map((item) {
         final id = item['item_id'] as int;
         final itemUnits = unitsByItem[id] ?? const <Map<String, dynamic>>[];
-        final total = itemUnits.isNotEmpty ? itemUnits.length : (item['quantity_total'] as int? ?? 0);
+        final total = itemUnits.isNotEmpty
+            ? itemUnits.length
+            : (item['quantity_total'] as int? ?? 0);
         final unavailableUnitIds = unavailableByItem[id] ?? const <int>{};
         final available = itemUnits.where((u) {
           return _isUnitAvailableForRequest(u, unavailableUnitIds);
         }).length;
         final clampedAvailable = available.clamp(0, total);
-        final inUse = ItemModel.normalizeItemUsage(total, total - clampedAvailable);
+        final inUse = ItemModel.normalizeItemUsage(
+          total,
+          total - clampedAvailable,
+        );
 
         return ItemModel(
           itemId: id,
@@ -794,14 +838,21 @@ class ReservationService {
         );
       }).length;
       final clampedAvailable = available.clamp(0, total);
-      final inUse = ItemModel.normalizeItemUsage(total, total - clampedAvailable);
+      final inUse = ItemModel.normalizeItemUsage(
+        total,
+        total - clampedAvailable,
+      );
 
       // Debug: if availability is unexpectedly zero, print unit details to help diagnose
       if (available == 0) {
         try {
-          print('Debug getItemDetails - item_id=$itemId total=$total available=$available units=');
+          print(
+            'Debug getItemDetails - item_id=$itemId total=$total available=$available units=',
+          );
           for (final u in units) {
-            print('  unit: unit_id=${u['unit_id']}, unit_code=${u['unit_code'] ?? 'N/A'}, status=${u['status'] ?? 'N/A'}');
+            print(
+              '  unit: unit_id=${u['unit_id']}, unit_code=${u['unit_code'] ?? 'N/A'}, status=${u['status'] ?? 'N/A'}',
+            );
           }
         } catch (_) {}
       }
@@ -844,12 +895,15 @@ class ReservationService {
         requestEnd: requestEnd,
       );
 
-      return units.where((unit) {
-        return _isUnitAvailableForRequest(
-          unit,
-          unavailableUnitIds[itemId] ?? const <int>{},
-        );
-      }).take(quantity).toList();
+      return units
+          .where((unit) {
+            return _isUnitAvailableForRequest(
+              unit,
+              unavailableUnitIds[itemId] ?? const <int>{},
+            );
+          })
+          .take(quantity)
+          .toList();
     } catch (e) {
       print('Error fetching available item units: $e');
       return [];
@@ -870,7 +924,9 @@ class ReservationService {
       requestEnd: requestEnd,
     );
     if (availableUnits.length < quantity) {
-      throw Exception('Not enough available units for item $itemId: requested $quantity, available ${availableUnits.length}');
+      throw Exception(
+        'Not enough available units for item $itemId: requested $quantity, available ${availableUnits.length}',
+      );
     }
 
     final now = DateTime.now().toIso8601String();
@@ -887,9 +943,14 @@ class ReservationService {
       };
 
       try {
-        final insertResponse = await _client.from('reservation_item_units').insert(reservationLinkPayload).select();
+        final insertResponse = await _client
+            .from('reservation_item_units')
+            .insert(reservationLinkPayload)
+            .select();
         if (insertResponse == null || (insertResponse as List).isEmpty) {
-          throw Exception('Failed to link unit $unitId to reservation item $reservationItemsId');
+          throw Exception(
+            'Failed to link unit $unitId to reservation item $reservationItemsId',
+          );
         }
       } catch (e) {
         print('Primary reservation_item_units insert failed: $e');
@@ -898,18 +959,27 @@ class ReservationService {
           rethrow;
         }
 
-        final serviceClient = SupabaseClient(_client.supabaseUrl, serviceRoleKey);
-        final insertResponse = await serviceClient.from('reservation_item_units').insert(reservationLinkPayload).select();
+        final serviceClient = SupabaseClient(
+          _client.supabaseUrl,
+          serviceRoleKey,
+        );
+        final insertResponse = await serviceClient
+            .from('reservation_item_units')
+            .insert(reservationLinkPayload)
+            .select();
         if (insertResponse == null || (insertResponse as List).isEmpty) {
-          throw Exception('Failed to link unit $unitId to reservation item $reservationItemsId');
+          throw Exception(
+            'Failed to link unit $unitId to reservation item $reservationItemsId',
+          );
         }
       }
 
       try {
-        final updateResponse = await _client.from('item_units').update({
-          'status': 'in_use',
-          'updated_at': now,
-        }).eq('unit_id', unitId).select();
+        final updateResponse = await _client
+            .from('item_units')
+            .update({'status': 'in_use', 'updated_at': now})
+            .eq('unit_id', unitId)
+            .select();
 
         if (updateResponse == null || (updateResponse as List).isEmpty) {
           throw Exception('Failed to reserve item unit $unitId');
@@ -921,11 +991,15 @@ class ReservationService {
           rethrow;
         }
 
-        final serviceClient = SupabaseClient(_client.supabaseUrl, serviceRoleKey);
-        final updateResponse = await serviceClient.from('item_units').update({
-          'status': 'in_use',
-          'updated_at': now,
-        }).eq('unit_id', unitId).select();
+        final serviceClient = SupabaseClient(
+          _client.supabaseUrl,
+          serviceRoleKey,
+        );
+        final updateResponse = await serviceClient
+            .from('item_units')
+            .update({'status': 'in_use', 'updated_at': now})
+            .eq('unit_id', unitId)
+            .select();
 
         if (updateResponse == null || (updateResponse as List).isEmpty) {
           throw Exception('Failed to reserve item unit $unitId');
@@ -946,7 +1020,9 @@ class ReservationService {
       }
       final reservationsResponse = await _client
           .from('reservations')
-          .select('reservation_id, activity_name, overall_status, created_at, updated_at, Date_of_Activity, Start_of_activity, End_of_Activity')
+          .select(
+            'reservation_id, activity_name, overall_status, created_at, updated_at, Date_of_Activity, Start_of_activity, End_of_Activity',
+          )
           .eq('user_id', userId)
           .order('Date_of_Activity', ascending: false);
 
@@ -963,9 +1039,11 @@ class ReservationService {
       final approvalsResponse = reservationIds.isEmpty
           ? const <Map<String, dynamic>>[]
           : await _client
-              .from('reservation_approvals')
-              .select('reservation_id, office_id, status, approved_at, created_at, updated_at, rejection_reason')
-              .in_('reservation_id', reservationIds);
+                .from('reservation_approvals')
+                .select(
+                  'reservation_id, office_id, status, approved_at, created_at, updated_at, rejection_reason',
+                )
+                .in_('reservation_id', reservationIds);
 
       final approvalRowsByReservation = <int, List<Map<String, dynamic>>>{};
       if (approvalsResponse != null) {
@@ -974,9 +1052,9 @@ class ReservationService {
           if (reservationId == null) {
             continue;
           }
-          approvalRowsByReservation.putIfAbsent(reservationId, () => []).add(
-            Map<String, dynamic>.from(approval as Map<String, dynamic>),
-          );
+          approvalRowsByReservation
+              .putIfAbsent(reservationId, () => [])
+              .add(Map<String, dynamic>.from(approval as Map<String, dynamic>));
         }
       }
 
@@ -986,31 +1064,43 @@ class ReservationService {
           final date = DateTime.parse(res['Date_of_Activity'] as String);
           final startTime = DateTime.parse(res['Start_of_activity'] as String);
           final endTime = DateTime.parse(res['End_of_Activity'] as String);
-          final reservationTime = '${_formatDateTime(startTime)} - ${_formatDateTime(endTime)}';
+          final reservationTime =
+              '${_formatDateTime(startTime)} - ${_formatDateTime(endTime)}';
           final effectiveStatus = resolveApprovalStatusFromRows(
-            overallStatus: (res['overall_status'] as String?) ?? 'Pending Approval',
+            overallStatus:
+                (res['overall_status'] as String?) ?? 'Pending Approval',
             approvalRows: approvalRowsByReservation[reservationId] ?? const [],
           );
-          final rejectedApproval = (approvalRowsByReservation[reservationId] ?? const <Map<String, dynamic>>[])
-              .where((approval) {
-                final status = (approval['status'] as String? ?? '').trim().toLowerCase();
-                return status == 'rejected' || status == 'denied';
-              })
-              .toList()
-            ..sort((a, b) {
-              final aCreated = DateTime.tryParse(a['created_at']?.toString() ?? '');
-              final bCreated = DateTime.tryParse(b['created_at']?.toString() ?? '');
-              if (aCreated == null && bCreated == null) return 0;
-              if (aCreated == null) return 1;
-              if (bCreated == null) return -1;
-              return aCreated.compareTo(bCreated);
-            });
+          final rejectedApproval =
+              (approvalRowsByReservation[reservationId] ??
+                      const <Map<String, dynamic>>[])
+                  .where((approval) {
+                    final status = (approval['status'] as String? ?? '')
+                        .trim()
+                        .toLowerCase();
+                    return status == 'rejected' || status == 'denied';
+                  })
+                  .toList()
+                ..sort((a, b) {
+                  final aCreated = DateTime.tryParse(
+                    a['created_at']?.toString() ?? '',
+                  );
+                  final bCreated = DateTime.tryParse(
+                    b['created_at']?.toString() ?? '',
+                  );
+                  if (aCreated == null && bCreated == null) return 0;
+                  if (aCreated == null) return 1;
+                  if (bCreated == null) return -1;
+                  return aCreated.compareTo(bCreated);
+                });
           final rejectionReason = rejectedApproval.isEmpty
               ? null
               : rejectedApproval.first['rejection_reason']?.toString().trim();
           final rejectingOffice = rejectedApproval.isEmpty
               ? null
-              : await _getOfficeNameById(rejectedApproval.first['office_id'] as int?);
+              : await _getOfficeNameById(
+                  rejectedApproval.first['office_id'] as int?,
+                );
           final databaseTimestamps = <DateTime>[];
           for (final rawTimestamp in [
             res['updated_at'],
@@ -1068,28 +1158,34 @@ class ReservationService {
           final detailCheck = results[3] as Map<String, dynamic>?;
 
           var reservationType = 'Venue Reservation';
-          if (detailCheck != null && detailCheck['reservation_items_id'] != null) {
+          if (detailCheck != null &&
+              detailCheck['reservation_items_id'] != null) {
             reservationType = 'Item Reservation';
           }
 
           return ReservationRecord(
             id: reservationId.toString(),
             userId: userId,
-            reservationTitle: res['activity_name'] as String? ?? 'Reservation Request',
+            reservationTitle:
+                res['activity_name'] as String? ?? 'Reservation Request',
             roomName: roomName,
             reservationType: reservationType,
             reservationStatus: effectiveStatus,
             date: date,
             reservationTime: reservationTime,
             lastUpdatedAt: databaseTimestamps.isEmpty
-              ? null
-              : databaseTimestamps.last,
+                ? null
+                : databaseTimestamps.last,
             timeline: timeline,
             reservedItems: reservedItems,
-            rejectionReason: effectiveStatus == 'Rejected' && rejectionReason?.isNotEmpty == true
+            rejectionReason:
+                effectiveStatus == 'Rejected' &&
+                    rejectionReason?.isNotEmpty == true
                 ? rejectionReason
                 : null,
-            rejectedBy: effectiveStatus == 'Rejected' && rejectingOffice?.isNotEmpty == true
+            rejectedBy:
+                effectiveStatus == 'Rejected' &&
+                    rejectingOffice?.isNotEmpty == true
                 ? rejectingOffice
                 : null,
           );
@@ -1176,26 +1272,28 @@ class ReservationService {
           .select('reservation_items_id')
           .eq('reservation_id', reservationId);
       if (details == null) return names;
-      final itemNames = await Future.wait((details as List).map((det) async {
-        final reservationItemsId = det['reservation_items_id'] as int?;
-        if (reservationItemsId == null) return null;
+      final itemNames = await Future.wait(
+        (details as List).map((det) async {
+          final reservationItemsId = det['reservation_items_id'] as int?;
+          if (reservationItemsId == null) return null;
 
-        final itemLink = await _client
-            .from('reservation_items')
-            .select('item_id')
-            .eq('reservation_items_id', reservationItemsId)
-            .maybeSingle();
-        final itemId = itemLink?['item_id'] as int?;
-        if (itemId == null) return null;
+          final itemLink = await _client
+              .from('reservation_items')
+              .select('item_id')
+              .eq('reservation_items_id', reservationItemsId)
+              .maybeSingle();
+          final itemId = itemLink?['item_id'] as int?;
+          if (itemId == null) return null;
 
-        final itemRow = await _client
-            .from('items')
-            .select('item_name')
-            .eq('item_id', itemId)
-            .maybeSingle();
-        final itemName = itemRow?['item_name'] as String?;
-        return itemName != null && itemName.isNotEmpty ? itemName : null;
-      }));
+          final itemRow = await _client
+              .from('items')
+              .select('item_name')
+              .eq('item_id', itemId)
+              .maybeSingle();
+          final itemName = itemRow?['item_name'] as String?;
+          return itemName != null && itemName.isNotEmpty ? itemName : null;
+        }),
+      );
       names.addAll(itemNames.whereType<String>());
     } catch (e) {
       print('Error fetching reservation item names: $e');
@@ -1204,7 +1302,9 @@ class ReservationService {
   }
 
   String _formatDateTime(DateTime dateTime) {
-    final hour = dateTime.hour == 0 ? 12 : (dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour);
+    final hour = dateTime.hour == 0
+        ? 12
+        : (dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour);
     final minute = dateTime.minute.toString().padLeft(2, '0');
     final period = dateTime.hour >= 12 ? 'PM' : 'AM';
     return '$hour:$minute $period';
@@ -1235,7 +1335,9 @@ class ReservationService {
         if (item != null && item.ownerId != null) {
           final owner = await getItemOwner(item.ownerId!);
           if (owner != null) {
-            final affiliation = (owner['department_affiliation'] as String?)?.trim().toUpperCase();
+            final affiliation = (owner['department_affiliation'] as String?)
+                ?.trim()
+                .toUpperCase();
             final ownerName = owner['owner_name'] as String?;
             if (affiliation != 'PFO' && ownerName != null) {
               itemOwners.add(ownerName);
@@ -1250,7 +1352,9 @@ class ReservationService {
   }
 
   String _formatTimestamp(DateTime date) {
-    final hour = date.hour == 0 ? 12 : (date.hour > 12 ? date.hour - 12 : date.hour);
+    final hour = date.hour == 0
+        ? 12
+        : (date.hour > 12 ? date.hour - 12 : date.hour);
     final minute = date.minute.toString().padLeft(2, '0');
     final period = date.hour >= 12 ? 'PM' : 'AM';
     return '${date.month}/${date.day}/${date.year} $hour:$minute $period';
@@ -1266,90 +1370,90 @@ class ReservationService {
     int? itemOwnerOfficeId,
     int? generalEducationOfficeId,
   }) {
-    return approvals
-        .asMap()
-        .entries
-        .map((entry) {
-          final approval = Map<String, dynamic>.from(entry.value);
-          final officeId = approval['office_id'] as int?;
-          final officeName = (approval['office_name'] as String?)?.toLowerCase() ?? '';
+    return approvals.asMap().entries.map((entry) {
+      final approval = Map<String, dynamic>.from(entry.value);
+      final officeId = approval['office_id'] as int?;
+      final officeName =
+          (approval['office_name'] as String?)?.toLowerCase() ?? '';
 
-          try {
-            final createdRaw = approval['created_at'] as String?;
-            if (createdRaw != null && createdRaw.isNotEmpty) {
-              final createdAt = DateTime.parse(createdRaw).toUtc();
-              approval['__created_at_ts'] = createdAt.millisecondsSinceEpoch;
-            } else {
-              approval['__created_at_ts'] = null;
-            }
-          } catch (_) {
-            approval['__created_at_ts'] = null;
-          }
-
-          int rank;
-          if (generalEducationOfficeId != null && officeId == generalEducationOfficeId) {
-            rank = -2;
-          } else if (officeName.contains('general education')) {
-            rank = -2;
-          } else if (itemOwnerOfficeId != null && officeId == itemOwnerOfficeId) {
-            rank = 0;
-          } else if (officeName.contains('item owner')) {
-            rank = 0;
-          } else if (officeName.isNotEmpty &&
-              !officeName.contains('program chair') &&
-              !officeName.contains('sdao') &&
-              !officeName.contains('do') &&
-              !officeName.contains('security') &&
-              !officeName.contains('physical facilities') &&
-              !officeName.contains('general education')) {
-            rank = 0;
-          } else if (officeName.contains('program chair')) {
-            rank = 1;
-          } else if (officeName.contains('sdao')) {
-            rank = 2;
-          } else if (officeName.contains('do')) {
-            rank = 3;
-          } else if (officeName.contains('security')) {
-            rank = 4;
-          } else if (officeName.contains('physical facilities')) {
-            rank = 5;
-          } else {
-            rank = 999;
-          }
-
-          approval['__timeline_rank'] = rank;
-          approval['__original_index'] = entry.key;
-          return approval;
-        })
-        .toList()
-      ..sort((a, b) {
-        final rankA = a['__timeline_rank'] as int;
-        final rankB = b['__timeline_rank'] as int;
-        if (rankA != rankB) {
-          return rankA.compareTo(rankB);
+      try {
+        final createdRaw = approval['created_at'] as String?;
+        if (createdRaw != null && createdRaw.isNotEmpty) {
+          final createdAt = DateTime.parse(createdRaw).toUtc();
+          approval['__created_at_ts'] = createdAt.millisecondsSinceEpoch;
+        } else {
+          approval['__created_at_ts'] = null;
         }
+      } catch (_) {
+        approval['__created_at_ts'] = null;
+      }
 
-        final aTs = a['__created_at_ts'] as int?;
-        final bTs = b['__created_at_ts'] as int?;
-        if (aTs != null && bTs != null) {
-          final cmp = aTs.compareTo(bTs);
-          if (cmp != 0) return cmp;
-        } else if (aTs != null) {
-          return -1;
-        } else if (bTs != null) {
-          return 1;
-        }
+      int rank;
+      if (generalEducationOfficeId != null &&
+          officeId == generalEducationOfficeId) {
+        rank = -2;
+      } else if (officeName.contains('general education')) {
+        rank = -2;
+      } else if (itemOwnerOfficeId != null && officeId == itemOwnerOfficeId) {
+        rank = 0;
+      } else if (officeName.contains('item owner')) {
+        rank = 0;
+      } else if (officeName.isNotEmpty &&
+          !officeName.contains('program chair') &&
+          !officeName.contains('sdao') &&
+          !officeName.contains('do') &&
+          !officeName.contains('security') &&
+          !officeName.contains('physical facilities') &&
+          !officeName.contains('general education')) {
+        rank = 0;
+      } else if (officeName.contains('program chair')) {
+        rank = 1;
+      } else if (officeName.contains('sdao')) {
+        rank = 2;
+      } else if (officeName.contains('do')) {
+        rank = 3;
+      } else if (officeName.contains('security')) {
+        rank = 4;
+      } else if (officeName.contains('physical facilities')) {
+        rank = 5;
+      } else {
+        rank = 999;
+      }
 
-        final indexA = a['__original_index'] as int;
-        final indexB = b['__original_index'] as int;
-        return indexA.compareTo(indexB);
-      });
+      approval['__timeline_rank'] = rank;
+      approval['__original_index'] = entry.key;
+      return approval;
+    }).toList()..sort((a, b) {
+      final rankA = a['__timeline_rank'] as int;
+      final rankB = b['__timeline_rank'] as int;
+      if (rankA != rankB) {
+        return rankA.compareTo(rankB);
+      }
+
+      final aTs = a['__created_at_ts'] as int?;
+      final bTs = b['__created_at_ts'] as int?;
+      if (aTs != null && bTs != null) {
+        final cmp = aTs.compareTo(bTs);
+        if (cmp != 0) return cmp;
+      } else if (aTs != null) {
+        return -1;
+      } else if (bTs != null) {
+        return 1;
+      }
+
+      final indexA = a['__original_index'] as int;
+      final indexB = b['__original_index'] as int;
+      return indexA.compareTo(indexB);
+    });
   }
 
   // MARK: - Approval Workflow
 
   static String normalizeRoomType(String? roomType) {
-    return (roomType ?? '').trim().replaceAll(RegExp(r'\s+'), ' ').toLowerCase();
+    return (roomType ?? '')
+        .trim()
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .toLowerCase();
   }
 
   static bool isGymRoomType(String? roomType) {
@@ -1373,10 +1477,13 @@ class ReservationService {
           if (item != null && item.ownerId != null) {
             final owner = await getItemOwner(item.ownerId!);
             if (owner != null) {
-              final affiliation =
-                  (owner['department_affiliation'] as String?)?.trim().toUpperCase();
+              final affiliation = (owner['department_affiliation'] as String?)
+                  ?.trim()
+                  .toUpperCase();
               final ownerName = owner['owner_name'] as String?;
-              if (ownerName != null && affiliation != 'PFO' && affiliation != 'PHYSICAL FACILITIES') {
+              if (ownerName != null &&
+                  affiliation != 'PFO' &&
+                  affiliation != 'PHYSICAL FACILITIES') {
                 if (!itemOwners.contains(ownerName)) {
                   itemOwners.add(ownerName);
                 }
@@ -1531,15 +1638,26 @@ class ReservationService {
     try {
       // Prefer the active Supabase authenticated session values where possible.
       final session = _client.auth.currentSession;
-      final authEmail = session?.user.email?.trim() ??
+      final authEmail =
+          session?.user.email?.trim() ??
           AuthService.currentUser?['email']?.toString().trim();
 
       final userId = AuthService.currentUser?['user_id'] as int?;
-      final authUserId = session?.user.id?.trim() ??
+      final authUserId =
+          session?.user.id?.trim() ??
           AuthService.currentUser?['auth_user_id']?.toString().trim();
-      final hasImageUrlColumn = await _tableHasColumn('reservation_issues', 'image_url');
-      final hasAuthUserIdColumn = await _tableHasColumn('reservation_issues', 'auth_user_id');
-      final hasReportedByColumn = await _tableHasColumn('reservation_issues', 'reported_by');
+      final hasImageUrlColumn = await _tableHasColumn(
+        'reservation_issues',
+        'image_url',
+      );
+      final hasAuthUserIdColumn = await _tableHasColumn(
+        'reservation_issues',
+        'auth_user_id',
+      );
+      final hasReportedByColumn = await _tableHasColumn(
+        'reservation_issues',
+        'reported_by',
+      );
 
       payload = <String, dynamic>{
         'reservation_id': reservationId,
@@ -1565,32 +1683,45 @@ class ReservationService {
         payload['image_name'] = imageName;
       }
 
-      if (imageBase64 != null && imageBase64.isNotEmpty && imageName != null && imageName.isNotEmpty) {
+      if (imageBase64 != null &&
+          imageBase64.isNotEmpty &&
+          imageName != null &&
+          imageName.isNotEmpty) {
         final filePath = _buildReportFilePath(reservationId, imageName);
         imageUrl = await _uploadReportImageFromBase64(imageBase64, filePath);
         if (imageUrl != null && hasImageUrlColumn) {
           payload['image_url'] = imageUrl;
         } else {
-          payload['description'] = '$description\n\n(Image upload failed or image_url unsupported. Image was not attached to this report.)';
+          payload['description'] =
+              '$description\n\n(Image upload failed or image_url unsupported. Image was not attached to this report.)';
         }
       }
 
       if (reportedItems != null && reportedItems.isNotEmpty) {
         // Only include the reported_items column if it exists in the DB schema.
         try {
-          final hasColumn = await _tableHasColumn('reservation_issues', 'reported_items');
+          final hasColumn = await _tableHasColumn(
+            'reservation_issues',
+            'reported_items',
+          );
           if (hasColumn) {
             payload['reported_items'] = reportedItems;
           } else {
             // Fallback: append a short list of reported items to the description
-            payload['description'] = '$description\n\nReported items: ${reportedItems.join(', ')}';
+            payload['description'] =
+                '$description\n\nReported items: ${reportedItems.join(', ')}';
           }
         } catch (_) {
-          payload['description'] = '$description\n\nReported items: ${reportedItems.join(', ')}';
+          payload['description'] =
+              '$description\n\nReported items: ${reportedItems.join(', ')}';
         }
       }
 
-      final response = await _client.from('reservation_issues').insert(payload).select().maybeSingle();
+      final response = await _client
+          .from('reservation_issues')
+          .insert(payload)
+          .select()
+          .maybeSingle();
       return response != null;
     } catch (e) {
       print('Error submitting issue report: $e');
@@ -1601,7 +1732,9 @@ class ReservationService {
     }
   }
 
-  Future<bool> _submitIssueReportWithServiceRole(Map<String, dynamic> payload) async {
+  Future<bool> _submitIssueReportWithServiceRole(
+    Map<String, dynamic> payload,
+  ) async {
     final serviceRoleKey = SupabaseService.serviceRoleKey;
     if (serviceRoleKey.isEmpty) {
       print('Service role key not available for report insert fallback');
@@ -1609,8 +1742,15 @@ class ReservationService {
     }
 
     try {
-      final serviceClient = SupabaseClient(SupabaseService.supabaseUrl, serviceRoleKey);
-      final response = await serviceClient.from('reservation_issues').insert(payload).select().maybeSingle();
+      final serviceClient = SupabaseClient(
+        SupabaseService.supabaseUrl,
+        serviceRoleKey,
+      );
+      final response = await serviceClient
+          .from('reservation_issues')
+          .insert(payload)
+          .select()
+          .maybeSingle();
       return response != null;
     } catch (e) {
       print('Service-role report insert failed: $e');
@@ -1618,7 +1758,10 @@ class ReservationService {
     }
   }
 
-  Future<String?> _uploadReportImageFromBase64(String imageBase64, String filePath) async {
+  Future<String?> _uploadReportImageFromBase64(
+    String imageBase64,
+    String filePath,
+  ) async {
     try {
       final imageBytes = base64Decode(imageBase64);
       final tempDir = Directory.systemTemp;
@@ -1627,7 +1770,9 @@ class ReservationService {
       await uploadTempFile.writeAsBytes(imageBytes, flush: true);
 
       try {
-        await _client.storage.from('reports').upload(
+        await _client.storage
+            .from('reports')
+            .upload(
               filePath,
               uploadTempFile,
               fileOptions: const FileOptions(
@@ -1639,8 +1784,13 @@ class ReservationService {
         final serviceRoleKey = SupabaseService.serviceRoleKey;
         if (serviceRoleKey.isNotEmpty) {
           try {
-            final storageClient = SupabaseClient(SupabaseService.supabaseUrl, serviceRoleKey);
-            await storageClient.storage.from('reports').upload(
+            final storageClient = SupabaseClient(
+              SupabaseService.supabaseUrl,
+              serviceRoleKey,
+            );
+            await storageClient.storage
+                .from('reports')
+                .upload(
                   filePath,
                   uploadTempFile,
                   fileOptions: const FileOptions(
@@ -1665,7 +1815,10 @@ class ReservationService {
     }
   }
 
-  String? _getPublicUrlFromStorageClient(SupabaseClient client, String filePath) {
+  String? _getPublicUrlFromStorageClient(
+    SupabaseClient client,
+    String filePath,
+  ) {
     final urlResponse = client.storage.from('reports').getPublicUrl(filePath);
     if (urlResponse is String) {
       return urlResponse;
@@ -1678,7 +1831,10 @@ class ReservationService {
   }
 
   String _buildReportFilePath(int reservationId, String imageName) {
-    final sanitizedName = imageName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9_.-]'), '_');
+    final sanitizedName = imageName.toLowerCase().replaceAll(
+      RegExp(r'[^a-z0-9_.-]'),
+      '_',
+    );
     final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
     return 'reports/$reservationId/${timestamp}_$sanitizedName';
   }
@@ -1713,11 +1869,7 @@ class ReservationService {
   /// Check whether a table has a specific column by querying the table directly.
   Future<bool> _tableHasColumn(String tableName, String columnName) async {
     try {
-      await _client
-          .from(tableName)
-          .select(columnName)
-          .limit(1)
-          .maybeSingle();
+      await _client.from(tableName).select(columnName).limit(1).maybeSingle();
       return true;
     } catch (_) {
       return false;
@@ -1725,7 +1877,9 @@ class ReservationService {
   }
 
   Future<List<ReservationTimelineEntry>> _buildApprovalTimeline(
-      int reservationId, DateTime date) async {
+    int reservationId,
+    DateTime date,
+  ) async {
     try {
       // Use canonical chain to force UI order, but read DB rows for status/timestamps.
       final prerequisites = await Future.wait([
@@ -1743,10 +1897,11 @@ class ReservationService {
           itemIds: itemIds.isEmpty ? null : itemIds,
         ),
         _client
-            .from('reservation_approvals')
-            .select('office_id, status, created_at, updated_at')
-            .eq('reservation_id', reservationId)
-          .order('created_at', ascending: true) as Future<dynamic>,
+                .from('reservation_approvals')
+                .select('office_id, status, created_at, updated_at')
+                .eq('reservation_id', reservationId)
+                .order('created_at', ascending: true)
+            as Future<dynamic>,
       ]);
       final approvalChain = timelineData[0] as ApprovalChain;
       final approvalsResponse = timelineData[1];
@@ -1757,7 +1912,9 @@ class ReservationService {
           (approvalsResponse as List).map((a) async {
             final row = Map<String, dynamic>.from(a as Map<String, dynamic>);
             final officeId = row['office_id'] as int?;
-            final office = officeId == null ? null : await _getOfficeById(officeId);
+            final office = officeId == null
+                ? null
+                : await _getOfficeById(officeId);
             row['office_name'] = office?['department_name'] as String?;
             return row;
           }),
@@ -1767,19 +1924,27 @@ class ReservationService {
 
       // Debug: print canonical approval chain and raw approval rows
       try {
-        print('DEBUG: reservation $reservationId approvalChain offices: ${jsonEncode(approvalChain.offices)}');
-        print('DEBUG: reservation $reservationId approvalChain officeIds: ${jsonEncode(approvalChain.officeIds)}');
-        print('DEBUG: reservation $reservationId rawApprovals: ${jsonEncode(rawApprovals.map((r) => {'office_id': r['office_id'], 'status': r['status'], 'created_at': r['created_at'], 'updated_at': r['updated_at']}).toList())}');
+        print(
+          'DEBUG: reservation $reservationId approvalChain offices: ${jsonEncode(approvalChain.offices)}',
+        );
+        print(
+          'DEBUG: reservation $reservationId approvalChain officeIds: ${jsonEncode(approvalChain.officeIds)}',
+        );
+        print(
+          'DEBUG: reservation $reservationId rawApprovals: ${jsonEncode(rawApprovals.map((r) => {'office_id': r['office_id'], 'status': r['status'], 'created_at': r['created_at'], 'updated_at': r['updated_at']}).toList())}',
+        );
       } catch (_) {}
 
       final entries = <ReservationTimelineEntry>[];
-      entries.add(ReservationTimelineEntry(
-        title: 'Request Submitted',
-        status: 'Completed',
-        date: date,
-        timestamp: _formatTimestamp(date),
-        description: 'Your reservation request was submitted successfully.',
-      ));
+      entries.add(
+        ReservationTimelineEntry(
+          title: 'Request Submitted',
+          status: 'Completed',
+          date: date,
+          timestamp: _formatTimestamp(date),
+          description: 'Your reservation request was submitted successfully.',
+        ),
+      );
 
       final used = List<bool>.filled(rawApprovals.length, false);
       final itemOwnerOfficeId = await _getOfficeIdByName('Item Owner');
@@ -1794,7 +1959,9 @@ class ReservationService {
         for (var j = 0; j < rawApprovals.length; j++) {
           if (used[j]) continue;
           final rowOfficeId = rawApprovals[j]['office_id'] as int?;
-          if (rowOfficeId != null && expectedOfficeId != null && rowOfficeId == expectedOfficeId) {
+          if (rowOfficeId != null &&
+              expectedOfficeId != null &&
+              rowOfficeId == expectedOfficeId) {
             matchIndex = j;
             break;
           }
@@ -1802,13 +1969,18 @@ class ReservationService {
 
         // Fallback: match by office name (normalized contains) when ID matching failed
         if (matchIndex == -1) {
-          final expectedNorm = displayName.toLowerCase().replaceAll(RegExp(r"\s+"), '');
+          final expectedNorm = displayName.toLowerCase().replaceAll(
+            RegExp(r"\s+"),
+            '',
+          );
           for (var j = 0; j < rawApprovals.length; j++) {
             if (used[j]) continue;
-            final rowName = (rawApprovals[j]['office_name'] as String?)?.toLowerCase();
+            final rowName = (rawApprovals[j]['office_name'] as String?)
+                ?.toLowerCase();
             if (rowName == null) continue;
             final rowNorm = rowName.replaceAll(RegExp(r"\s+"), '');
-            if (rowNorm.contains(expectedNorm) || expectedNorm.contains(rowNorm)) {
+            if (rowNorm.contains(expectedNorm) ||
+                expectedNorm.contains(rowNorm)) {
               matchIndex = j;
               break;
             }
@@ -1840,8 +2012,11 @@ class ReservationService {
         // prefer an approved/completed/accepted row
         for (var k = 0; k < remainingRowIndexes.length; k++) {
           final ri = remainingRowIndexes[k];
-          final rs = (rawApprovals[ri]['status'] as String?)?.toLowerCase() ?? '';
-          if (rs.contains('approved') || rs.contains('completed') || rs.contains('accepted')) {
+          final rs =
+              (rawApprovals[ri]['status'] as String?)?.toLowerCase() ?? '';
+          if (rs.contains('approved') ||
+              rs.contains('completed') ||
+              rs.contains('accepted')) {
             pick = ri;
             remainingRowIndexes.removeAt(k);
             break;
@@ -1857,7 +2032,9 @@ class ReservationService {
             final created = rawApprovals[ri]['created_at'] as String?;
             int ts;
             try {
-              ts = DateTime.parse(created ?? DateTime.now().toIso8601String()).millisecondsSinceEpoch;
+              ts = DateTime.parse(
+                created ?? DateTime.now().toIso8601String(),
+              ).millisecondsSinceEpoch;
             } catch (_) {
               ts = DateTime.now().millisecondsSinceEpoch;
             }
@@ -1876,7 +2053,9 @@ class ReservationService {
           used[pick] = true;
           slot['matchIndex'] = pick;
           try {
-            print('DEBUG: reservation $reservationId second-pass assigned row $pick to slot ${slot['index']} (${slot['displayName']})');
+            print(
+              'DEBUG: reservation $reservationId second-pass assigned row $pick to slot ${slot['index']} (${slot['displayName']})',
+            );
           } catch (_) {}
         }
       }
@@ -1892,7 +2071,8 @@ class ReservationService {
 
         if (matchIndex != -1) {
           final row = rawApprovals[matchIndex];
-          final rowStatus = (row['status'] as String?)?.trim().toLowerCase() ?? 'pending';
+          final rowStatus =
+              (row['status'] as String?)?.trim().toLowerCase() ?? 'pending';
           final createdAt = row['created_at'] as String?;
           final updatedAt = row['updated_at'] as String?;
           if (rowStatus.contains('returned')) {
@@ -1911,28 +2091,34 @@ class ReservationService {
           if (status == 'Pending') {
             timestamp = 'Pending';
           } else {
-            timestamp = _formatTimestamp(DateTime.parse(updatedAt ?? createdAt ?? DateTime.now().toIso8601String()));
+            timestamp = _formatTimestamp(
+              DateTime.parse(
+                updatedAt ?? createdAt ?? DateTime.now().toIso8601String(),
+              ),
+            );
           }
           description = status == 'Approved'
               ? 'Your reservation has been approved by $displayName.'
               : status == 'Completed'
-                  ? 'This reservation has been completed.'
-                  : status == 'Returned'
-                      ? 'This reservation has been returned and the item units are available again.'
-                      : status == 'Rejected'
-                          ? 'Your reservation was rejected by $displayName.'
-                          : status == 'Cancelled'
-                              ? 'This reservation was cancelled.'
-                              : 'Waiting for approval from $displayName.';
+              ? 'This reservation has been completed.'
+              : status == 'Returned'
+              ? 'This reservation has been returned and the item units are available again.'
+              : status == 'Rejected'
+              ? 'Your reservation was rejected by $displayName.'
+              : status == 'Cancelled'
+              ? 'This reservation was cancelled.'
+              : 'Waiting for approval from $displayName.';
         }
 
-        entries.add(ReservationTimelineEntry(
-          title: displayName,
-          status: status,
-          date: date,
-          timestamp: timestamp,
-          description: description,
-        ));
+        entries.add(
+          ReservationTimelineEntry(
+            title: displayName,
+            status: status,
+            date: date,
+            timestamp: timestamp,
+            description: description,
+          ),
+        );
       }
 
       return entries;
@@ -1977,8 +2163,10 @@ class ReservationService {
         final officeId = approval['office_id'] as int?;
         String officeName = officeId == null
             ? 'Approval Step'
-            : (await _getOfficeById(officeId))?['department_name'] as String? ?? 'Approval Step';
-        if (officeName.toLowerCase() == 'item owner' && itemOwnerNames.isNotEmpty) {
+            : (await _getOfficeById(officeId))?['department_name'] as String? ??
+                  'Approval Step';
+        if (officeName.toLowerCase() == 'item owner' &&
+            itemOwnerNames.isNotEmpty) {
           officeName = itemOwnerNames.join(', ');
         }
         approvalEntries.add({
@@ -1989,7 +2177,9 @@ class ReservationService {
         });
       }
 
-      print('DEBUG: reservation $reservationId raw approvals: ${approvalEntries.map((e) => e['office_name']).toList()}');
+      print(
+        'DEBUG: reservation $reservationId raw approvals: ${approvalEntries.map((e) => e['office_name']).toList()}',
+      );
 
       final ordered = sortApprovalEntriesForTimeline(
         approvalEntries,
@@ -1997,7 +2187,9 @@ class ReservationService {
         generalEducationOfficeId: await _getOfficeIdByName('General Education'),
       );
 
-      print('DEBUG: reservation $reservationId ordered approvals: ${ordered.map((e) => e['office_name']).toList()}');
+      print(
+        'DEBUG: reservation $reservationId ordered approvals: ${ordered.map((e) => e['office_name']).toList()}',
+      );
     } catch (e) {
       print('DEBUG: error printing approval order for $reservationId: $e');
     }
@@ -2046,18 +2238,20 @@ class ReservationService {
           .select('reservation_items_id')
           .eq('reservation_id', reservationId);
       if (details == null) return ids;
-      final itemIds = await Future.wait((details as List).map((det) async {
-        final reservationItemsId = det['reservation_items_id'] as int?;
-        if (reservationItemsId == null) return null;
+      final itemIds = await Future.wait(
+        (details as List).map((det) async {
+          final reservationItemsId = det['reservation_items_id'] as int?;
+          if (reservationItemsId == null) return null;
 
-        final itemLink = await _client
-            .from('reservation_items')
-            .select('item_id')
-            .eq('reservation_items_id', reservationItemsId)
-            .maybeSingle();
-        final itemId = itemLink?['item_id'] as int?;
-        return itemId;
-      }));
+          final itemLink = await _client
+              .from('reservation_items')
+              .select('item_id')
+              .eq('reservation_items_id', reservationItemsId)
+              .maybeSingle();
+          final itemId = itemLink?['item_id'] as int?;
+          return itemId;
+        }),
+      );
       ids.addAll(itemIds.whereType<int>());
     } catch (e) {
       print('Error fetching reservation item ids: $e');
@@ -2103,7 +2297,9 @@ class ReservationService {
         for (final itemId in normalizedItemQuantities.keys) {
           final quantity = normalizedItemQuantities[itemId]!;
           if (quantity <= 0) {
-            throw Exception('Invalid quantity requested for item $itemId: $quantity');
+            throw Exception(
+              'Invalid quantity requested for item $itemId: $quantity',
+            );
           }
 
           final availableUnits = await _getAvailableItemUnits(
@@ -2113,7 +2309,9 @@ class ReservationService {
             requestEnd: endTime,
           );
           if (availableUnits.length < quantity) {
-            throw Exception('Not enough available units for item $itemId: requested $quantity, available ${availableUnits.length}');
+            throw Exception(
+              'Not enough available units for item $itemId: requested $quantity, available ${availableUnits.length}',
+            );
           }
         }
       }
@@ -2126,7 +2324,9 @@ class ReservationService {
         endTime,
       );
       if (conflict) {
-        print('Cannot create reservation: time conflict for room $roomId on $dateOfActivity');
+        print(
+          'Cannot create reservation: time conflict for room $roomId on $dateOfActivity',
+        );
         return null;
       }
 
@@ -2147,21 +2347,37 @@ class ReservationService {
         reservationData['proof_of_consent_url'] = proofOfConsentUrl;
       }
 
-      final resResponse = await _client.from('reservations').insert(reservationData).select();
+      final authUser = _client.auth.currentUser;
+      print(
+        'Reservation identity check: profile=$userId, '
+        'authEmail=${authUser?.email}, authUserId=${authUser?.id}',
+      );
 
-      if (resResponse.isEmpty) {
-        return null;
-      }
+      final reservationId =
+          (await _client.rpc(
+                'create_reservation_header',
+                params: {
+                  'p_user_id': userId,
+                  'p_activity_name': activityName,
+                  'p_date_of_activity': dateOfActivity.toIso8601String(),
+                  'p_start_of_activity': startTime.toIso8601String(),
+                  'p_end_of_activity': endTime.toIso8601String(),
+                  'p_outside_participants': hasOutsideParticipants,
+                  'p_proof_of_consent_url': proofOfConsentUrl,
+                },
+              ))
+              as int;
 
-      final reservationId = resResponse[0]['reservation_id'] as int;
+      final roomReservationResponse =
+          await _client.from('reservation_rooms').insert({
+            'reservation_id': reservationId,
+            'room_id': roomId,
+            'created_at': DateTime.now().toIso8601String(),
+            'updated_at': DateTime.now().toIso8601String(),
+          }).select();
 
-      final roomReservationResponse = await _client.from('reservation_rooms').insert({
-        'room_id': roomId,
-        'created_at': DateTime.now().toIso8601String(),
-        'updated_at': DateTime.now().toIso8601String(),
-      }).select();
-
-      final reservationRoomsId = roomReservationResponse[0]['reservation_rooms_id'] as int;
+      final reservationRoomsId =
+          roomReservationResponse[0]['reservation_rooms_id'] as int;
 
       await _client.from('reservation_details').insert({
         'reservation_id': reservationId,
@@ -2171,7 +2387,9 @@ class ReservationService {
         'updated_at': DateTime.now().toIso8601String(),
       });
 
-      if (chairsQuantity != null && chairsQuantity.isNotEmpty && chairsQuantity[0] > 0) {
+      if (chairsQuantity != null &&
+          chairsQuantity.isNotEmpty &&
+          chairsQuantity[0] > 0) {
         await _client.from('reservation_details').insert({
           'reservation_id': reservationId,
           'quantity': chairsQuantity[0],
@@ -2184,12 +2402,14 @@ class ReservationService {
         for (final itemId in resolvedItemIds) {
           final quantity = normalizedItemQuantities[itemId]!;
           final itemResponse = await _client.from('reservation_items').insert({
+            'reservation_id': reservationId,
             'item_id': itemId,
             'created_at': DateTime.now().toIso8601String(),
             'updated_at': DateTime.now().toIso8601String(),
           }).select();
 
-          final reservationItemsId = itemResponse[0]['reservation_items_id'] as int;
+          final reservationItemsId =
+              itemResponse[0]['reservation_items_id'] as int;
 
           await _client.from('reservation_details').insert({
             'reservation_id': reservationId,
@@ -2206,14 +2426,6 @@ class ReservationService {
             requestStart: startTime,
             requestEnd: endTime,
           );
-
-          final currentItem = await getItemDetails(itemId);
-          if (currentItem != null) {
-            await _client.from('items').update({
-              'quantity_in_use': currentItem.quantityInUse,
-              'updated_at': DateTime.now().toIso8601String(),
-            }).eq('item_id', itemId);
-          }
         }
       }
 
@@ -2234,9 +2446,8 @@ class ReservationService {
       }
 
       return reservationId;
-    } catch (e) {
-      print('Error creating reservation: $e');
-      return null;
+    } catch (error, stackTrace) {
+      Error.throwWithStackTrace(error, stackTrace);
     }
   }
 
@@ -2284,7 +2495,9 @@ class ReservationService {
       // Fetch reservations by id and check date/time overlap
       final reservationsResp = await _client
           .from('reservations')
-          .select('reservation_id, Date_of_Activity, Start_of_activity, End_of_Activity, overall_status')
+          .select(
+            'reservation_id, Date_of_Activity, Start_of_activity, End_of_Activity, overall_status',
+          )
           .in_('reservation_id', reservationIds.toList());
 
       if (reservationsResp == null) return false;
@@ -2305,7 +2518,8 @@ class ReservationService {
           final existingStart = DateTime.parse(startStr);
           final existingEnd = DateTime.parse(endStr);
 
-          if (startTime.isBefore(existingEnd) && endTime.isAfter(existingStart)) {
+          if (startTime.isBefore(existingEnd) &&
+              endTime.isAfter(existingStart)) {
             return true;
           }
         }
@@ -2348,13 +2562,12 @@ class ReservationService {
   /// Upload proof of consent file to Supabase Storage
   Future<void> uploadProofOfConsent(File file, String filePath) async {
     try {
-      await _client.storage.from('proof_of_consent').upload(
+      await _client.storage
+          .from('proof_of_consent')
+          .upload(
             filePath,
             file,
-            fileOptions: const FileOptions(
-              cacheControl: '3600',
-              upsert: false,
-            ),
+            fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
           );
       print('Successfully uploaded proof of consent to: $filePath');
     } catch (e) {
@@ -2370,15 +2583,19 @@ class ReservationService {
           serviceRoleKey,
         );
 
-        await storageClient.storage.from('proof_of_consent').upload(
-          filePath,
-          file,
-          fileOptions: const FileOptions(
-            cacheControl: '3600',
-            upsert: false,
-          ),
+        await storageClient.storage
+            .from('proof_of_consent')
+            .upload(
+              filePath,
+              file,
+              fileOptions: const FileOptions(
+                cacheControl: '3600',
+                upsert: false,
+              ),
+            );
+        print(
+          'Successfully uploaded proof of consent via service-role fallback: $filePath',
         );
-        print('Successfully uploaded proof of consent via service-role fallback: $filePath');
       } catch (fallbackError) {
         print('Service-role upload fallback failed: $fallbackError');
         rethrow;
@@ -2389,7 +2606,9 @@ class ReservationService {
   /// Get public URL for uploaded proof of consent file
   String getProofOfConsentUrl(String filePath) {
     try {
-      final url = _client.storage.from('proof_of_consent').getPublicUrl(filePath);
+      final url = _client.storage
+          .from('proof_of_consent')
+          .getPublicUrl(filePath);
       return url;
     } catch (e) {
       print('Error getting proof of consent URL: $e');
@@ -2433,7 +2652,9 @@ class ReservationService {
       for (final itemId in itemQuantities.keys) {
         final quantity = itemQuantities[itemId]!;
         if (quantity <= 0) {
-          throw Exception('Invalid quantity requested for item $itemId: $quantity');
+          throw Exception(
+            'Invalid quantity requested for item $itemId: $quantity',
+          );
         }
 
         final availableUnits = await _getAvailableItemUnits(
@@ -2443,17 +2664,26 @@ class ReservationService {
           requestEnd: requestEnd,
         );
         if (availableUnits.length < quantity) {
-          throw Exception('Not enough available units for item $itemId: requested $quantity, available ${availableUnits.length}');
+          throw Exception(
+            'Not enough available units for item $itemId: requested $quantity, available ${availableUnits.length}',
+          );
         }
       }
 
-      final resResponse = await _client.from('reservations').insert(reservationData).select();
-
-      if (resResponse.isEmpty) {
-        return null;
-      }
-
-      final reservationId = resResponse[0]['reservation_id'] as int;
+      final reservationId =
+          (await _client.rpc(
+                'create_reservation_header',
+                params: {
+                  'p_user_id': userId,
+                  'p_activity_name': activityName,
+                  'p_date_of_activity': dateOfActivity.toIso8601String(),
+                  'p_start_of_activity': startTime.toIso8601String(),
+                  'p_end_of_activity': endTime.toIso8601String(),
+                  'p_outside_participants': hasOutsideParticipants,
+                  'p_proof_of_consent_url': proofOfConsentUrl,
+                },
+              ))
+              as int;
 
       // Add each item to reservation_details
       for (final itemId in itemQuantities.keys) {
@@ -2461,12 +2691,14 @@ class ReservationService {
 
         // Create a reservation_items entry and link via reservation_items_id
         final itemResponse = await _client.from('reservation_items').insert({
+          'reservation_id': reservationId,
           'item_id': itemId,
           'created_at': DateTime.now().toIso8601String(),
           'updated_at': DateTime.now().toIso8601String(),
         }).select();
 
-        final reservationItemsId = itemResponse[0]['reservation_items_id'] as int;
+        final reservationItemsId =
+            itemResponse[0]['reservation_items_id'] as int;
 
         await _client.from('reservation_details').insert({
           'reservation_id': reservationId,
@@ -2491,7 +2723,10 @@ class ReservationService {
       print('Item reservation created: $reservationId');
 
       // Build and insert the approval chain for this item reservation
-      final approvalChain = await calculateApprovalChain(roomType: '', itemIds: itemQuantities.keys.toList());
+      final approvalChain = await calculateApprovalChain(
+        roomType: '',
+        itemIds: itemQuantities.keys.toList(),
+      );
       final approvalBaseTime = DateTime.now().toUtc();
       for (var index = 0; index < approvalChain.officeIds.length; index++) {
         final officeId = approvalChain.officeIds[index];
@@ -2511,22 +2746,26 @@ class ReservationService {
       // Add a local ReservationRecord for immediate UI feedback
       try {
         final timeline = <ReservationTimelineEntry>[];
-        timeline.add(ReservationTimelineEntry(
-          title: 'Request Submitted',
-          status: 'Completed',
-          date: dateOfActivity,
-          timestamp: _formatTimestamp(dateOfActivity),
-          description: 'Your reservation request was submitted successfully.',
-        ));
+        timeline.add(
+          ReservationTimelineEntry(
+            title: 'Request Submitted',
+            status: 'Completed',
+            date: dateOfActivity,
+            timestamp: _formatTimestamp(dateOfActivity),
+            description: 'Your reservation request was submitted successfully.',
+          ),
+        );
 
         for (final office in approvalChain.offices) {
-          timeline.add(ReservationTimelineEntry(
-            title: office,
-            status: 'Pending',
-            date: dateOfActivity,
-            timestamp: 'Pending',
-            description: 'Waiting for approval from $office.',
-          ));
+          timeline.add(
+            ReservationTimelineEntry(
+              title: office,
+              status: 'Pending',
+              date: dateOfActivity,
+              timestamp: 'Pending',
+              description: 'Waiting for approval from $office.',
+            ),
+          );
         }
 
         final reservedItemNames = <String>[];
@@ -2538,12 +2777,15 @@ class ReservationService {
         final newRecord = ReservationRecord(
           id: reservationId.toString(),
           userId: userId,
-          reservationTitle: activityName.isEmpty ? 'Item Reservation' : activityName,
+          reservationTitle: activityName.isEmpty
+              ? 'Item Reservation'
+              : activityName,
           roomName: 'Item Reservation',
           reservationType: 'Item Reservation',
           reservationStatus: 'Pending Approval',
           date: dateOfActivity,
-          reservationTime: '${_formatDateTime(startTime)} - ${_formatDateTime(endTime)}',
+          reservationTime:
+              '${_formatDateTime(startTime)} - ${_formatDateTime(endTime)}',
           timeline: timeline,
           reservedItems: reservedItemNames,
         );
@@ -2617,10 +2859,13 @@ class ReservationService {
             for (final unit in reservationUnits as List) {
               final unitId = unit['unit_id'] as int?;
               if (unitId != null) {
-                await _client.from('item_units').update({
-                  'status': 'available',
-                  'updated_at': DateTime.now().toIso8601String(),
-                }).eq('unit_id', unitId);
+                await _client
+                    .from('item_units')
+                    .update({
+                      'status': 'available',
+                      'updated_at': DateTime.now().toIso8601String(),
+                    })
+                    .eq('unit_id', unitId);
               }
             }
           }
@@ -2634,7 +2879,10 @@ class ReservationService {
           .select('reservation_id, overall_status')
           .eq('reservation_id', reservationId)
           .maybeSingle();
-      if (cancelledReservation != null && (cancelledReservation['overall_status'] as String? ?? '').toLowerCase() == 'cancelled') {
+      if (cancelledReservation != null &&
+          (cancelledReservation['overall_status'] as String? ?? '')
+                  .toLowerCase() ==
+              'cancelled') {
         final allReservationItems = await _client
             .from('reservation_details')
             .select('reservation_items_id')
@@ -2662,10 +2910,13 @@ class ReservationService {
               for (final linkedUnit in linkedUnits as List) {
                 final unitId = linkedUnit['unit_id'] as int?;
                 if (unitId == null) continue;
-                await _client.from('item_units').update({
-                  'status': 'available',
-                  'updated_at': DateTime.now().toIso8601String(),
-                }).eq('unit_id', unitId);
+                await _client
+                    .from('item_units')
+                    .update({
+                      'status': 'available',
+                      'updated_at': DateTime.now().toIso8601String(),
+                    })
+                    .eq('unit_id', unitId);
               }
             }
 

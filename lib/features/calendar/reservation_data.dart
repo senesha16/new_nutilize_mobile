@@ -21,7 +21,7 @@ class ReservationTimelineEntry {
   /// Format approval time in Philippine Time (UTC+8)
   String get approvalTimeFormatted {
     if (approvedAt == null) return '';
-    
+
     // Convert to Philippine Time (UTC+8)
     final phTime = approvedAt!.add(const Duration(hours: 8));
     final month = phTime.month.toString().padLeft(2, '0');
@@ -29,7 +29,7 @@ class ReservationTimelineEntry {
     final hour = phTime.hour % 12 == 0 ? 12 : phTime.hour % 12;
     final minute = phTime.minute.toString().padLeft(2, '0');
     final period = phTime.hour >= 12 ? 'PM' : 'AM';
-    
+
     return '${phTime.year}-$month-$day $hour:$minute $period';
   }
 
@@ -133,7 +133,11 @@ class ReservationRecord {
   List<String> get approvalSteps {
     return timeline
         .skip(1)
-        .where((entry) => entry.title != 'Request Processing' && entry.title != 'Request Approved')
+        .where(
+          (entry) =>
+              entry.title != 'Request Processing' &&
+              entry.title != 'Request Approved',
+        )
         .map((entry) => entry.title)
         .toList();
   }
@@ -244,25 +248,32 @@ class ReservationActivityStore {
     }
 
     final normalizedStatus = reservation.reservationStatus.toLowerCase();
-    final isApprovedLike = normalizedStatus.contains('approved') ||
+    final isApprovedLike =
+        normalizedStatus.contains('approved') ||
         normalizedStatus.contains('completed') ||
         normalizedStatus.contains('confirmed');
     final isReturnedLike = normalizedStatus.contains('returned');
-    final isCancelledLike = normalizedStatus.contains('rejected') ||
-      normalizedStatus.contains('denied');
-    final isInProgressLike = normalizedStatus.contains('pending') ||
+    final isCancelledLike =
+        normalizedStatus.contains('rejected') ||
+        normalizedStatus.contains('denied');
+    final isInProgressLike =
+        normalizedStatus.contains('pending') ||
         normalizedStatus.contains('processing') ||
         normalizedStatus.contains('submitted') ||
         normalizedStatus.contains('waiting') ||
         normalizedStatus.contains('review') ||
         normalizedStatus.contains('approval');
-    final isOwnPendingLike = currentUserId != null &&
+    final isOwnPendingLike =
+        currentUserId != null &&
         _userIdsMatch(reservation.userId, currentUserId) &&
         isInProgressLike;
 
-    return (isApprovedLike || isReturnedLike || isCancelledLike || isOwnPendingLike) &&
-      !normalizedStatus.contains('cancelled') &&
-      !normalizedStatus.contains('canceled');
+    return (isApprovedLike ||
+            isReturnedLike ||
+            isCancelledLike ||
+            isOwnPendingLike) &&
+        !normalizedStatus.contains('cancelled') &&
+        !normalizedStatus.contains('canceled');
   }
 
   static List<ReservationRecord> get reservations =>
@@ -388,20 +399,20 @@ List<ReservationRecord> recentReservations(DateTime now, {int limit = 3}) {
 
   final upcomingReservations = allReservations.where(isUpcoming).toList();
 
-  final approvedReservations = upcomingReservations
-      .where((reservation) => reservation.reservationStatus
-          .toLowerCase()
-          .contains('approved'))
-      .toList()
-    ..sort((a, b) => a.date.compareTo(b.date));
+  final approvedReservations =
+      upcomingReservations
+          .where(
+            (reservation) => reservation.reservationStatus
+                .toLowerCase()
+                .contains('approved'),
+          )
+          .toList()
+        ..sort((a, b) => a.date.compareTo(b.date));
 
-  final pendingReservations = upcomingReservations
-      .where((reservation) {
-        final status = reservation.reservationStatus.toLowerCase();
-        return status.contains('pending') || status.contains('processing');
-      })
-      .toList()
-    ..sort((a, b) => a.date.compareTo(b.date));
+  final pendingReservations = upcomingReservations.where((reservation) {
+    final status = reservation.reservationStatus.toLowerCase();
+    return status.contains('pending') || status.contains('processing');
+  }).toList()..sort((a, b) => a.date.compareTo(b.date));
 
   final result = <ReservationRecord>[];
   result.addAll(approvedReservations);
@@ -628,9 +639,7 @@ class NotificationRepository {
         isRead: false,
         reservation: reservation,
         detailTitle: title,
-        detailBody: statusSummary.isNotEmpty
-            ? statusSummary
-            : description,
+        detailBody: statusSummary.isNotEmpty ? statusSummary : description,
       );
     }).toList();
 
@@ -702,8 +711,7 @@ class NotificationActivityStore {
     List<NotificationRecord> current,
   ) {
     final previousSnapshots = <String>{
-      for (final notification in previous)
-        _notificationSnapshot(notification),
+      for (final notification in previous) _notificationSnapshot(notification),
     };
 
     return current
@@ -785,10 +793,8 @@ class NotificationActivityStore {
         ..clear()
         ..addEntries(
           reservations.map(
-            (reservation) => MapEntry(
-              reservation.stableId,
-              _reservationState(reservation),
-            ),
+            (reservation) =>
+                MapEntry(reservation.stableId, _reservationState(reservation)),
           ),
         );
       _hasStatusBaseline = true;
@@ -797,7 +803,9 @@ class NotificationActivityStore {
       return;
     }
 
-    final existingIds = listenable.value.map((notification) => notification.id).toSet();
+    final existingIds = listenable.value
+        .map((notification) => notification.id)
+        .toSet();
     final updated = List<NotificationRecord>.from(listenable.value);
     for (final reservation in reservations) {
       final status = reservation.reservationStatus.trim().toLowerCase();
@@ -805,11 +813,9 @@ class NotificationActivityStore {
       final previousState = _knownReservationStates[reservation.stableId];
       if (previousState != null &&
           previousState != currentState &&
-          _isNotifiableTransition(previousState, reservation, status) &&
-          (reservation.lastUpdatedAt == null ||
-            !reservation.lastUpdatedAt!.isBefore(_sessionStartedAt!))) {
+          _isNotifiableTransition(previousState, reservation, status)) {
         final notificationId =
-          'reservation-status-${reservation.stableId}-${currentState.hashCode}';
+            'reservation-status-${reservation.stableId}-${currentState.hashCode}';
         if (!existingIds.contains(notificationId)) {
           updated.add(
             NotificationRecord(
@@ -830,8 +836,7 @@ class NotificationActivityStore {
     }
 
     final currentByReservationId = <String, ReservationRecord>{
-      for (final reservation in reservations)
-        reservation.stableId: reservation,
+      for (final reservation in reservations) reservation.stableId: reservation,
     };
     final filtered = updated.where((notification) {
       final reservation = notification.reservation;
@@ -841,7 +846,8 @@ class NotificationActivityStore {
       if (currentReservation == null) return false;
 
       final currentStatus = currentReservation.reservationStatus.toLowerCase();
-      final isCancelled = currentStatus.contains('cancelled') ||
+      final isCancelled =
+          currentStatus.contains('cancelled') ||
           currentStatus.contains('canceled');
       if (isCancelled) {
         return false;
@@ -879,8 +885,11 @@ class NotificationActivityStore {
   }
 
   static NotificationCategory _categoryForStatus(String status) {
-    if (status.contains('approved')) return NotificationCategory.reservationApproved;
-    if (status.contains('rejected') || status.contains('denied') || status.contains('timed out')) {
+    if (status.contains('approved'))
+      return NotificationCategory.reservationApproved;
+    if (status.contains('rejected') ||
+        status.contains('denied') ||
+        status.contains('timed out')) {
       return NotificationCategory.reservationRejected;
     }
     if (status.contains('cancelled') || status.contains('canceled')) {
@@ -891,8 +900,10 @@ class NotificationActivityStore {
 
   static String _titleForStatus(String status, [String? approvalSummary]) {
     if (status.contains('approved')) return 'Reservation Approved';
-    if (status.contains('rejected') || status.contains('denied')) return 'Reservation Rejected';
-    if (status.contains('cancelled') || status.contains('canceled')) return 'Reservation Cancelled';
+    if (status.contains('rejected') || status.contains('denied'))
+      return 'Reservation Rejected';
+    if (status.contains('cancelled') || status.contains('canceled'))
+      return 'Reservation Cancelled';
     if (status.contains('timed out')) return 'Reservation Timed Out';
     if (status == 'to return') return 'Reservation To Return';
     if (approvalSummary != null && approvalSummary.trim().isNotEmpty) {
@@ -905,7 +916,8 @@ class NotificationActivityStore {
     ReservationRecord reservation,
     String status,
   ) {
-    if (!_isNotifiableStatus(status) && reservation.approvalSummary.trim().isNotEmpty) {
+    if (!_isNotifiableStatus(status) &&
+        reservation.approvalSummary.trim().isNotEmpty) {
       return '${reservation.reservationTitle}: ${reservation.approvalSummary}';
     }
     return '${reservation.reservationTitle} is now ${reservation.reservationStatus}.';

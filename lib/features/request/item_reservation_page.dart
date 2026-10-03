@@ -157,7 +157,7 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
 
       final timestamp = DateTime.now().millisecondsSinceEpoch;
       final fileName = 'item_proof_${timestamp}.jpg';
-      final filePath = 'proof_of_consent/$userId/$fileName';
+      final filePath = '$userId/$fileName';
 
       await _reservationService.uploadProofOfConsent(file, filePath);
       return _reservationService.getProofOfConsentUrl(filePath);
