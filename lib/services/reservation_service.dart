@@ -1628,7 +1628,7 @@ class ReservationService {
   }
 
   Future<bool> submitIssueReport({
-    required int reservationId,
+    int? reservationId,
     required String description,
     String? imageName,
     String? imageBase64,
@@ -1660,11 +1660,14 @@ class ReservationService {
       );
 
       payload = <String, dynamic>{
-        'reservation_id': reservationId,
         'description': description,
         'status': 'Pending',
         'created_at': DateTime.now().toIso8601String(),
       };
+
+      if (reservationId != null) {
+        payload['reservation_id'] = reservationId;
+      }
 
       // Attach auth identifiers to satisfy RLS policies.
       if (hasReportedByColumn && authEmail != null && authEmail.isNotEmpty) {
@@ -1687,7 +1690,11 @@ class ReservationService {
           imageBase64.isNotEmpty &&
           imageName != null &&
           imageName.isNotEmpty) {
-        final filePath = _buildReportFilePath(reservationId, imageName);
+        final filePath = _buildReportFilePath(
+          userId,
+          reservationId ?? 0,
+          imageName,
+        );
         imageUrl = await _uploadReportImageFromBase64(imageBase64, filePath);
         if (imageUrl != null && hasImageUrlColumn) {
           payload['image_url'] = imageUrl;
@@ -1830,13 +1837,18 @@ class ReservationService {
     return null;
   }
 
-  String _buildReportFilePath(int reservationId, String imageName) {
+  String _buildReportFilePath(
+    int? userId,
+    int reservationId,
+    String imageName,
+  ) {
     final sanitizedName = imageName.toLowerCase().replaceAll(
       RegExp(r'[^a-z0-9_.-]'),
       '_',
     );
     final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
-    return 'reports/$reservationId/${timestamp}_$sanitizedName';
+    final ownerPath = userId?.toString() ?? 'unknown';
+    return '$ownerPath/$reservationId/${timestamp}_$sanitizedName';
   }
 
   Future<Map<String, dynamic>?> _getOfficeById(int officeId) async {

@@ -33,10 +33,20 @@ android {
 
     signingConfigs {
         create("release") {
-            keyAlias = keystoreProperties.getProperty("keyAlias") ?: "nutilize-key"
-            keyPassword = keystoreProperties.getProperty("keyPassword") ?: "nutilize123"
-            storeFile = file(keystoreProperties.getProperty("storeFile") ?: "upload-keystore.jks")
-            storePassword = keystoreProperties.getProperty("storePassword") ?: "nutilize123"
+            val keyAliasValue = keystoreProperties.getProperty("keyAlias")
+            val keyPasswordValue = keystoreProperties.getProperty("keyPassword")
+            val storeFileValue = keystoreProperties.getProperty("storeFile")
+            val storePasswordValue = keystoreProperties.getProperty("storePassword")
+            if (keyAliasValue == null || keyPasswordValue == null ||
+                storeFileValue == null || storePasswordValue == null) {
+                throw GradleException(
+                    "Release signing requires key.properties; insecure default credentials are disabled."
+                )
+            }
+            keyAlias = keyAliasValue
+            keyPassword = keyPasswordValue
+            storeFile = file(storeFileValue)
+            storePassword = storePasswordValue
         }
     }
 
@@ -54,6 +64,12 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("release")
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
         }
     }
 }

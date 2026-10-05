@@ -1,5 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:new_nutilize_mobile/services/auth_service.dart';
+import 'package:new_nutilize_mobile/services/reservation_service.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
 import 'package:new_nutilize_mobile/widgets/secondary_header.dart';
@@ -18,6 +23,8 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
   String _selectedCategory = 'Technical Issue';
   XFile? _selectedScreenshot;
   bool _submitted = false;
+  bool _isSubmitting = false;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -27,8 +34,21 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
   }
 
   Future<void> _pickScreenshot() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    XFile? pickedFile;
+    try {
+      final picker = ImagePicker();
+      pickedFile = await picker.pickImage(source: ImageSource.gallery);
+    } catch (_) {
+      final selectedFile = await openFile(
+        acceptedTypeGroups: [
+          XTypeGroup(
+            label: 'Images',
+            extensions: ['jpg', 'jpeg', 'png', 'webp'],
+          ),
+        ],
+      );
+      pickedFile = selectedFile;
+    }
     if (pickedFile != null) {
       setState(() {
         _selectedScreenshot = pickedFile;
@@ -36,11 +56,52 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
     }
   }
 
-  void _submitReport() {
-    if (_formKey.currentState?.validate() ?? false) {
+  Future<void> _submitReport() async {
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      return;
+    }
+
+    final userId = AuthService.currentUser?['user_id'] as int?;
+    if (userId == null) {
+      setState(() => _errorMessage = 'Please sign in again before submitting.');
+      return;
+    }
+
+    setState(() {
+      _isSubmitting = true;
+      _submitted = false;
+      _errorMessage = null;
+    });
+
+    try {
+      String? imageBase64;
+      if (_selectedScreenshot != null) {
+        imageBase64 = base64Encode(await _selectedScreenshot!.readAsBytes());
+      }
+
+      final success = await ReservationService().submitIssueReport(
+        description:
+            '${_selectedCategory.trim()}: ${_subjectController.text.trim()}\n\n${_descriptionController.text.trim()}',
+        imageName: _selectedScreenshot?.name,
+        imageBase64: imageBase64,
+      );
+
+      if (!mounted) return;
       setState(() {
-        _submitted = true;
+        _submitted = success;
+        _errorMessage = success
+            ? null
+            : 'The report could not be submitted. Please try again.';
       });
+    } catch (_) {
+      if (mounted) {
+        setState(
+          () => _errorMessage =
+              'The report could not be submitted. Please try again.',
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
@@ -224,7 +285,7 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
-                                onPressed: _submitReport,
+                                onPressed: _isSubmitting ? null : _submitReport,
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: const Color(0xFF35489A),
                                   foregroundColor: Colors.white,
@@ -235,15 +296,35 @@ class _ReportIssuePageState extends State<ReportIssuePage> {
                                     borderRadius: BorderRadius.circular(12),
                                   ),
                                 ),
-                                child: const Text(
-                                  'Submit',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
+                                child: _isSubmitting
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : const Text(
+                                        'Submit',
+                                        style: TextStyle(
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
                               ),
                             ),
+                            if (_errorMessage != null) ...[
+                              const SizedBox(height: 16),
+                              Text(
+                                _errorMessage!,
+                                style: const TextStyle(
+                                  color: Color(0xFFC0392B),
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                             if (_submitted) ...[
                               const SizedBox(height: 16),
                               Container(

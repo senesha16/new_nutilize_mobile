@@ -343,10 +343,15 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
 
   void _startDatePicker() async {
     final today = DateTime.now();
+    final earliestDate = DateTime(today.year, today.month, today.day + 3);
+    final initialDate =
+        _selectedDate != null && !_selectedDate!.isBefore(earliestDate)
+        ? _selectedDate!
+        : earliestDate;
     final picked = await showDatePicker(
       context: context,
-      initialDate: _selectedDate ?? today,
-      firstDate: today,
+      initialDate: initialDate,
+      firstDate: earliestDate,
       lastDate: DateTime(today.year + 1),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
@@ -354,6 +359,11 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
             primary: const Color(0xFF35489A),
             onPrimary: Colors.white,
             onSurface: Colors.black,
+          ),
+          datePickerTheme: const DatePickerThemeData(
+            todayBackgroundColor: WidgetStatePropertyAll(Color(0xFFF6C914)),
+            todayForegroundColor: WidgetStatePropertyAll(Color(0xFF24304C)),
+            todayBorder: BorderSide(color: Color(0xFF35489A), width: 2),
           ),
         ),
         child: child!,
@@ -417,7 +427,6 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
           _selectedEndTime = picked;
         }
       });
-      await _loadEquipmentItems();
       await _loadEquipmentItems();
     }
   }
@@ -906,6 +915,18 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
               color: Color(0xFF111111),
               fontSize: 14,
               fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(height: 4),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+            'Please book at least 2 full days before your event. The next 2 days are unavailable.',
+            style: TextStyle(
+              color: Color(0xFF6A6F86),
+              fontSize: 12,
+              height: 1.3,
             ),
           ),
         ),

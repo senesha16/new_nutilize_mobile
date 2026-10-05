@@ -8,11 +8,12 @@ serve(async (req) => {
     const payload = await req.json();
     const email = payload.email?.toString().trim();
     const code = payload.code?.toString().trim();
+    const purpose = payload.purpose?.toString() || 'verification';
     if (!email || !code) {
       return new Response(JSON.stringify({ ok: false, error: 'missing_fields' }), { status: 400 });
     }
 
-    const query = `${PROJECT_URL}/rest/v1/email_otps?email=eq.${encodeURIComponent(email)}&code=eq.${encodeURIComponent(code)}&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&select=*`;
+    const query = `${PROJECT_URL}/rest/v1/email_otps?email=eq.${encodeURIComponent(email)}&code=eq.${encodeURIComponent(code)}&purpose=eq.${encodeURIComponent(purpose)}&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&select=*`;
     const resp = await fetch(query, {
       method: 'GET',
       headers: {

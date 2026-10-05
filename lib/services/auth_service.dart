@@ -805,6 +805,7 @@ class AuthService {
   static Future<String?> sendEmailCode(
     String email, {
     bool requireExistingAccount = false,
+    String? purpose,
   }) async {
     final normalizedEmail = email.trim();
     if (normalizedEmail.isEmpty) {
@@ -832,7 +833,9 @@ class AuthService {
             },
             body: jsonEncode({
               'email': normalizedEmail,
-              if (requireExistingAccount) 'purpose': 'password_reset',
+              if (purpose != null) 'purpose': purpose,
+              if (purpose == null && requireExistingAccount)
+                'purpose': 'password_reset',
             }),
           )
           .timeout(
@@ -883,6 +886,18 @@ class AuthService {
     return sendEmailCode(normalizedEmail, requireExistingAccount: true);
   }
 
+  static Future<String?> sendAccountDeletionCode(String email) async {
+    final normalizedEmail = email.trim();
+    if (normalizedEmail.isEmpty) {
+      return 'Please sign in again before deleting your account.';
+    }
+    return sendEmailCode(
+      normalizedEmail,
+      requireExistingAccount: true,
+      purpose: 'account_deletion',
+    );
+  }
+
   // Verify a code previously sent to the email. Expects `verify_email_code` function.
   static Future<bool> verifyEmailCode(String email, String code) async {
     final normalizedEmail = email.trim();
@@ -913,6 +928,32 @@ class AuthService {
       return false;
     } catch (e) {
       debugPrint('[AuthService] verifyEmailCode exception: $e');
+      return false;
+    }
+  }
+
+  static Future<bool> deleteAccount({required String code}) async {
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null || code.trim().isEmpty) return false;
+
+    try {
+      final response = await http.post(
+        Uri.parse('$_baseUrl/functions/v1/delete_account'),
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': _anonKey,
+          'Authorization': 'Bearer ${session.accessToken}',
+        },
+        body: jsonEncode({'code': code.trim()}),
+      );
+      debugPrint(
+        '[AuthService] deleteAccount response: ${response.statusCode} ${response.body}',
+      );
+      if (response.statusCode != 200) return false;
+      final body = jsonDecode(response.body);
+      return body['ok'] == true;
+    } catch (e) {
+      debugPrint('[AuthService] deleteAccount failed: $e');
       return false;
     }
   }

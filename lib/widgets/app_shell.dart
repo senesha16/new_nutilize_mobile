@@ -47,7 +47,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _currentIndex = widget.initialIndex;
     _scheduleRefresh();
     _initRealtimeSubscriptions();
-    unawaited(_refreshReservations(includeDetails: false));
+    unawaited(_refreshReservations());
   }
 
   @override
@@ -76,7 +76,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   void _scheduleRefresh() {
     _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+    _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) {
         unawaited(_refreshReservations());
       }
@@ -125,9 +125,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       // Ignore refresh failures and keep the shell responsive.
     } finally {
       _isRefreshing = false;
-      if (mounted && !includeDetails) {
-        unawaited(_refreshReservations());
-      }
     }
   }
 

@@ -183,7 +183,7 @@ serve(async (req) => {
       );
     }
 
-    if (purpose === 'password_reset') {
+    if (purpose === 'password_reset' || purpose === 'account_deletion') {
       const profileResponse = await fetch(
         `${PROJECT_URL}/rest/v1/users?select=user_id&email=ilike.${encodeURIComponent(email)}&limit=1`,
         {
@@ -226,6 +226,9 @@ serve(async (req) => {
     const code = generateCode();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
 
+    const otpPurpose = purpose === 'password_reset' || purpose === 'account_deletion'
+      ? purpose
+      : 'verification';
     const insertResponse = await fetch(`${PROJECT_URL}/rest/v1/email_otps`, {
       method: 'POST',
       headers: {
@@ -234,7 +237,7 @@ serve(async (req) => {
         Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
         Prefer: 'return=representation',
       },
-      body: JSON.stringify({ email, code, expires_at: expiresAt }),
+      body: JSON.stringify({ email, code, purpose: otpPurpose, expires_at: expiresAt }),
     });
 
     if (!insertResponse.ok) {
@@ -260,7 +263,9 @@ serve(async (req) => {
         fromHeader,
         fromEmail,
         email,
-        'Your NUtilize verification code',
+        otpPurpose === 'account_deletion'
+          ? 'Your NUtilize account deletion code'
+          : 'Your NUtilize verification code',
         emailBody,
       );
     } catch (err) {

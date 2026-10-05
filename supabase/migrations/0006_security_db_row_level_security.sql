@@ -1,5 +1,8 @@
 BEGIN;
 
+ALTER TABLE public.email_otps
+  ADD COLUMN IF NOT EXISTS purpose text NOT NULL DEFAULT 'verification';
+
 ALTER TABLE public.users
   ADD COLUMN IF NOT EXISTS auth_user_id uuid;
 
@@ -301,6 +304,11 @@ BEGIN
       USING ERRCODE = '42501';
   END IF;
 
+  IF p_date_of_activity::date < (current_date + 3) THEN
+    RAISE EXCEPTION 'Reservations must be submitted at least two days before the activity date.'
+      USING ERRCODE = '22023';
+  END IF;
+
   EXECUTE format(
     'INSERT INTO public.reservations (
        user_id, activity_name, overall_status, %I, %I, %I,
@@ -334,6 +342,57 @@ GRANT EXECUTE ON FUNCTION public.create_reservation_header(
   bigint, text, text, text, text, boolean, text
 ) TO authenticated, service_role;
 
+CREATE OR REPLACE FUNCTION public.delete_account_data(target_user_id bigint)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public, private, storage
+AS $$
+BEGIN
+  CREATE TEMP TABLE account_reservations ON COMMIT DROP AS
+    SELECT reservation_id FROM public.reservations WHERE user_id = target_user_id;
+
+  DELETE FROM public.report_targets
+  WHERE report_id IN (SELECT report_id FROM public.reports WHERE user_id = target_user_id);
+  DELETE FROM public.reports WHERE user_id = target_user_id;
+
+  DELETE FROM public.reservation_item_units
+  WHERE reservation_items_id IN (
+    SELECT reservation_items_id FROM public.reservation_items
+    WHERE reservation_id IN (SELECT reservation_id FROM account_reservations)
+  );
+  DELETE FROM public.reservation_details
+  WHERE reservation_id IN (SELECT reservation_id FROM account_reservations);
+  DELETE FROM public.reservation_approval_histories
+  WHERE reservation_id IN (SELECT reservation_id FROM account_reservations);
+  DELETE FROM public.reservation_approvals
+  WHERE reservation_id IN (SELECT reservation_id FROM account_reservations);
+  DELETE FROM public.reservation_rooms
+  WHERE reservation_id IN (SELECT reservation_id FROM account_reservations);
+  DELETE FROM public.reservation_items
+  WHERE reservation_id IN (SELECT reservation_id FROM account_reservations);
+  DELETE FROM public.reservations
+  WHERE reservation_id IN (SELECT reservation_id FROM account_reservations);
+
+  DELETE FROM public.notifications WHERE user_id = target_user_id;
+  DELETE FROM public.reservation_issues WHERE user_id = target_user_id;
+  DELETE FROM public.schedule_import_details
+  WHERE import_id IN (SELECT import_id FROM public.schedule_imports WHERE user_id = target_user_id);
+  DELETE FROM public.schedule_imports WHERE user_id = target_user_id;
+  DELETE FROM public.account_setup_tokens WHERE user_id = target_user_id;
+  DELETE FROM public.sessions WHERE user_id = target_user_id;
+  DELETE FROM public.admin_activity_logs WHERE user_id = target_user_id;
+  UPDATE public.item_owners
+  SET user_id = NULL
+  WHERE user_id = target_user_id;
+
+  DELETE FROM public.users WHERE user_id = target_user_id;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.delete_account_data(bigint) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.delete_account_data(bigint) TO service_role;
+
 DO $$
 BEGIN
   IF EXISTS (
@@ -351,6 +410,26 @@ BEGIN
   END IF;
 END;
 $$;
+
+DROP POLICY IF EXISTS reports_authenticated_insert_own ON storage.objects;
+CREATE POLICY reports_authenticated_insert_own
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'reports'
+    AND (storage.foldername(name))[1] = private.current_profile_id()::text
+  );
+
+DROP POLICY IF EXISTS reports_authenticated_update_own ON storage.objects;
+CREATE POLICY reports_authenticated_update_own
+  ON storage.objects FOR UPDATE TO authenticated
+  USING (
+    bucket_id = 'reports'
+    AND (storage.foldername(name))[1] = private.current_profile_id()::text
+  )
+  WITH CHECK (
+    bucket_id = 'reports'
+    AND (storage.foldername(name))[1] = private.current_profile_id()::text
+  );
 
 CREATE POLICY users_select_own_profile
   ON public.users FOR SELECT TO authenticated

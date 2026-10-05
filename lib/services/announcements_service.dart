@@ -84,17 +84,32 @@ class AnnouncementsService extends ChangeNotifier {
   RealtimeChannel? _subscription;
   Timer? _refreshTimer;
   bool _isFetching = false;
+  DateTime? _lastFetchAt;
 
   List<AnnouncementRecord> get announcements =>
       List.unmodifiable(_announcements);
 
   /// Fetch all active announcements from the database, sorted by created_at descending (latest first)
-  Future<List<AnnouncementRecord>> fetchAnnouncements() async {
+  Future<List<AnnouncementRecord>> fetchAnnouncements({
+    bool force = false,
+  }) async {
+    if (Supabase.instance.client.auth.currentSession == null) {
+      return _announcements;
+    }
+
+    final now = DateTime.now();
+    if (!force &&
+        _lastFetchAt != null &&
+        now.difference(_lastFetchAt!) < const Duration(seconds: 15)) {
+      return _announcements;
+    }
+
     if (_isFetching) {
       return _announcements;
     }
 
     _isFetching = true;
+    _lastFetchAt = now;
     try {
       final client = Supabase.instance.client;
 
@@ -120,7 +135,7 @@ class AnnouncementsService extends ChangeNotifier {
       if (kDebugMode) {
         print('Error fetching announcements: $e');
       }
-      return [];
+      return _announcements;
     } finally {
       _isFetching = false;
     }
@@ -130,6 +145,14 @@ class AnnouncementsService extends ChangeNotifier {
   Future<void> subscribeToAnnouncements() async {
     try {
       final client = Supabase.instance.client;
+
+      if (client.auth.currentSession == null) {
+        return;
+      }
+
+      if (_subscription != null) {
+        return;
+      }
 
       // Unsubscribe from previous subscription if any
       if (_subscription != null) {
@@ -142,12 +165,12 @@ class AnnouncementsService extends ChangeNotifier {
         ChannelFilter(event: '*', schema: 'public', table: 'announcements'),
         (payload, [ref]) async {
           // Refetch announcements when any change is detected
-          await fetchAnnouncements();
+          await fetchAnnouncements(force: true);
         },
       );
       _subscription!.subscribe();
       _refreshTimer?.cancel();
-      _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+      _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
         fetchAnnouncements();
       });
     } catch (e) {

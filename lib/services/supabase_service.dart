@@ -1,6 +1,39 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+
+class _SecureSessionStorage extends LocalStorage {
+  _SecureSessionStorage()
+      : super(
+          initialize: _initialize,
+          hasAccessToken: _hasAccessToken,
+          accessToken: _accessToken,
+          removePersistedSession: _removePersistedSession,
+          persistSession: _persistSession,
+        );
+
+  static const _sessionKey = 'nutilize.supabase.session';
+  static const _storage = FlutterSecureStorage();
+
+  static Future<void> _initialize() async {}
+
+  static Future<bool> _hasAccessToken() async {
+    return (await _storage.read(key: _sessionKey)) != null;
+  }
+
+  static Future<String?> _accessToken() {
+    return _storage.read(key: _sessionKey);
+  }
+
+  static Future<void> _removePersistedSession() {
+    return _storage.delete(key: _sessionKey);
+  }
+
+  static Future<void> _persistSession(String session) {
+    return _storage.write(key: _sessionKey, value: session);
+  }
+}
 
 class SupabaseService {
   static Map<String, String> _envVars = <String, String>{};
@@ -60,28 +93,8 @@ class SupabaseService {
   }
 
   static String get serviceRoleKey {
-    if (_securityTestMode) {
-      return '';
-    }
-
-    if (_envVars.containsKey('SUPABASE_SERVICE_ROLE_KEY')) {
-      final value = _envVars['SUPABASE_SERVICE_ROLE_KEY']?.trim();
-      if (value != null && value.isNotEmpty) {
-        return value;
-      }
-    }
-
-    try {
-      final value = dotenv.env['SUPABASE_SERVICE_ROLE_KEY']?.trim();
-      if (value != null && value.isNotEmpty) {
-        return value;
-      }
-    } catch (_) {}
-
-    return String.fromEnvironment(
-      'SUPABASE_SERVICE_ROLE_KEY',
-      defaultValue: '',
-    );
+    // A service-role key must never be shipped in a client application.
+    return '';
   }
 
   /// Call this from main.dart to pass environment variables
@@ -93,7 +106,9 @@ class SupabaseService {
   static Future<void> init() async {
     final url = supabaseUrl;
     final key = supabaseKey;
-    final localStorage = _securityTestMode ? const EmptyLocalStorage() : null;
+    final localStorage = _securityTestMode
+      ? const EmptyLocalStorage()
+      : _SecureSessionStorage();
 
     try {
       if (key.isEmpty) {
