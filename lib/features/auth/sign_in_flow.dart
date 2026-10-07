@@ -134,7 +134,6 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       );
       return;
     }
-
     setState(() {
       _isLoggingIn = true;
     });
@@ -288,6 +287,15 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       return;
     }
 
+    if (password.length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password must be at least 8 characters long.'),
+        ),
+      );
+      return;
+    }
+
     if (password != confirm) {
       ScaffoldMessenger.of(
         context,
@@ -302,6 +310,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     try {
       final ok = await AuthService.resetPassword(
         email: email,
+        code: _codeControllers.map((controller) => controller.text).join(),
         newPassword: password,
       );
 
@@ -343,6 +352,14 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     if (email.isEmpty || password.isEmpty || confirm.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please fill required fields')),
+      );
+      return;
+    }
+    if (password.length < 8) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Password must be at least 8 characters long.'),
+        ),
       );
       return;
     }
@@ -396,6 +413,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       final result = await AuthService.signUp(
         email: email,
         password: password,
+        verificationCode: _codeControllers
+            .map((controller) => controller.text)
+            .join(),
         profile: profile,
       );
       final error = result['error'] as String?;

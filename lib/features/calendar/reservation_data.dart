@@ -314,11 +314,16 @@ class ReservationActivityStore {
     NotificationActivityStore.syncFromReservations();
   }
 
-  static void replaceAll(List<ReservationRecord> reservations) {
+  static void replaceAll(
+    List<ReservationRecord> reservations, {
+    bool syncNotifications = true,
+  }) {
     listenable.value = _dedupeReservations(
       List<ReservationRecord>.from(reservations),
     );
-    NotificationActivityStore.syncFromReservations();
+    if (syncNotifications) {
+      NotificationActivityStore.syncFromReservations();
+    }
   }
 
   static void removeById(String stableId) {

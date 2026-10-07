@@ -1,6 +1,9 @@
 import 'dart:io';
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:new_nutilize_mobile/features/auth/sign_in_flow.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell.dart';
@@ -19,7 +22,7 @@ Future<void> main() async {
   runApp(const NUtilizeApp());
 }
 
-Future<void> _initializeApplication() async {
+Future<bool> _initializeApplication() async {
   // Try to load .env from assets (works on all platforms)
   try {
     final envFileName = _useSecurityDatabase ? '.env.security' : '.env';
@@ -67,11 +70,15 @@ Future<void> _initializeApplication() async {
     debugPrint('[main] Supabase init error (continuing anyway): $e');
   }
 
+  final updateCheck = _isAndroidUpdateRequired();
+
   try {
     await _repairPersistedSession();
   } catch (e) {
     debugPrint('[main] Session repair error (continuing anyway): $e');
   }
+
+  return updateCheck;
 }
 
 Future<void> _repairPersistedSession() async {
@@ -92,6 +99,47 @@ Future<void> _repairPersistedSession() async {
       : int.tryParse(profile['user_id']?.toString() ?? '');
   if (userId == null) {
     await AuthService.signOut();
+  }
+}
+
+Future<bool> _isAndroidUpdateRequired() async {
+  if (!Platform.isAndroid) return false;
+
+  const updateChannel = MethodChannel('com.nutilizmobile/app_update');
+  try {
+    final currentBuild = await updateChannel.invokeMethod<int>(
+      'getBuildNumber',
+    );
+    if (currentBuild == null) return false;
+
+    final baseUrl = SupabaseService.supabaseUrl.replaceFirst(
+      RegExp(r'/+$'),
+      '',
+    );
+    final response = await http
+        .get(
+          Uri.parse('$baseUrl/functions/v1/app_update_policy'),
+          headers: {
+            'apikey': SupabaseService.supabaseKey,
+            'Authorization': 'Bearer ${SupabaseService.supabaseKey}',
+          },
+        )
+        .timeout(const Duration(seconds: 2));
+    if (response.statusCode != 200) {
+      throw Exception(
+        'Update policy request failed with status ${response.statusCode}.',
+      );
+    }
+
+    final policy = jsonDecode(response.body) as Map<String, dynamic>;
+    final minimumBuild = policy['minimumAndroidBuild'] as int?;
+    if (minimumBuild == null || minimumBuild < 1) {
+      throw const FormatException('Invalid minimum Android build.');
+    }
+    return currentBuild < minimumBuild;
+  } catch (error) {
+    debugPrint('[startup] App update check unavailable: $error');
+    return false;
   }
 }
 
@@ -130,6 +178,7 @@ class _StartupGate extends StatefulWidget {
 class _StartupGateState extends State<_StartupGate> {
   bool _isReady = false;
   bool _hasSession = false;
+  bool _updateRequired = false;
 
   @override
   void initState() {
@@ -139,7 +188,7 @@ class _StartupGateState extends State<_StartupGate> {
 
   Future<void> _initialize() async {
     try {
-      await _initializeApplication();
+      _updateRequired = await _initializeApplication();
       _hasSession = Supabase.instance.client.auth.currentSession != null;
     } catch (e) {
       debugPrint('[startup] Initialization error: $e');
@@ -155,7 +204,73 @@ class _StartupGateState extends State<_StartupGate> {
     if (!_isReady) {
       return const _StartupSplash();
     }
+    if (_updateRequired) {
+      return const _UpdateRequiredScreen();
+    }
     return _hasSession ? const AppShell() : const SignInFlowPage();
+  }
+}
+
+class _UpdateRequiredScreen extends StatelessWidget {
+  const _UpdateRequiredScreen();
+
+  static const _updateChannel = MethodChannel('com.nutilizmobile/app_update');
+
+  Future<void> _openPlayStore(BuildContext context) async {
+    try {
+      await _updateChannel.invokeMethod<bool>('openPlayStore');
+    } catch (error) {
+      debugPrint('[startup] Could not open Play Store: $error');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Could not open Google Play. Please update NUtilize there.',
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFF243C8F),
+      body: SafeArea(
+        child: Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Image.asset('assets/images/nutilize_logo.png', width: 190),
+                const SizedBox(height: 24),
+                const Text(
+                  'Update required',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 24,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                const Text(
+                  'Please install the latest supported version of NUtilize to continue.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: Colors.white70, fontSize: 16),
+                ),
+                const SizedBox(height: 24),
+                FilledButton(
+                  onPressed: () => _openPlayStore(context),
+                  child: const Text('UPDATE IN GOOGLE PLAY'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

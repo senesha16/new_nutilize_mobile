@@ -47,7 +47,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _currentIndex = widget.initialIndex;
     _scheduleRefresh();
     _initRealtimeSubscriptions();
-    unawaited(_refreshReservations());
+    unawaited(_loadReservationsForStartup());
   }
 
   @override
@@ -81,6 +81,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         unawaited(_refreshReservations());
       }
     });
+  }
+
+  Future<void> _loadReservationsForStartup() async {
+    await _refreshReservations(includeDetails: false);
+    if (!mounted || Supabase.instance.client.auth.currentSession == null) {
+      return;
+    }
+    await _refreshReservations();
   }
 
   Future<void> _refreshReservations({bool includeDetails = true}) async {
@@ -119,8 +127,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       final locallyKnown = ReservationActivityStore.reservations
           .where((record) => !fetchedIds.contains(record.stableId))
           .toList();
-      ReservationActivityStore.replaceAll([...records, ...locallyKnown]);
-      NotificationActivityStore.syncFromReservations(DateTime.now());
+      ReservationActivityStore.replaceAll(
+        [...records, ...locallyKnown],
+        syncNotifications: includeDetails,
+      );
+      if (includeDetails) {
+        NotificationActivityStore.syncFromReservations(DateTime.now());
+      }
     } catch (_) {
       // Ignore refresh failures and keep the shell responsive.
     } finally {

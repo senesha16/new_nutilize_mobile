@@ -5,6 +5,7 @@
 // 3) Sign in using password grant to obtain access_token and return it
 
 import { serve } from "https://deno.land/std@0.201.0/http/server.ts";
+import { hashPassword } from "../_shared/password_hash.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || Deno.env.get("PROJECT_URL");
 const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -121,14 +122,43 @@ serve(async (req) => {
     const body = await req.json();
     const email = (body.email || '').toString().trim();
     const password = (body.password || '').toString();
+    const verificationCode = (body.code || '').toString().trim();
     const profile = Object.assign({}, body.profile || {}, {
       affiliation: body.affiliation ?? body.profile?.affiliation,
       program_id: body.program_id ?? body.profile?.program_id,
     });
 
-    if (!email || !password) {
-      return new Response(JSON.stringify({ error: 'Missing email or password' }), { status: 400 });
+    if (!email || !password || !verificationCode) {
+      return new Response(JSON.stringify({ error: 'Missing email, password, or verification code' }), { status: 400 });
     }
+    if (password.length < 8) {
+      return new Response(
+        JSON.stringify({ error: 'Password must be at least 8 characters long.' }),
+        { status: 400 },
+      );
+    }
+    const otpQuery =
+      `${SUPABASE_URL}/rest/v1/email_otps?email=eq.${encodeURIComponent(email)}` +
+      `&code=eq.${encodeURIComponent(verificationCode)}` +
+      `&purpose=eq.verification&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&select=id`;
+    const otpResponse = await fetch(otpQuery, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+        apikey: SERVICE_ROLE_KEY,
+        Prefer: 'return=representation',
+      },
+    });
+    if (!otpResponse.ok) {
+      console.error('Signup verification code consume failed:', otpResponse.status);
+      return new Response(JSON.stringify({ error: 'verification_failed' }), { status: 500 });
+    }
+    const consumedCodes = await otpResponse.json().catch(() => []);
+    if (!Array.isArray(consumedCodes) || consumedCodes.length === 0) {
+      return new Response(JSON.stringify({ error: 'invalid_or_expired_code' }), { status: 400 });
+    }
+
+    const passwordHash = await hashPassword(password);
 
     // 1) Create user via Admin API
     const createResp = await fetch(`${SUPABASE_URL}/auth/v1/admin/users`, {
@@ -243,7 +273,9 @@ serve(async (req) => {
     const payload: any = {};
     payload.email = incoming.email || email;
     payload.username = incoming.username || email;
+    payload.password = passwordHash;
     payload.role = incoming.role || 'student';
+    payload.auth_user_id = user.id;
     if (incoming.first_name) payload.first_name = incoming.first_name;
     if (incoming.last_name) payload.last_name = incoming.last_name;
     if (incoming.contact_number) payload.contact_number = incoming.contact_number;
@@ -253,7 +285,6 @@ serve(async (req) => {
     if (incoming.suffix) payload.suffix = incoming.suffix;
     if (incoming.office_id) payload.office_id = Number(incoming.office_id);
     if (incoming.affiliation) payload.affiliation = incoming.affiliation;
-    if (incoming.role) payload.role = incoming.role;
     if (incoming.program_id) {
       payload.program_id = Number(incoming.program_id);
     } else {

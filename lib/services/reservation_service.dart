@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
@@ -214,6 +215,8 @@ class ReservationService {
   SupabaseClient get _client => Supabase.instance.client;
   final Map<String, Map<String, dynamic>?> _officeByNameCache = {};
   final Map<int, Map<String, dynamic>?> _officeByIdCache = {};
+  final Map<String, Future<Map<String, dynamic>?>> _officeByNameRequests = {};
+  final Map<int, Future<Map<String, dynamic>?>> _officeByIdRequests = {};
 
   static String resolveApprovalStatusFromRows({
     required String overallStatus,
@@ -1136,7 +1139,11 @@ class ReservationService {
           }
 
           final roomNameFuture = _fetchReservationRoomName(reservationId);
-          final timelineFuture = _buildApprovalTimeline(reservationId, date);
+          final timelineFuture = _buildApprovalTimeline(
+            reservationId,
+            date,
+            approvalRowsByReservation[reservationId] ?? const [],
+          );
           final reservedItemsFuture = _fetchReservationItemNames(reservationId);
           final detailCheckFuture = _client
               .from('reservation_details')
@@ -1470,29 +1477,6 @@ class ReservationService {
       final officeIds = <int>[];
       final itemOwners = <String>[];
       final normalizedRoomType = normalizeRoomType(roomType);
-
-      if (itemIds != null && itemIds.isNotEmpty) {
-        for (int itemId in itemIds) {
-          final item = await getItemDetails(itemId);
-          if (item != null && item.ownerId != null) {
-            final owner = await getItemOwner(item.ownerId!);
-            if (owner != null) {
-              final affiliation = (owner['department_affiliation'] as String?)
-                  ?.trim()
-                  .toUpperCase();
-              final ownerName = owner['owner_name'] as String?;
-              if (ownerName != null &&
-                  affiliation != 'PFO' &&
-                  affiliation != 'PHYSICAL FACILITIES') {
-                if (!itemOwners.contains(ownerName)) {
-                  itemOwners.add(ownerName);
-                }
-              }
-            }
-          }
-        }
-      }
-
       final standardOffices = [
         'Program Chair',
         'SDAO',
@@ -1500,12 +1484,57 @@ class ReservationService {
         'Security',
         'Physical Facilities',
       ];
-      final itemOwnerOfficeId = await _getOfficeIdByName('Item Owner');
+
+      final Future<List<String?>> itemOwnerNamesFuture = Future.wait<String?>(
+        (itemIds ?? const <int>[]).map((itemId) async {
+          final itemResponse = await _client
+              .from('items')
+              .select('owner_id')
+              .eq('item_id', itemId)
+              .maybeSingle();
+          final ownerId = itemResponse?['owner_id'] as int?;
+          if (ownerId == null) return null;
+
+          final owner = await getItemOwner(ownerId);
+          if (owner == null) return null;
+
+          final affiliation = (owner['department_affiliation'] as String?)
+              ?.trim()
+              .toUpperCase();
+          final ownerName = owner['owner_name'] as String?;
+          if (ownerName == null ||
+              affiliation == 'PFO' ||
+              affiliation == 'PHYSICAL FACILITIES') {
+            return null;
+          }
+          return ownerName;
+        }),
+      );
+      final officeNames = [
+        'Item Owner',
+        'General Education',
+        ...standardOffices,
+      ];
+      final Future<List<MapEntry<String, int?>>> officeIdsFuture =
+          Future.wait<MapEntry<String, int?>>(
+            officeNames.map(
+              (name) async => MapEntry(name, await _getOfficeIdByName(name)),
+            ),
+          );
+      final itemOwnerNameResults = await itemOwnerNamesFuture;
+      final officeIdResults = await officeIdsFuture;
+      for (final ownerName in itemOwnerNameResults) {
+        if (ownerName != null && !itemOwners.contains(ownerName)) {
+          itemOwners.add(ownerName);
+        }
+      }
+      final officeIdsByName = Map<String, int?>.fromEntries(officeIdResults);
+      final itemOwnerOfficeId = officeIdsByName['Item Owner'];
       final hasItems = itemIds != null && itemIds.isNotEmpty;
 
       /// Helper to safely add an office with its ID to both lists
       Future<void> addOfficeToChain(String officeName) async {
-        final officeId = await _getOfficeIdByName(officeName);
+        final officeId = officeIdsByName[officeName];
         if (officeId != null) {
           officeTitles.add(officeName);
           officeIds.add(officeId);
@@ -1583,6 +1612,26 @@ class ReservationService {
       return _officeByNameCache[cacheKey];
     }
 
+    final pendingRequest = _officeByNameRequests[cacheKey];
+    if (pendingRequest != null) {
+      return pendingRequest;
+    }
+
+    final request = _fetchOfficeByName(departmentName, cacheKey);
+    _officeByNameRequests[cacheKey] = request;
+    try {
+      return await request;
+    } finally {
+      if (identical(_officeByNameRequests[cacheKey], request)) {
+        _officeByNameRequests.remove(cacheKey);
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchOfficeByName(
+    String departmentName,
+    String cacheKey,
+  ) async {
     try {
       final response = await _client
           .from('offices')
@@ -1856,6 +1905,23 @@ class ReservationService {
       return _officeByIdCache[officeId];
     }
 
+    final pendingRequest = _officeByIdRequests[officeId];
+    if (pendingRequest != null) {
+      return pendingRequest;
+    }
+
+    final request = _fetchOfficeById(officeId);
+    _officeByIdRequests[officeId] = request;
+    try {
+      return await request;
+    } finally {
+      if (identical(_officeByIdRequests[officeId], request)) {
+        _officeByIdRequests.remove(officeId);
+      }
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchOfficeById(int officeId) async {
     try {
       final response = await _client
           .from('offices')
@@ -1891,51 +1957,45 @@ class ReservationService {
   Future<List<ReservationTimelineEntry>> _buildApprovalTimeline(
     int reservationId,
     DateTime date,
+    List<Map<String, dynamic>> approvals,
   ) async {
     try {
       // Use canonical chain to force UI order, but read DB rows for status/timestamps.
       final prerequisites = await Future.wait([
-        _getReservationItemOwnerNames(reservationId),
         _getReservationRoomType(reservationId),
         _getReservationItemIds(reservationId),
       ]);
-      final itemOwnerNames = prerequisites[0] as List<String>;
-      final roomType = prerequisites[1] as String?;
-      final itemIds = prerequisites[2] as List<int>;
-
-      final timelineData = await Future.wait([
-        calculateApprovalChain(
-          roomType: roomType ?? '',
-          itemIds: itemIds.isEmpty ? null : itemIds,
-        ),
-        _client
-                .from('reservation_approvals')
-                .select('office_id, status, created_at, updated_at')
-                .eq('reservation_id', reservationId)
-                .order('created_at', ascending: true)
-            as Future<dynamic>,
-      ]);
-      final approvalChain = timelineData[0] as ApprovalChain;
-      final approvalsResponse = timelineData[1];
+      final roomType = prerequisites[0] as String?;
+      final itemIds = prerequisites[1] as List<int>;
+      final approvalChain = await calculateApprovalChain(
+        roomType: roomType ?? '',
+        itemIds: itemIds.isEmpty ? null : itemIds,
+      );
+      final approvalsResponse = List<Map<String, dynamic>>.from(approvals)
+        ..sort((a, b) {
+          final aCreated = DateTime.tryParse(a['created_at']?.toString() ?? '');
+          final bCreated = DateTime.tryParse(b['created_at']?.toString() ?? '');
+          if (aCreated == null && bCreated == null) return 0;
+          if (aCreated == null) return 1;
+          if (bCreated == null) return -1;
+          return aCreated.compareTo(bCreated);
+        });
 
       final rawApprovals = <Map<String, dynamic>>[];
-      if (approvalsResponse != null) {
-        final augmentedApprovals = await Future.wait(
-          (approvalsResponse as List).map((a) async {
-            final row = Map<String, dynamic>.from(a as Map<String, dynamic>);
-            final officeId = row['office_id'] as int?;
-            final office = officeId == null
-                ? null
-                : await _getOfficeById(officeId);
-            row['office_name'] = office?['department_name'] as String?;
-            return row;
-          }),
-        );
-        rawApprovals.addAll(augmentedApprovals);
-      }
+      final augmentedApprovals = await Future.wait(
+        approvalsResponse.map((a) async {
+          final row = Map<String, dynamic>.from(a);
+          final officeId = row['office_id'] as int?;
+          final office = officeId == null
+              ? null
+              : await _getOfficeById(officeId);
+          row['office_name'] = office?['department_name'] as String?;
+          return row;
+        }),
+      );
+      rawApprovals.addAll(augmentedApprovals);
 
-      // Debug: print canonical approval chain and raw approval rows
-      try {
+      if (kDebugMode) {
         print(
           'DEBUG: reservation $reservationId approvalChain offices: ${jsonEncode(approvalChain.offices)}',
         );
@@ -1945,7 +2005,7 @@ class ReservationService {
         print(
           'DEBUG: reservation $reservationId rawApprovals: ${jsonEncode(rawApprovals.map((r) => {'office_id': r['office_id'], 'status': r['status'], 'created_at': r['created_at'], 'updated_at': r['updated_at']}).toList())}',
         );
-      } catch (_) {}
+      }
 
       final entries = <ReservationTimelineEntry>[];
       entries.add(

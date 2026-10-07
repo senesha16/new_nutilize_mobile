@@ -107,6 +107,7 @@ class AuthService {
   static Future<Map<String, dynamic>> signUp({
     required String email,
     required String password,
+    required String verificationCode,
     Map<String, dynamic>? profile,
   }) async {
     if (!_hasValidAnonKey) {
@@ -122,6 +123,7 @@ class AuthService {
     final requestBody = {
       'email': email,
       'password': password,
+      'code': verificationCode,
       'affiliation': normalizedProfile['affiliation'],
       'program_id': normalizedProfile['program_id'],
       'profile': normalizedProfile,
@@ -899,7 +901,11 @@ class AuthService {
   }
 
   // Verify a code previously sent to the email. Expects `verify_email_code` function.
-  static Future<bool> verifyEmailCode(String email, String code) async {
+  static Future<bool> verifyEmailCode(
+    String email,
+    String code, {
+    String? purpose,
+  }) async {
     final normalizedEmail = email.trim();
     if (normalizedEmail.isEmpty || code.trim().isEmpty) {
       return false;
@@ -914,7 +920,11 @@ class AuthService {
           'apikey': _anonKey,
           'Authorization': 'Bearer $_anonKey',
         },
-        body: jsonEncode({'email': normalizedEmail, 'code': code.trim()}),
+        body: jsonEncode({
+          'email': normalizedEmail,
+          'code': code.trim(),
+          'purpose': ?purpose,
+        }),
       );
 
       if (resp.statusCode == 200) {
@@ -968,16 +978,24 @@ class AuthService {
       return false;
     }
 
-    return verifyEmailCode(normalizedEmail, normalizedCode);
+    return verifyEmailCode(
+      normalizedEmail,
+      normalizedCode,
+      purpose: 'password_reset',
+    );
   }
 
   static Future<bool> resetPassword({
     required String email,
+    required String code,
     required String newPassword,
   }) async {
     final normalizedEmail = email.trim();
+    final normalizedCode = code.trim();
     final password = newPassword.trim();
-    if (normalizedEmail.isEmpty || password.isEmpty) {
+    if (normalizedEmail.isEmpty ||
+        normalizedCode.isEmpty ||
+        password.length < 8) {
       return false;
     }
 
@@ -990,7 +1008,11 @@ class AuthService {
           'apikey': _anonKey,
           'Authorization': 'Bearer $_anonKey',
         },
-        body: jsonEncode({'email': normalizedEmail, 'password': password}),
+        body: jsonEncode({
+          'email': normalizedEmail,
+          'code': normalizedCode,
+          'password': password,
+        }),
       );
 
       if (resp.statusCode == 200 || resp.statusCode == 201) {
