@@ -1,4 +1,5 @@
 import { serve } from 'https://deno.land/std@0.199.0/http/server.ts';
+import { isRegistrationEmailTaken } from '../_shared/registration_email.ts';
 
 const PROJECT_URL = Deno.env.get('PROJECT_URL');
 const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY');
@@ -168,6 +169,12 @@ serve(async (req) => {
     if (!email) {
       return new Response(JSON.stringify({ ok: false, error: 'missing_email' }), { status: 400 });
     }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return new Response(
+        JSON.stringify({ ok: false, error: 'invalid_email', message: 'Enter a valid email address.' }),
+        { status: 400 },
+      );
+    }
 
     if (!PROJECT_URL) {
       return new Response(
@@ -216,6 +223,39 @@ serve(async (req) => {
       }
     }
 
+    const code = generateCode();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+
+    const otpPurpose = purpose === 'password_reset' || purpose === 'account_deletion'
+      ? purpose
+      : 'verification';
+
+    if (otpPurpose === 'verification') {
+      let emailTaken: boolean;
+      try {
+        emailTaken = await isRegistrationEmailTaken(
+          PROJECT_URL,
+          SERVICE_ROLE_KEY,
+          email,
+        );
+      } catch {
+        return new Response(
+          JSON.stringify({ ok: false, error: 'account_lookup_failed' }),
+          { status: 500 },
+        );
+      }
+      if (emailTaken) {
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: 'email_already_taken',
+            message: 'Email is already taken.',
+          }),
+          { status: 409 },
+        );
+      }
+    }
+
     if (!SMTP_USER || !SMTP_PASS) {
       return new Response(
         JSON.stringify({ ok: false, error: 'missing_smtp_config', message: 'SMTP_USER and SMTP_PASS are required.' }),
@@ -223,12 +263,6 @@ serve(async (req) => {
       );
     }
 
-    const code = generateCode();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
-
-    const otpPurpose = purpose === 'password_reset' || purpose === 'account_deletion'
-      ? purpose
-      : 'verification';
     const insertResponse = await fetch(`${PROJECT_URL}/rest/v1/email_otps`, {
       method: 'POST',
       headers: {

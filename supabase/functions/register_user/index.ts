@@ -6,6 +6,7 @@
 
 import { serve } from "https://deno.land/std@0.201.0/http/server.ts";
 import { hashPassword } from "../_shared/password_hash.ts";
+import { isRegistrationEmailTaken } from "../_shared/registration_email.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || Deno.env.get("PROJECT_URL");
 const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -137,6 +138,30 @@ serve(async (req) => {
         { status: 400 },
       );
     }
+
+    let emailTaken: boolean;
+    try {
+      emailTaken = await isRegistrationEmailTaken(
+        SUPABASE_URL,
+        SERVICE_ROLE_KEY,
+        email,
+      );
+    } catch {
+      return new Response(
+        JSON.stringify({ error: 'account_lookup_failed' }),
+        { status: 500 },
+      );
+    }
+    if (emailTaken) {
+      return new Response(
+        JSON.stringify({
+          error: 'email_already_taken',
+          message: 'Email is already taken.',
+        }),
+        { status: 409 },
+      );
+    }
+
     const otpQuery =
       `${SUPABASE_URL}/rest/v1/email_otps?email=eq.${encodeURIComponent(email)}` +
       `&code=eq.${encodeURIComponent(verificationCode)}` +

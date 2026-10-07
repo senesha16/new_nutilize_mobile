@@ -124,6 +124,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
   bool _isSendingResetCode = false;
   bool _isVerifyingResetCode = false;
   bool _isSubmittingNewPassword = false;
+  bool _isSendingRegistrationCode = false;
+  bool _isResendingRegistrationCode = false;
+  bool _isVerifyingRegistrationCode = false;
 
   Future<void> _attemptLogin() async {
     final email = _emailController.text.trim();
@@ -169,6 +172,103 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
   }
 
   bool _isSavingAccount = false;
+
+  Future<void> _sendRegistrationCode({bool resend = false}) async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            resend
+                ? 'Enter your email to resend the code'
+                : 'Please enter your email',
+          ),
+        ),
+      );
+      return;
+    }
+    if (_isSendingRegistrationCode || _isResendingRegistrationCode) return;
+
+    for (final controller in _codeControllers) {
+      controller.clear();
+    }
+    setState(() {
+      if (resend) {
+        _isResendingRegistrationCode = true;
+      } else {
+        _isSendingRegistrationCode = true;
+      }
+    });
+
+    try {
+      final error = await AuthService.sendEmailCode(email);
+      if (!mounted) return;
+
+      if (error == null) {
+        if (resend) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Code resent. Check your email.')),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Code sent. Check your email')),
+          );
+          _goToStep(SignInStep.code);
+        }
+        return;
+      }
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error == 'Email is already taken.'
+                ? error
+                : 'Failed to send code: $error',
+          ),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSendingRegistrationCode = false;
+          _isResendingRegistrationCode = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _verifyRegistrationCode() async {
+    final email = _emailController.text.trim();
+    final code = _codeControllers.map((controller) => controller.text).join();
+    if (code.length != 6) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter the 6-digit code')),
+      );
+      return;
+    }
+    if (_isVerifyingRegistrationCode) return;
+
+    setState(() => _isVerifyingRegistrationCode = true);
+    try {
+      final isValid = await AuthService.verifyEmailCode(email, code);
+      if (!mounted) return;
+
+      if (isValid) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Email verified')));
+        _goToStep(SignInStep.role);
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Invalid code')));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isVerifyingRegistrationCode = false);
+      }
+    }
+  }
 
   Future<void> _sendForgotPasswordCode() async {
     final email = _emailController.text.trim();
@@ -881,31 +981,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               const SizedBox(height: 18),
               _PrimaryButton(
                 label: 'SEND CODE',
-                onPressed: () async {
-                  final email = _emailController.text.trim();
-                  if (email.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Please enter your email')),
-                    );
-                    return;
-                  }
-                  for (final controller in _codeControllers) {
-                    controller.clear();
-                  }
-                  final error = await AuthService.sendEmailCode(email);
-                  if (error == null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Code sent. Check your email'),
-                      ),
-                    );
-                    _goToStep(SignInStep.code);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Failed to send code: $error')),
-                    );
-                  }
-                },
+                isLoading: _isSendingRegistrationCode,
+                loadingLabel: 'SENDING CODE...',
+                onPressed: () => _sendRegistrationCode(),
               ),
             ],
           ),
@@ -936,61 +1014,41 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               ),
               const SizedBox(height: 10),
               TextButton(
-                onPressed: () async {
-                  final email = _emailController.text.trim();
-                  if (email.isEmpty) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Enter your email to resend the code'),
+                onPressed: _isResendingRegistrationCode
+                    ? null
+                    : () => _sendRegistrationCode(resend: true),
+                child: _isResendingRegistrationCode
+                    ? const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(
+                                Color(0xFFF6C914),
+                              ),
+                            ),
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Sending code...',
+                            style: TextStyle(color: Colors.white70),
+                          ),
+                        ],
+                      )
+                    : const Text(
+                        'Resend Code',
+                        style: TextStyle(color: Colors.white70),
                       ),
-                    );
-                    return;
-                  }
-                  for (final controller in _codeControllers) {
-                    controller.clear();
-                  }
-                  final error = await AuthService.sendEmailCode(email);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        error == null
-                            ? 'Code resent. Check your email.'
-                            : 'Failed to resend code: $error',
-                      ),
-                    ),
-                  );
-                },
-                child: const Text(
-                  'Resend Code',
-                  style: TextStyle(color: Colors.white70),
-                ),
               ),
               const SizedBox(height: 4),
               _PrimaryButton(
                 label: 'VERIFY CODE',
-                onPressed: () async {
-                  final email = _emailController.text.trim();
-                  final code = _codeControllers.map((c) => c.text).join();
-                  if (code.length != 6) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Please enter the 6-digit code'),
-                      ),
-                    );
-                    return;
-                  }
-                  final ok = await AuthService.verifyEmailCode(email, code);
-                  if (ok) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Email verified')),
-                    );
-                    _goToStep(SignInStep.role);
-                  } else {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Invalid code')),
-                    );
-                  }
-                },
+                isLoading: _isVerifyingRegistrationCode,
+                loadingLabel: 'VERIFYING...',
+                onPressed: _verifyRegistrationCode,
               ),
             ],
           ),
@@ -1722,10 +1780,17 @@ class _UploadBox extends StatelessWidget {
 }
 
 class _PrimaryButton extends StatelessWidget {
-  const _PrimaryButton({required this.label, required this.onPressed});
+  const _PrimaryButton({
+    required this.label,
+    required this.onPressed,
+    this.isLoading = false,
+    this.loadingLabel,
+  });
 
   final String label;
   final VoidCallback onPressed;
+  final bool isLoading;
+  final String? loadingLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -1733,17 +1798,44 @@ class _PrimaryButton extends StatelessWidget {
       width: double.infinity,
       height: 52,
       child: ElevatedButton(
-        onPressed: onPressed,
+        onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFFF6C914),
           foregroundColor: const Color(0xFF1A2254),
           elevation: 0,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(4)),
         ),
-        child: Text(
-          label,
-          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
-        ),
+        child: isLoading
+            ? Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.2,
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        Color(0xFF1A2254),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    loadingLabel ?? label,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              )
+            : Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
       ),
     );
   }

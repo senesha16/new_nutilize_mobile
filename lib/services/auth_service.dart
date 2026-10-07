@@ -159,21 +159,8 @@ class AuthService {
         };
       }
 
-      // Registration succeeded but the function did not create a session.
-      // Try one fast sign-in immediately so the user still gets a session.
-      final fallbackToken = await signIn(email: email, password: password);
-      if (fallbackToken != null) {
-        debugPrint('[AuthService] Fast sign-in succeeded after registration.');
-        return {
-          'error': null,
-          'access_token': fallbackToken,
-          'warning': warning ?? 'Account created and signed in.',
-        };
-      }
-
-      debugPrint(
-        '[AuthService] Fast sign-in after registration failed; user can log in manually.',
-      );
+      // Registration intentionally leaves sign-in to the login flow. Avoid
+      // doing another Auth request and profile fetch while the save is pending.
       return {
         'error': null,
         'access_token': null,

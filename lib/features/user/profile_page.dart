@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:new_nutilize_mobile/features/auth/sign_in_flow.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/features/calendar/calendar_page.dart';
@@ -255,19 +256,55 @@ Future<void> _handleDeleteAccount(BuildContext context) async {
   final confirmed = await showDialog<bool>(
     context: context,
     builder: (dialogContext) => AlertDialog(
-      title: const Text('Delete account?'),
-      content: const Text(
-        'Are you sure you want to delete your account? This permanently removes your profile, reservations, reports, and uploaded files.',
+      backgroundColor: Colors.white,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      icon: const Icon(
+        Icons.warning_amber_rounded,
+        color: Color(0xFFE53935),
+        size: 36,
       ),
+      title: const Text(
+        'Delete your account?',
+        style: TextStyle(color: Color(0xFF111111), fontWeight: FontWeight.w800),
+      ),
+      content: const Text(
+        'This permanently removes your profile, reservations, reports, and uploaded files. You’ll need to verify your email before deletion.',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: Color(0xFF626A80), height: 1.45),
+      ),
+      actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          style: FilledButton.styleFrom(backgroundColor: Color(0xFFE53935)),
-          onPressed: () => Navigator.of(dialogContext).pop(true),
-          child: const Text('Proceed'),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                onPressed: () => Navigator.of(dialogContext).pop(false),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: const Color(0xFF35489A),
+                  side: const BorderSide(color: Color(0xFFD8DDF0)),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                child: const Text('Keep account'),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: FilledButton(
+                style: FilledButton.styleFrom(
+                  backgroundColor: const Color(0xFFE53935),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                onPressed: () => Navigator.of(dialogContext).pop(true),
+                child: const Text('Continue'),
+              ),
+            ),
+          ],
         ),
       ],
     ),
@@ -275,7 +312,11 @@ Future<void> _handleDeleteAccount(BuildContext context) async {
   if (confirmed != true || !context.mounted) return;
 
   final email = AuthService.currentUser?['email']?.toString() ?? '';
-  final sendError = await AuthService.sendAccountDeletionCode(email);
+  final sendError = await _withAccountDeletionProgress(
+    context,
+    'Sending your verification code…',
+    () => AuthService.sendAccountDeletionCode(email),
+  );
   if (!context.mounted) return;
   if (sendError != null) {
     await _showAccountDeletionError(context, sendError);
@@ -285,42 +326,120 @@ Future<void> _handleDeleteAccount(BuildContext context) async {
   final codeController = TextEditingController();
   final code = await showDialog<String>(
     context: context,
-    builder: (dialogContext) => AlertDialog(
-      title: const Text('Verify account deletion'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('We sent a deletion code to your email address.'),
-          const SizedBox(height: 16),
-          TextField(
-            controller: codeController,
-            autofocus: true,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            decoration: const InputDecoration(
-              labelText: 'Enter OTP',
-              border: OutlineInputBorder(),
+    builder: (dialogContext) => StatefulBuilder(
+      builder: (dialogContext, setDialogState) => AlertDialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+        icon: const Icon(
+          Icons.mark_email_read_outlined,
+          color: Color(0xFF35489A),
+          size: 34,
+        ),
+        title: const Text(
+          'Verify it’s you',
+          style: TextStyle(
+            color: Color(0xFF111111),
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'Enter the 6-digit code sent to ${_maskEmail(email)} to confirm account deletion.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Color(0xFF626A80), height: 1.45),
             ),
+            const SizedBox(height: 18),
+            TextField(
+              controller: codeController,
+              autofocus: true,
+              keyboardType: TextInputType.number,
+              textAlign: TextAlign.center,
+              maxLength: 6,
+              inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+              style: const TextStyle(
+                color: Color(0xFF111111),
+                fontSize: 22,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 8,
+              ),
+              onChanged: (_) => setDialogState(() {}),
+              decoration: InputDecoration(
+                hintText: '••••••',
+                counterText: '',
+                filled: true,
+                fillColor: const Color(0xFFF3F5FB),
+                contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFD8DDF0)),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(color: Color(0xFFD8DDF0)),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  borderSide: const BorderSide(
+                    color: Color(0xFF35489A),
+                    width: 1.5,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+        actions: [
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF35489A),
+                    side: const BorderSide(color: Color(0xFFD8DDF0)),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Cancel'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: FilledButton(
+                  onPressed: codeController.text.length == 6
+                      ? () =>
+                            Navigator.of(dialogContext).pop(codeController.text)
+                      : null,
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF35489A),
+                    disabledBackgroundColor: const Color(0xFFD8DDF0),
+                    padding: const EdgeInsets.symmetric(vertical: 13),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text('Verify'),
+                ),
+              ),
+            ],
           ),
         ],
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(dialogContext).pop(),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(dialogContext).pop(codeController.text),
-          child: const Text('Proceed'),
-        ),
-      ],
     ),
   );
   codeController.dispose();
   if (code == null || code.trim().isEmpty || !context.mounted) return;
 
-  final deleted = await AuthService.deleteAccount(code: code);
+  final deleted = await _withAccountDeletionProgress(
+    context,
+    'Securely deleting your account…',
+    () => AuthService.deleteAccount(code: code),
+  );
   if (!context.mounted) return;
   if (!deleted) {
     await _showAccountDeletionError(
@@ -333,6 +452,65 @@ Future<void> _handleDeleteAccount(BuildContext context) async {
   await Navigator.of(context).pushReplacement(
     MaterialPageRoute(builder: (_) => const AccountDeletedPage()),
   );
+}
+
+Future<T> _withAccountDeletionProgress<T>(
+  BuildContext context,
+  String message,
+  Future<T> Function() operation,
+) async {
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => PopScope(
+      canPop: false,
+      child: Dialog(
+        backgroundColor: Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 22),
+          child: Row(
+            children: [
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Color(0xFF35489A),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Text(
+                  message,
+                  style: const TextStyle(
+                    color: Color(0xFF252A3A),
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+
+  try {
+    return await operation();
+  } finally {
+    if (context.mounted) {
+      Navigator.of(context, rootNavigator: true).pop();
+    }
+  }
+}
+
+String _maskEmail(String email) {
+  final parts = email.split('@');
+  if (parts.length != 2 || parts.first.isEmpty) return 'your email address';
+  final name = parts.first;
+  final visiblePrefix = name.length == 1 ? name : name.substring(0, 2);
+  return '$visiblePrefix•••@${parts.last}';
 }
 
 Future<void> _showAccountDeletionError(BuildContext context, String message) {
@@ -360,45 +538,114 @@ class AccountDeletedPage extends StatelessWidget {
       backgroundColor: const Color(0xFFF3F5FB),
       body: SafeArea(
         child: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(
-                  Icons.check_circle_outline_rounded,
-                  color: Color(0xFF2E9D50),
-                  size: 72,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 440),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.fromLTRB(28, 34, 28, 28),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x12000000),
+                      blurRadius: 24,
+                      offset: Offset(0, 12),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 22),
-                const Text(
-                  'Thank you for using NUtilize Mobile, we hope to see you again :(((',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Color(0xFF111111),
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                const SizedBox(height: 28),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton(
-                    onPressed: () async {
-                      await AuthService.signOut();
-                      if (context.mounted) {
-                        Navigator.of(context).pushAndRemoveUntil(
-                          MaterialPageRoute(
-                            builder: (_) => const SignInFlowPage(),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 92,
+                      height: 92,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFEAF5ED),
+                        borderRadius: BorderRadius.circular(28),
+                      ),
+                      child: const Icon(
+                        Icons.check_circle_rounded,
+                        color: Color(0xFF2E9D50),
+                        size: 56,
+                      ),
+                    ),
+                    const SizedBox(height: 26),
+                    const Text(
+                      'Account deleted',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF111111),
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Your NUtilize Mobile account and associated data have been removed.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Color(0xFF626A80),
+                        fontSize: 15,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFF3F5FB),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: const Text(
+                        'Thank you for being part of NUtilize. We’re sorry to see you go, and you’re always welcome back.',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: Color(0xFF35489A),
+                          fontSize: 14,
+                          height: 1.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton(
+                        onPressed: () async {
+                          await AuthService.signOut();
+                          if (context.mounted) {
+                            Navigator.of(context).pushAndRemoveUntil(
+                              MaterialPageRoute(
+                                builder: (_) => const SignInFlowPage(),
+                              ),
+                              (route) => false,
+                            );
+                          }
+                        },
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF35489A),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 15),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
                           ),
-                          (route) => false,
-                        );
-                      }
-                    },
-                    child: const Text('Proceed to Login'),
-                  ),
+                        ),
+                        child: const Text(
+                          'Return to sign in',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
