@@ -3,7 +3,6 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
-import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/services/supabase_service.dart';
 
 // MARK: - Models
@@ -1683,221 +1682,48 @@ class ReservationService {
     String? imageBase64,
     List<String>? reportedItems,
   }) async {
-    late final Map<String, dynamic> payload;
+    final session = _client.auth.currentSession;
+    if (session == null) {
+      debugPrint(
+        '[ReservationService] Cannot submit issue report without a session.',
+      );
+      return false;
+    }
+
+    final hasImageName = imageName != null && imageName.isNotEmpty;
+    final hasImageBytes = imageBase64 != null && imageBase64.isNotEmpty;
+    if (hasImageName != hasImageBytes) {
+      debugPrint('[ReservationService] Issue report image data is incomplete.');
+      return false;
+    }
+
     try {
-      // Prefer the active Supabase authenticated session values where possible.
-      final session = _client.auth.currentSession;
-      final authEmail =
-          session?.user.email?.trim() ??
-          AuthService.currentUser?['email']?.toString().trim();
-
-      final userId = AuthService.currentUser?['user_id'] as int?;
-      final authUserId =
-          session?.user.id?.trim() ??
-          AuthService.currentUser?['auth_user_id']?.toString().trim();
-      final hasImageUrlColumn = await _tableHasColumn(
-        'reservation_issues',
-        'image_url',
-      );
-      final hasAuthUserIdColumn = await _tableHasColumn(
-        'reservation_issues',
-        'auth_user_id',
-      );
-      final hasReportedByColumn = await _tableHasColumn(
-        'reservation_issues',
-        'reported_by',
+      final response = await _client.functions.invoke(
+        'submit_issue_report',
+        body: {
+          'description': description,
+          if (reservationId != null) 'reservation_id': reservationId,
+          if (hasImageName) 'image_name': imageName,
+          if (hasImageBytes) 'image_base64': imageBase64,
+          if (reportedItems != null && reportedItems.isNotEmpty)
+            'reported_items': reportedItems,
+        },
       );
 
-      payload = <String, dynamic>{
-        'description': description,
-        'status': 'Pending',
-        'created_at': DateTime.now().toIso8601String(),
-      };
-
-      if (reservationId != null) {
-        payload['reservation_id'] = reservationId;
-      }
-
-      // Attach auth identifiers to satisfy RLS policies.
-      if (hasReportedByColumn && authEmail != null && authEmail.isNotEmpty) {
-        payload['reported_by'] = authEmail;
-      }
-      if (hasAuthUserIdColumn && authUserId != null && authUserId.isNotEmpty) {
-        payload['auth_user_id'] = authUserId;
-      }
-      // Preserve numeric user_id if we have it (legacy users table).
-      if (userId != null) {
-        payload['user_id'] = userId;
-      }
-
-      String? imageUrl;
-      if (imageName != null && imageName.isNotEmpty) {
-        payload['image_name'] = imageName;
-      }
-
-      if (imageBase64 != null &&
-          imageBase64.isNotEmpty &&
-          imageName != null &&
-          imageName.isNotEmpty) {
-        final filePath = _buildReportFilePath(
-          userId,
-          reservationId ?? 0,
-          imageName,
+      final status = response.status;
+      if (status == null || status < 200 || status >= 300) {
+        debugPrint(
+          '[ReservationService] Issue report function returned ${response.status}.',
         );
-        imageUrl = await _uploadReportImageFromBase64(imageBase64, filePath);
-        if (imageUrl != null && hasImageUrlColumn) {
-          payload['image_url'] = imageUrl;
-        } else {
-          payload['description'] =
-              '$description\n\n(Image upload failed or image_url unsupported. Image was not attached to this report.)';
-        }
+        return false;
       }
 
-      if (reportedItems != null && reportedItems.isNotEmpty) {
-        // Only include the reported_items column if it exists in the DB schema.
-        try {
-          final hasColumn = await _tableHasColumn(
-            'reservation_issues',
-            'reported_items',
-          );
-          if (hasColumn) {
-            payload['reported_items'] = reportedItems;
-          } else {
-            // Fallback: append a short list of reported items to the description
-            payload['description'] =
-                '$description\n\nReported items: ${reportedItems.join(', ')}';
-          }
-        } catch (_) {
-          payload['description'] =
-              '$description\n\nReported items: ${reportedItems.join(', ')}';
-        }
-      }
-
-      final response = await _client
-          .from('reservation_issues')
-          .insert(payload)
-          .select()
-          .maybeSingle();
-      return response != null;
+      final responseBody = response.data;
+      return responseBody is Map && responseBody['ok'] == true;
     } catch (e) {
-      print('Error submitting issue report: $e');
-      if (SupabaseService.serviceRoleKey.isNotEmpty) {
-        return await _submitIssueReportWithServiceRole(payload);
-      }
+      debugPrint('[ReservationService] Issue report submission failed: $e');
       return false;
     }
-  }
-
-  Future<bool> _submitIssueReportWithServiceRole(
-    Map<String, dynamic> payload,
-  ) async {
-    final serviceRoleKey = SupabaseService.serviceRoleKey;
-    if (serviceRoleKey.isEmpty) {
-      print('Service role key not available for report insert fallback');
-      return false;
-    }
-
-    try {
-      final serviceClient = SupabaseClient(
-        SupabaseService.supabaseUrl,
-        serviceRoleKey,
-      );
-      final response = await serviceClient
-          .from('reservation_issues')
-          .insert(payload)
-          .select()
-          .maybeSingle();
-      return response != null;
-    } catch (e) {
-      print('Service-role report insert failed: $e');
-      return false;
-    }
-  }
-
-  Future<String?> _uploadReportImageFromBase64(
-    String imageBase64,
-    String filePath,
-  ) async {
-    try {
-      final imageBytes = base64Decode(imageBase64);
-      final tempDir = Directory.systemTemp;
-      final uploadTempFile = File('${tempDir.path}/$filePath');
-      await uploadTempFile.parent.create(recursive: true);
-      await uploadTempFile.writeAsBytes(imageBytes, flush: true);
-
-      try {
-        await _client.storage
-            .from('reports')
-            .upload(
-              filePath,
-              uploadTempFile,
-              fileOptions: const FileOptions(
-                cacheControl: '3600',
-                upsert: true,
-              ),
-            );
-      } catch (e) {
-        final serviceRoleKey = SupabaseService.serviceRoleKey;
-        if (serviceRoleKey.isNotEmpty) {
-          try {
-            final storageClient = SupabaseClient(
-              SupabaseService.supabaseUrl,
-              serviceRoleKey,
-            );
-            await storageClient.storage
-                .from('reports')
-                .upload(
-                  filePath,
-                  uploadTempFile,
-                  fileOptions: const FileOptions(
-                    cacheControl: '3600',
-                    upsert: true,
-                  ),
-                );
-            return _getPublicUrlFromStorageClient(storageClient, filePath);
-          } catch (fallbackError) {
-            print('Service-role upload fallback failed: $fallbackError');
-            return null;
-          }
-        }
-        print('Error uploading report image: $e');
-        return null;
-      }
-
-      return _getPublicUrlFromStorageClient(_client, filePath);
-    } catch (e) {
-      print('Error uploading report image: $e');
-      return null;
-    }
-  }
-
-  String? _getPublicUrlFromStorageClient(
-    SupabaseClient client,
-    String filePath,
-  ) {
-    final urlResponse = client.storage.from('reports').getPublicUrl(filePath);
-    if (urlResponse is String) {
-      return urlResponse;
-    }
-    if (urlResponse is Map) {
-      final urlMap = Map<String, dynamic>.from(urlResponse as Map);
-      return urlMap['publicUrl']?.toString() ?? urlMap['publicURL']?.toString();
-    }
-    return null;
-  }
-
-  String _buildReportFilePath(
-    int? userId,
-    int reservationId,
-    String imageName,
-  ) {
-    final sanitizedName = imageName.toLowerCase().replaceAll(
-      RegExp(r'[^a-z0-9_.-]'),
-      '_',
-    );
-    final timestamp = DateTime.now().toUtc().millisecondsSinceEpoch;
-    final ownerPath = userId?.toString() ?? 'unknown';
-    return '$ownerPath/$reservationId/${timestamp}_$sanitizedName';
   }
 
   Future<Map<String, dynamic>?> _getOfficeById(int officeId) async {
@@ -1942,16 +1768,6 @@ class ReservationService {
     if (officeId == null) return null;
     final office = await _getOfficeById(officeId);
     return office?['department_name'] as String?;
-  }
-
-  /// Check whether a table has a specific column by querying the table directly.
-  Future<bool> _tableHasColumn(String tableName, String columnName) async {
-    try {
-      await _client.from(tableName).select(columnName).limit(1).maybeSingle();
-      return true;
-    } catch (_) {
-      return false;
-    }
   }
 
   Future<List<ReservationTimelineEntry>> _buildApprovalTimeline(
