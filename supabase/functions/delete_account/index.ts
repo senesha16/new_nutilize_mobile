@@ -10,46 +10,192 @@ function json(body: Record<string, unknown>, status = 200) {
   });
 }
 
-async function removeUserStorage(bucket: string, userId: number) {
-  const listResponse = await fetch(`${PROJECT_URL}/storage/v1/object/list/${bucket}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: SERVICE_ROLE_KEY!,
-      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-    },
-    body: JSON.stringify({
-      prefix: `${userId}/`,
-      limit: 1000,
-      offset: 0,
-      sortBy: { column: 'name', order: 'asc' },
-    }),
+function serviceHeaders(extra: Record<string, string> = {}) {
+  return {
+    apikey: SERVICE_ROLE_KEY!,
+    Authorization: `Bearer ${SERVICE_ROLE_KEY!}`,
+    ...extra,
+  };
+}
+
+function tableUrl(table: string, filters: Array<[string, number | number[]]>) {
+  const url = new URL(`${PROJECT_URL}/rest/v1/${table}`);
+  for (const [column, value] of filters) {
+    url.searchParams.set(
+      column,
+      Array.isArray(value) ? `in.(${value.join(',')})` : `eq.${value}`,
+    );
+  }
+  return url;
+}
+
+async function getIds(
+  table: string,
+  idColumn: string,
+  filters: Array<[string, number | number[]]>,
+): Promise<number[]> {
+  const ids: number[] = [];
+  const pageSize = 1000;
+
+  for (let offset = 0; ; offset += pageSize) {
+    const url = tableUrl(table, filters);
+    url.searchParams.set('select', idColumn);
+    url.searchParams.set('limit', pageSize.toString());
+    url.searchParams.set('offset', offset.toString());
+
+    const response = await fetch(url, { headers: serviceHeaders() });
+    if (!response.ok) {
+      throw new Error(`Account data lookup failed for ${table}: ${await response.text()}`);
+    }
+
+    const rows = await response.json();
+    if (!Array.isArray(rows)) {
+      throw new Error(`Account data lookup returned invalid rows for ${table}`);
+    }
+
+    for (const row of rows) {
+      const id = Number(row?.[idColumn]);
+      if (!Number.isSafeInteger(id)) {
+        throw new Error(`Account data lookup returned an invalid ${idColumn}`);
+      }
+      ids.push(id);
+    }
+    if (rows.length < pageSize) return ids;
+  }
+}
+
+async function deleteRows(
+  table: string,
+  filters: Array<[string, number | number[]]>,
+) {
+  const response = await fetch(tableUrl(table, filters), {
+    method: 'DELETE',
+    headers: serviceHeaders({ Prefer: 'return=minimal' }),
   });
-  if (!listResponse.ok) {
-    throw new Error(`Storage list failed for ${bucket}: ${await listResponse.text()}`);
+  if (!response.ok) {
+    throw new Error(`Account data deletion failed for ${table}: ${await response.text()}`);
+  }
+}
+
+async function deleteRowsByIds(table: string, column: string, ids: number[]) {
+  const batchSize = 100;
+  for (let offset = 0; offset < ids.length; offset += batchSize) {
+    await deleteRows(table, [[column, ids.slice(offset, offset + batchSize)]]);
+  }
+}
+
+async function getIdsByIds(
+  table: string,
+  idColumn: string,
+  filterColumn: string,
+  filterIds: number[],
+): Promise<number[]> {
+  const ids: number[] = [];
+  const batchSize = 100;
+  for (let offset = 0; offset < filterIds.length; offset += batchSize) {
+    ids.push(
+      ...await getIds(table, idColumn, [
+        [filterColumn, filterIds.slice(offset, offset + batchSize)],
+      ]),
+    );
+  }
+  return ids;
+}
+
+async function deleteUserData(userId: number) {
+  const userFilter: Array<[string, number | number[]]> = [['user_id', userId]];
+
+  const reportIds = await getIds('reports', 'report_id', userFilter);
+  const reservationIds = await getIds('reservations', 'reservation_id', userFilter);
+  const importIds = await getIds('schedule_imports', 'import_id', userFilter);
+  const reservationItemIds = await getIdsByIds(
+    'reservation_items',
+    'reservation_items_id',
+    'reservation_id',
+    reservationIds,
+  );
+
+  await deleteRowsByIds('report_targets', 'report_id', reportIds);
+  await deleteRows('reports', userFilter);
+
+  await deleteRowsByIds('reservation_item_units', 'reservation_items_id', reservationItemIds);
+  await deleteRowsByIds('reservation_details', 'reservation_id', reservationIds);
+  await deleteRowsByIds('reservation_approval_histories', 'reservation_id', reservationIds);
+  await deleteRowsByIds('reservation_approvals', 'reservation_id', reservationIds);
+  await deleteRowsByIds('reservation_rooms', 'reservation_id', reservationIds);
+  await deleteRowsByIds('reservation_items', 'reservation_id', reservationIds);
+  await deleteRowsByIds('reservations', 'reservation_id', reservationIds);
+
+  await deleteRows('notifications', userFilter);
+  await deleteRows('reservation_issues', userFilter);
+  await deleteRowsByIds('schedule_import_details', 'import_id', importIds);
+  await deleteRows('schedule_imports', userFilter);
+  await deleteRows('sessions', userFilter);
+  await deleteRows('admin_activity_logs', userFilter);
+
+  const ownerUrl = tableUrl('item_owners', userFilter);
+  const ownerResponse = await fetch(ownerUrl, {
+    method: 'PATCH',
+    headers: serviceHeaders({
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    }),
+    body: JSON.stringify({ user_id: null }),
+  });
+  if (!ownerResponse.ok) {
+    throw new Error(`Account ownership cleanup failed: ${await ownerResponse.text()}`);
   }
 
-  const objects = await listResponse.json();
-  const paths = Array.isArray(objects)
-    ? objects
-        .map((object) => object?.name?.toString())
-        .filter((name): name is string => Boolean(name))
-        .map((name) => `${userId}/${name}`)
-    : [];
+  await deleteRows('users', userFilter);
+}
 
-  if (paths.length === 0) return;
-
-  const removeResponse = await fetch(`${PROJECT_URL}/storage/v1/object/${bucket}`, {
-    method: 'DELETE',
-    headers: {
-      'Content-Type': 'application/json',
-      apikey: SERVICE_ROLE_KEY!,
+async function removeUserStorage(bucket: string, userId: number) {
+  const pageSize = 1000;
+  for (;;) {
+    const listResponse = await fetch(`${PROJECT_URL}/storage/v1/object/list/${bucket}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SERVICE_ROLE_KEY!,
       Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
     },
-    body: JSON.stringify({ prefixes: paths }),
-  });
-  if (!removeResponse.ok) {
-    throw new Error(`Storage delete failed for ${bucket}: ${await removeResponse.text()}`);
+      body: JSON.stringify({
+        prefix: `${userId}/`,
+        limit: pageSize,
+        offset: 0,
+        sortBy: { column: 'name', order: 'asc' },
+      }),
+    });
+    if (!listResponse.ok) {
+      throw new Error(`Storage list failed for ${bucket}: ${await listResponse.text()}`);
+    }
+
+    const objects = await listResponse.json();
+    if (!Array.isArray(objects)) {
+      throw new Error(`Storage list returned invalid objects for ${bucket}`);
+    }
+    if (objects.length === 0) return;
+    const paths = objects
+      .map((object) => object?.name?.toString())
+      .filter((name): name is string => Boolean(name))
+      .map((name) => `${userId}/${name}`);
+
+    if (paths.length === 0) {
+      throw new Error(`Storage list returned no usable paths for ${bucket}`);
+    }
+
+    const removeResponse = await fetch(`${PROJECT_URL}/storage/v1/object/${bucket}`, {
+      method: 'DELETE',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: SERVICE_ROLE_KEY!,
+      Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
+    },
+      body: JSON.stringify({ prefixes: paths }),
+    });
+    if (!removeResponse.ok) {
+      throw new Error(`Storage delete failed for ${bucket}: ${await removeResponse.text()}`);
+    }
   }
 }
 
@@ -119,20 +265,7 @@ serve(async (req) => {
     await removeUserStorage('reports', userId);
     await removeUserStorage('proof_of_consent', userId);
 
-    const deleteDataResponse = await fetch(`${PROJECT_URL}/rest/v1/rpc/delete_account_data`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        apikey: SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${SERVICE_ROLE_KEY}`,
-      },
-      body: JSON.stringify({ target_user_id: userId }),
-    });
-    if (!deleteDataResponse.ok) {
-      const details = await deleteDataResponse.text();
-      console.error('Account data deletion failed:', details);
-      return json({ ok: false, error: 'data_deletion_failed', details }, 500);
-    }
+    await deleteUserData(userId);
 
     const deleteAuthResponse = await fetch(
       `${PROJECT_URL}/auth/v1/admin/users/${encodeURIComponent(authUserId)}`,

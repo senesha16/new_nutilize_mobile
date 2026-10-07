@@ -139,6 +139,7 @@ serve(async (req) => {
     if (reportedItems.length > 0) {
       payload.description = `${description}\n\nReported items: ${reportedItems.join(', ')}`;
     }
+    payload.reported_items = reportedItems;
 
     const imageName = body.image_name?.toString();
     const imageBase64 = body.image_base64?.toString();
@@ -206,7 +207,12 @@ serve(async (req) => {
       },
     );
     if (!insertResponse.ok) {
-      console.error('Issue report database insert failed:', insertResponse.status);
+      const insertError = await insertResponse.text();
+      console.error(
+        'Issue report database insert failed:',
+        insertResponse.status,
+        insertError,
+      );
       if (uploadedPath) {
         const cleanupResponse = await fetch(
           `${PROJECT_URL}/storage/v1/object/reports/${encodedPath(uploadedPath)}`,

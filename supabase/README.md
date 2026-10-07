@@ -1,57 +1,31 @@
-# Supabase Functions for NUtilize
+# Supabase backend for NUtilize
 
-This folder contains two Supabase Edge Functions to support email OTP verification:
+NUtilize uses Supabase Edge Functions for account registration, email OTPs,
+password resets, account deletion, Android update checks, and issue reports.
+Issue screenshots are uploaded to the `reports` Storage bucket and linked to
+rows in `public.reservation_issues`.
 
-- `send_email_code`: sends a 6-digit code to the user's email
-- `verify_email_code`: validates the code and deletes it after use
+## Email OTP behavior
 
-## Setup
+- `send_email_code` checks both `public.users` and Supabase Auth before sending
+  a registration code.
+- `verify_email_code` validates signup and password-reset codes without
+  consuming them; the operation that completes registration or reset consumes
+  the code.
+- Configure `PROJECT_URL`, `SERVICE_ROLE_KEY`, `SMTP_HOST`, `SMTP_PORT`,
+  `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM` as Edge Function secrets.
+- Never include the service-role key in the Flutter app or a client `.env`.
 
-1. Install Supabase CLI and login:
+## Deploy functions
 
-```bash
+Log in to Supabase CLI, then deploy the functions to the intended project:
+
+```powershell
 supabase login
+supabase functions deploy register_user send_email_code verify_email_code reset_user_password delete_account app_update_policy --project-ref <project-ref> --use-api
+supabase functions deploy submit_issue_report --project-ref <project-ref> --no-verify-jwt --use-api
 ```
 
-2. Create the required table in Supabase SQL editor:
-
-```sql
-CREATE TABLE email_otps (
-  id bigserial PRIMARY KEY,
-  email varchar NOT NULL,
-  code varchar NOT NULL,
-  expires_at timestamptz NOT NULL,
-  created_at timestamptz DEFAULT now()
-);
-CREATE INDEX ON email_otps (email);
-```
-
-3. Set secrets in Supabase CLI:
-
-```bash
-supabase secrets set SERVICE_ROLE_KEY="your-supabase-service-role-key"
-supabase secrets set PROJECT_URL="https://uszlgigsuseomkwmqwan.supabase.co"
-supabase secrets set SMTP_HOST="smtp.gmail.com"
-supabase secrets set SMTP_PORT="465"
-supabase secrets set SMTP_USER="your@gmail.com"
-supabase secrets set SMTP_PASS="your-gmail-app-password"
-supabase secrets set SMTP_FROM="your@gmail.com"
-```
-
-4. Deploy the functions from the repo root (for example, in your VS Code terminal):
-
-```bash
-cd c:\Users\Joshueee\new_nutilize_mobile
-supabase functions deploy send_email_code
-supabase functions deploy verify_email_code
-```
-
-> Note: Supabase CLI uses Docker to bundle Edge Functions. That is why it may pull a container image before deploying.
-
-5. If your project uses a different ref, add `--project-ref <ref>` to the deploy commands.
-
-## Notes
-
-- Use a Gmail App Password for `SMTP_PASS` when using Gmail SMTP.
-- Keep `SERVICE_ROLE_KEY` secret.
-- The mobile app already calls these functions via `AuthService.sendEmailCode` and `AuthService.verifyEmailCode`.
+`submit_issue_report` performs its own session validation, uploads the optional
+image, and inserts the report using server-side credentials. Other functions
+retain the target project's JWT verification setting.
