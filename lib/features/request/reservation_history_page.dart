@@ -28,6 +28,12 @@ class _ReservationHistoryPageState extends State<ReservationHistoryPage> {
     final status = dbStatus.toLowerCase();
     if (status.contains('returned')) {
       return 'Returned';
+    } else if (status.contains('timed out')) {
+      return 'Timed Out';
+    } else if (status.contains('overdue')) {
+      return 'Overdue';
+    } else if (status == 'to return') {
+      return 'To Return';
     } else if (status.contains('completed')) {
       return 'Completed';
     } else if (status.contains('pending') || status.contains('waiting')) {
@@ -139,6 +145,9 @@ class _ReservationHistoryPageState extends State<ReservationHistoryPage> {
                               'Pending',
                               'Approved',
                               'Completed',
+                              'To Return',
+                              'Timed Out',
+                              'Overdue',
                               'Cancelled',
                               'Returned',
                             ].map((status) {
@@ -311,6 +320,8 @@ class _ReservationHistoryCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final status = reservation.reservationStatus.toLowerCase();
     final statusColor = switch (status) {
+      _ when status.contains('overdue') || status.contains('timed out') =>
+        const Color(0xFFD22828),
       _ when status.contains('approved') || status.contains('completed') => const Color(0xFF2E9D50),
       _ when status.contains('rejected') || status.contains('denied') || status.contains('cancelled') => const Color(0xFFD22828),
       _ => const Color(0xFFD79700),

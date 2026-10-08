@@ -29,3 +29,14 @@ supabase functions deploy submit_issue_report --project-ref <project-ref> --no-v
 `submit_issue_report` performs its own session validation, uploads the optional
 image, and inserts the report using server-side credentials. Other functions
 retain the target project's JWT verification setting.
+
+## Reservation timeout and overdue lifecycle
+
+Apply `migrations/0011_reservation_timeout_overdue.sql` to enable the
+one-minute, set-based lifecycle job. It stores times as Philippine local time:
+pending approvals become `Timed Out` at the reservation start, approved
+reservations become `To Return` at the event end, and unresolved returns become
+`Overdue` exactly 24 hours after the event end. New room and item reservations
+are checked against that exact overdue deadline by a database trigger, even if
+the scheduled status update has not run yet. Marking a reservation `returned`
+releases the account lock.

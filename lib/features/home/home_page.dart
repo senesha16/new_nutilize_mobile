@@ -599,7 +599,9 @@ class _RecentActivityCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = switch (reservation.reservationStatus.toLowerCase()) {
+    final status = reservation.reservationStatus.toLowerCase();
+    final statusColor = switch (status) {
+      _ when status.contains('overdue') => const Color(0xFFD22828),
       'approved' || 'completed' => const Color(0xFF2E9D50),
       'cancelled' => const Color(0xFFD22828),
       'rejected' => const Color(0xFFD22828),

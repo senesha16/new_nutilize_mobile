@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:new_nutilize_mobile/services/auth_service.dart';
+import 'package:new_nutilize_mobile/services/reservation_service.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
+import 'package:new_nutilize_mobile/widgets/reservation_return_lock_dialog.dart';
 
 import 'home.dart';
 import 'calendar.dart';
@@ -9,6 +12,30 @@ import 'features/request/reservation_history_page.dart' as features_history;
 
 class RequestPage extends StatelessWidget {
   const RequestPage({super.key});
+
+  Future<void> _openReservation(BuildContext context, Widget page) async {
+    if (AuthService.currentUser == null) {
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+      return;
+    }
+
+    try {
+      final returnLock = await ReservationService()
+          .enforceReservationLifecycle();
+      if (!context.mounted) return;
+      if (returnLock != null) {
+        await showReservationReturnLockDialog(context, returnLock);
+        return;
+      }
+
+      Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+    } catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Could not check reservation eligibility: $error')),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,22 +64,20 @@ class RequestPage extends StatelessWidget {
                       icon: Icons.home_work_rounded,
                       title: 'Venue Reservation',
                       subtitle: 'Classrooms, gymnasium, AMP',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const features_request.RoomReservationPage()),
-                        );
-                      },
+                      onTap: () => _openReservation(
+                        context,
+                        const features_request.RoomReservationPage(),
+                      ),
                     ),
                     const SizedBox(height: 16),
                     _ReservationCard(
                       icon: Icons.devices_outlined,
                       title: 'Item Reservation',
                       subtitle: 'TV, Tables, Chairs, etc.',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const features_item.ItemReservationPage()),
-                        );
-                      },
+                      onTap: () => _openReservation(
+                        context,
+                        const features_item.ItemReservationPage(),
+                      ),
                     ),
                     const SizedBox(height: 32),
                     const Text(

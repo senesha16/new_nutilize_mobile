@@ -7,6 +7,7 @@ import 'package:new_nutilize_mobile/features/request/reservation_history_page.da
 import 'package:new_nutilize_mobile/features/request/item_reservation_page.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/services/reservation_service.dart';
+import 'package:new_nutilize_mobile/widgets/reservation_return_lock_dialog.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
 import 'package:new_nutilize_mobile/widgets/top_message_banner.dart';
 
@@ -638,19 +639,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   }
 
   Future<void> _showReturnLock(String message) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Items or requests to return'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
+    await showReservationReturnLockDialog(context, message);
   }
 
   Future<void> _submitReservation() async {
@@ -678,9 +667,8 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         return;
       }
 
-      final returnLock = await _reservationService.enforceReservationLifecycle(
-        currentUser['user_id'] as int,
-      );
+      final returnLock = await _reservationService
+          .enforceReservationLifecycle();
       if (returnLock != null) {
         await _showReturnLock(returnLock);
         return;
@@ -812,7 +800,12 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         _showError('Reservation failed. Please try again.');
       }
     } catch (e) {
-      _showError('Error submitting reservation: $e');
+      final returnLock = _reservationService.reservationReturnLockFromError(e);
+      if (returnLock != null) {
+        await _showReturnLock(returnLock);
+      } else {
+        _showError('Error submitting reservation: $e');
+      }
     } finally {
       if (mounted) {
         setState(() {

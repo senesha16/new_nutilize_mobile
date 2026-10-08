@@ -18,6 +18,7 @@ import 'package:new_nutilize_mobile/features/user/report_issue_page.dart';
 import 'package:new_nutilize_mobile/features/user/request_history_page.dart';
 import 'package:new_nutilize_mobile/main.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
+import 'package:new_nutilize_mobile/widgets/reservation_return_lock_dialog.dart';
 
 bool canProceedFromProfilePage({String? selectedDepartment}) {
   final department = selectedDepartment?.trim();
@@ -48,6 +49,42 @@ void main() {
     expect(find.text('Subject'), findsOneWidget);
     expect(find.text('Description'), findsOneWidget);
     expect(find.text('Submit'), findsOneWidget);
+  });
+
+  testWidgets('shows the branded overdue reservation lock dialog', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => Scaffold(
+            body: TextButton(
+              onPressed: () => showReservationReturnLockDialog(
+                context,
+                'Please accomplish return/settle your reservation:\n\n'
+                'TEMP OVERDUE LIFECYCLE TEST (return deadline: 2026-10-07 12:07 AM)',
+              ),
+              child: const Text('Open lock'),
+            ),
+          ),
+        ),
+      ),
+    );
+
+    await tester.tap(find.text('Open lock'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Reservation return required'), findsOneWidget);
+    expect(
+      find.textContaining('You can’t make a new reservation'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('TEMP OVERDUE LIFECYCLE TEST'), findsOneWidget);
+    expect(find.text('Understood'), findsOneWidget);
+
+    await tester.tap(find.text('Understood'));
+    await tester.pumpAndSettle();
+    expect(find.text('Reservation return required'), findsNothing);
   });
 
   testWidgets('shows the personal details screen', (WidgetTester tester) async {
@@ -94,130 +131,160 @@ void main() {
   });
 
   test('sorts an approval timeline by workflow order', () {
-    final ordered = ReservationService.sortApprovalEntriesForTimeline(
-      [
-        {'office_name': 'Physical Facilities', 'created_at': '2026-07-20T10:00:00Z'},
-        {'office_name': 'Security', 'created_at': '2026-07-20T10:01:00Z'},
-        {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:02:00Z'},
-        {'office_name': 'Item Owner', 'created_at': '2026-07-20T10:03:00Z'},
-      ],
-      itemOwnerOfficeId: 42,
-    );
-
-    expect(
-      ordered.map((entry) => entry['office_name']),
-      ['Item Owner', 'Program Chair', 'Security', 'Physical Facilities'],
-    );
-  });
-
-  test('keeps a borrowed item owner ahead of program chair in the timeline UI', () {
     final ordered = ReservationService.sortApprovalEntriesForTimeline([
-      {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:00:00Z'},
-      {'office_name': 'Maria Lerma', 'created_at': '2026-07-20T10:01:00Z'},
-      {'office_name': 'SDAO', 'created_at': '2026-07-20T10:02:00Z'},
-      {'office_name': 'Physical Facilities', 'created_at': '2026-07-20T10:03:00Z'},
-    ]);
+      {
+        'office_name': 'Physical Facilities',
+        'created_at': '2026-07-20T10:00:00Z',
+      },
+      {'office_name': 'Security', 'created_at': '2026-07-20T10:01:00Z'},
+      {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:02:00Z'},
+      {'office_name': 'Item Owner', 'created_at': '2026-07-20T10:03:00Z'},
+    ], itemOwnerOfficeId: 42);
 
-    expect(
-      ordered.map((entry) => entry['office_name']),
-      ['Maria Lerma', 'Program Chair', 'SDAO', 'Physical Facilities'],
-    );
+    expect(ordered.map((entry) => entry['office_name']), [
+      'Item Owner',
+      'Program Chair',
+      'Security',
+      'Physical Facilities',
+    ]);
   });
 
-  test('sorts an approval timeline for AVR with item owner before Program Chair', () {
-    final ordered = ReservationService.sortApprovalEntriesForTimeline(
-      [
-        {'office_name': 'Physical Facilities', 'created_at': '2026-07-20T10:00:00Z'},
+  test(
+    'keeps a borrowed item owner ahead of program chair in the timeline UI',
+    () {
+      final ordered = ReservationService.sortApprovalEntriesForTimeline([
+        {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:00:00Z'},
+        {'office_name': 'Maria Lerma', 'created_at': '2026-07-20T10:01:00Z'},
+        {'office_name': 'SDAO', 'created_at': '2026-07-20T10:02:00Z'},
+        {
+          'office_name': 'Physical Facilities',
+          'created_at': '2026-07-20T10:03:00Z',
+        },
+      ]);
+
+      expect(ordered.map((entry) => entry['office_name']), [
+        'Maria Lerma',
+        'Program Chair',
+        'SDAO',
+        'Physical Facilities',
+      ]);
+    },
+  );
+
+  test(
+    'sorts an approval timeline for AVR with item owner before Program Chair',
+    () {
+      final ordered = ReservationService.sortApprovalEntriesForTimeline([
+        {
+          'office_name': 'Physical Facilities',
+          'created_at': '2026-07-20T10:00:00Z',
+        },
         {'office_name': 'Maria Lerma', 'created_at': '2026-07-20T10:01:00Z'},
         {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:02:00Z'},
         {'office_name': 'Security', 'created_at': '2026-07-20T10:03:00Z'},
-      ],
-      itemOwnerOfficeId: 42,
-    );
+      ], itemOwnerOfficeId: 42);
 
-    expect(
-      ordered.map((entry) => entry['office_name']),
-      ['Maria Lerma', 'Program Chair', 'Security', 'Physical Facilities'],
-    );
-  });
+      expect(ordered.map((entry) => entry['office_name']), [
+        'Maria Lerma',
+        'Program Chair',
+        'Security',
+        'Physical Facilities',
+      ]);
+    },
+  );
 
   test('places general education ahead of item owners in gym requests', () {
     final ordered = ReservationService.sortApprovalEntriesForTimeline(
       [
         {'office_name': 'Program Chair', 'created_at': '2026-07-20T10:02:00Z'},
         {'office_name': 'Maria Lerma', 'created_at': '2026-07-20T10:03:00Z'},
-        {'office_name': 'General Education', 'created_at': '2026-07-20T10:00:00Z'},
+        {
+          'office_name': 'General Education',
+          'created_at': '2026-07-20T10:00:00Z',
+        },
         {'office_name': 'Security', 'created_at': '2026-07-20T10:04:00Z'},
       ],
       itemOwnerOfficeId: 42,
       generalEducationOfficeId: 99,
     );
 
-    expect(
-      ordered.map((entry) => entry['office_name']),
-      ['General Education', 'Maria Lerma', 'Program Chair', 'Security'],
-    );
+    expect(ordered.map((entry) => entry['office_name']), [
+      'General Education',
+      'Maria Lerma',
+      'Program Chair',
+      'Security',
+    ]);
   });
 
-  test('normalizes gym room types so general education is retained in the approval chain', () {
-    expect(ReservationService.normalizeRoomType(' gym '), 'gym');
-    expect(ReservationService.isGymRoomType(' gym '), isTrue);
-    expect(ReservationService.isGymRoomType('Gym'), isTrue);
-    expect(ReservationService.isGymRoomType('GYM'), isTrue);
-    expect(ReservationService.isGymRoomType('Classroom'), isFalse);
-  });
+  test(
+    'normalizes gym room types so general education is retained in the approval chain',
+    () {
+      expect(ReservationService.normalizeRoomType(' gym '), 'gym');
+      expect(ReservationService.isGymRoomType(' gym '), isTrue);
+      expect(ReservationService.isGymRoomType('Gym'), isTrue);
+      expect(ReservationService.isGymRoomType('GYM'), isTrue);
+      expect(ReservationService.isGymRoomType('Classroom'), isFalse);
+    },
+  );
 
-  test('keeps reservations visible while awaiting physical facilities approval', () {
-    final reservation = ReservationRecord(
-      reservationTitle: 'Party',
-      roomName: 'Room 101',
-      reservationType: 'Venue Reservation',
-      reservationStatus: 'Waiting for Physical Facilities Approval',
-      date: DateTime.now(),
-      reservationTime: '10:00 AM - 12:00 PM',
-      userId: 42,
-    );
-
-    expect(
-      ReservationActivityStore.isVisibleOnCalendar(
-        reservation,
-        currentUserId: 42,
-      ),
-      isTrue,
-    );
-  });
-
-  test('creates approved notifications from the current reservation baseline', () {
-    final originalUser = AuthService.currentUser;
-
-    AuthService.currentUser = null;
-    NotificationActivityStore.ensureSeeded(DateTime.now());
-    AuthService.currentUser = {'user_id': 42, 'email': 'user@example.com'};
-    ReservationActivityStore.replaceAll([
-      ReservationRecord(
-        id: 'approved-1',
-        userId: 42,
-        reservationTitle: 'Approved request',
+  test(
+    'keeps reservations visible while awaiting physical facilities approval',
+    () {
+      final reservation = ReservationRecord(
+        reservationTitle: 'Party',
         roomName: 'Room 101',
         reservationType: 'Venue Reservation',
-        reservationStatus: 'Approved',
+        reservationStatus: 'Waiting for Physical Facilities Approval',
         date: DateTime.now(),
         reservationTime: '10:00 AM - 12:00 PM',
-      ),
-    ]);
+        userId: 42,
+      );
 
-    NotificationActivityStore.syncFromReservations(DateTime.now());
+      expect(
+        ReservationActivityStore.isVisibleOnCalendar(
+          reservation,
+          currentUserId: 42,
+        ),
+        isTrue,
+      );
+    },
+  );
 
-    expect(
-      NotificationActivityStore.notifications.any(
-        (notification) => notification.category == NotificationCategory.reservationApproved,
-      ),
-      isTrue,
-    );
+  test(
+    'creates approved notifications from the current reservation baseline',
+    () {
+      final originalUser = AuthService.currentUser;
 
-    AuthService.currentUser = originalUser;
-    NotificationActivityStore.clear();
-  });
+      AuthService.currentUser = null;
+      NotificationActivityStore.ensureSeeded(DateTime.now());
+      AuthService.currentUser = {'user_id': 42, 'email': 'user@example.com'};
+      ReservationActivityStore.replaceAll([
+        ReservationRecord(
+          id: 'approved-1',
+          userId: 42,
+          reservationTitle: 'Approved request',
+          roomName: 'Room 101',
+          reservationType: 'Venue Reservation',
+          reservationStatus: 'Approved',
+          date: DateTime.now(),
+          reservationTime: '10:00 AM - 12:00 PM',
+        ),
+      ]);
+
+      NotificationActivityStore.syncFromReservations(DateTime.now());
+
+      expect(
+        NotificationActivityStore.notifications.any(
+          (notification) =>
+              notification.category == NotificationCategory.reservationApproved,
+        ),
+        isTrue,
+      );
+
+      AuthService.currentUser = originalUser;
+      NotificationActivityStore.clear();
+    },
+  );
 
   test('profile requires a department before proceeding', () {
     expect(canProceedFromProfilePage(selectedDepartment: null), isFalse);
@@ -264,33 +331,39 @@ void main() {
     );
   });
 
-  test('keeps the reservation pending while any approval office is pending', () {
-    expect(
-      ReservationService.resolveApprovalStatusFromRows(
-        overallStatus: 'Approved',
-        approvalRows: [
-          {'status': 'Approved', 'updated_at': '2026-08-20T08:00:00Z'},
-          {'status': 'Pending', 'updated_at': '2026-08-20T08:01:00Z'},
-          {'status': 'Pending', 'updated_at': '2026-08-20T08:02:00Z'},
-        ],
-      ),
-      'Pending Approval',
-    );
-  });
+  test(
+    'keeps the reservation pending while any approval office is pending',
+    () {
+      expect(
+        ReservationService.resolveApprovalStatusFromRows(
+          overallStatus: 'Approved',
+          approvalRows: [
+            {'status': 'Approved', 'updated_at': '2026-08-20T08:00:00Z'},
+            {'status': 'Pending', 'updated_at': '2026-08-20T08:01:00Z'},
+            {'status': 'Pending', 'updated_at': '2026-08-20T08:02:00Z'},
+          ],
+        ),
+        'Pending Approval',
+      );
+    },
+  );
 
-  test('marks the reservation approved only after every approval office approves', () {
-    expect(
-      ReservationService.resolveApprovalStatusFromRows(
-        overallStatus: 'Pending Approval',
-        approvalRows: [
-          {'status': 'Approved'},
-          {'status': 'Approved'},
-          {'status': 'Accepted'},
-        ],
-      ),
-      'Approved',
-    );
-  });
+  test(
+    'marks the reservation approved only after every approval office approves',
+    () {
+      expect(
+        ReservationService.resolveApprovalStatusFromRows(
+          overallStatus: 'Pending Approval',
+          approvalRows: [
+            {'status': 'Approved'},
+            {'status': 'Approved'},
+            {'status': 'Accepted'},
+          ],
+        ),
+        'Approved',
+      );
+    },
+  );
 
   test('keeps reservation pending until every office approves', () {
     expect(
@@ -306,29 +379,101 @@ void main() {
     );
   });
 
-  test('keeps completed and returned states distinct from pending and cancelled', () {
-    expect(
-      ReservationService.resolveApprovalStatusFromRows(
-        overallStatus: 'Pending Approval',
-        approvalRows: [
-          {'status': 'Completed', 'updated_at': '2026-07-20T10:00:00Z'},
-          {'status': 'Completed', 'updated_at': '2026-07-20T11:00:00Z'},
-        ],
-      ),
-      'Completed',
+  test('preserves timeout, overdue, and returned lifecycle states', () {
+    for (final status in ['Timed Out', 'Overdue', 'returned']) {
+      expect(
+        ReservationService.resolveApprovalStatusFromRows(
+          overallStatus: status,
+          approvalRows: [
+            {'status': 'Pending'},
+          ],
+        ),
+        status,
+      );
+    }
+  });
+
+  test('shows overdue reservations before upcoming recent activity', () {
+    final previousUser = AuthService.currentUser;
+    final previousReservations = ReservationActivityStore.reservations;
+    final now = DateTime(2026, 10, 8);
+    final overdue = ReservationRecord(
+      id: 'overdue-test',
+      userId: 598,
+      reservationTitle: 'Overdue test reservation',
+      roomName: 'Test Room',
+      reservationType: 'Venue Reservation',
+      reservationStatus: 'Overdue',
+      date: now.subtract(const Duration(days: 2)),
+      reservationTime: '8:00 AM - 9:00 AM',
+      lastUpdatedAt: now,
+    );
+    final upcoming = ReservationRecord(
+      id: 'upcoming-test',
+      userId: 598,
+      reservationTitle: 'Upcoming test reservation',
+      roomName: 'Test Room',
+      reservationType: 'Venue Reservation',
+      reservationStatus: 'Approved',
+      date: now.add(const Duration(days: 1)),
+      reservationTime: '8:00 AM - 9:00 AM',
     );
 
-    expect(
-      ReservationService.resolveApprovalStatusFromRows(
-        overallStatus: 'Pending Approval',
-        approvalRows: [
-          {'status': 'Pending', 'updated_at': '2026-07-20T10:00:00Z'},
-          {'status': 'Returned', 'updated_at': '2026-07-20T11:00:00Z'},
-        ],
-      ),
-      'Returned',
-    );
+    AuthService.currentUser = {'user_id': 598};
+    ReservationActivityStore.replaceAll([
+      upcoming,
+      overdue,
+    ], syncNotifications: false);
+
+    try {
+      final recent = recentReservations(now, limit: 3);
+      expect(recent.first.stableId, overdue.stableId);
+
+      final overdueNotification = NotificationRecord(
+        id: 'overdue-notification-test',
+        category: NotificationCategory.reservationOverdue,
+        title: 'Reservation Overdue',
+        description: 'Please return or settle this reservation.',
+        date: now,
+        targetKind: NotificationTargetKind.reservation,
+        reservation: overdue,
+      );
+      expect(overdueNotification.accentColor, const Color(0xFFD22828));
+    } finally {
+      AuthService.currentUser = previousUser;
+      ReservationActivityStore.replaceAll(
+        previousReservations,
+        syncNotifications: false,
+      );
+    }
   });
+
+  test(
+    'keeps completed and returned states distinct from pending and cancelled',
+    () {
+      expect(
+        ReservationService.resolveApprovalStatusFromRows(
+          overallStatus: 'Pending Approval',
+          approvalRows: [
+            {'status': 'Completed', 'updated_at': '2026-07-20T10:00:00Z'},
+            {'status': 'Completed', 'updated_at': '2026-07-20T11:00:00Z'},
+          ],
+        ),
+        'Completed',
+      );
+
+      expect(
+        ReservationService.resolveApprovalStatusFromRows(
+          overallStatus: 'Pending Approval',
+          approvalRows: [
+            {'status': 'Pending', 'updated_at': '2026-07-20T10:00:00Z'},
+            {'status': 'Returned', 'updated_at': '2026-07-20T11:00:00Z'},
+          ],
+        ),
+        'Returned',
+      );
+    },
+  );
 
   test('clamps item usage to the valid zero-to-total range', () {
     expect(ReservationService.normalizeItemUsage(280, 300), 280);

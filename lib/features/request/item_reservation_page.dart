@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/services/reservation_service.dart';
+import 'package:new_nutilize_mobile/widgets/reservation_return_lock_dialog.dart';
 import 'package:new_nutilize_mobile/widgets/top_message_banner.dart';
 
 class ItemReservationPage extends StatefulWidget {
@@ -349,19 +350,7 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
   }
 
   Future<void> _showReturnLock(String message) async {
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Items or requests to return'),
-        content: Text(message),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
+    await showReservationReturnLockDialog(context, message);
   }
 
   Future<void> _submitReservation() async {
@@ -370,36 +359,35 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
       return;
     }
 
-    final currentUser = AuthService.currentUser;
-    if (currentUser == null) {
-      _showError('Please sign in again');
-      return;
-    }
-
-    final returnLock = await _reservationService.enforceReservationLifecycle(
-      currentUser['user_id'] as int,
-    );
-    if (returnLock != null) {
-      await _showReturnLock(returnLock);
-      return;
-    }
-
-    final startDateTime = DateTime(
-      _selectedDate!.year,
-      _selectedDate!.month,
-      _selectedDate!.day,
-      _selectedStartTime!.hour,
-      _selectedStartTime!.minute,
-    );
-    final endDateTime = DateTime(
-      _selectedDate!.year,
-      _selectedDate!.month,
-      _selectedDate!.day,
-      _selectedEndTime!.hour,
-      _selectedEndTime!.minute,
-    );
-
     try {
+      final currentUser = AuthService.currentUser;
+      if (currentUser == null || currentUser['user_id'] == null) {
+        _showError('Please sign in again');
+        return;
+      }
+
+      final returnLock = await _reservationService
+          .enforceReservationLifecycle();
+      if (returnLock != null) {
+        await _showReturnLock(returnLock);
+        return;
+      }
+
+      final startDateTime = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        _selectedStartTime!.hour,
+        _selectedStartTime!.minute,
+      );
+      final endDateTime = DateTime(
+        _selectedDate!.year,
+        _selectedDate!.month,
+        _selectedDate!.day,
+        _selectedEndTime!.hour,
+        _selectedEndTime!.minute,
+      );
+
       final requestStart = _getRequestStart();
       final requestEnd = _getRequestEnd();
 
@@ -452,7 +440,12 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
         _showError('Reservation failed: no confirmation from server');
       }
     } catch (e) {
-      _showError('Error submitting reservation: $e');
+      final returnLock = _reservationService.reservationReturnLockFromError(e);
+      if (returnLock != null) {
+        await _showReturnLock(returnLock);
+      } else {
+        _showError('Error submitting reservation: $e');
+      }
     }
   }
 

@@ -144,15 +144,6 @@ bool _isUnitAvailableForRequest(
       normalized == 'borrowed';
 }
 
-bool _isCancelledReservationStatus(String? status) {
-  final normalized = (status ?? '').trim().toLowerCase();
-  return normalized == 'cancelled' ||
-      normalized == 'canceled' ||
-      normalized == 'rejected' ||
-      normalized == 'denied' ||
-      normalized == 'void';
-}
-
 bool _isBlockingReservationStatus(String? status) {
   final normalized = (status ?? '').trim().toLowerCase();
   if (normalized.isEmpty) return true;
@@ -160,34 +151,9 @@ bool _isBlockingReservationStatus(String? status) {
       !normalized.contains('canceled') &&
       !normalized.contains('rejected') &&
       !normalized.contains('denied') &&
+      !normalized.contains('timed out') &&
       !normalized.contains('returned') &&
       !normalized.contains('void');
-}
-
-bool _isTerminalReservationStatus(String? status) {
-  final normalized = (status ?? '').trim().toLowerCase();
-  return normalized == 'completed' ||
-      normalized == 'complete' ||
-      normalized == 'returned' ||
-      normalized == 'cancelled' ||
-      normalized == 'canceled' ||
-      normalized == 'rejected' ||
-      normalized == 'denied';
-}
-
-bool _isPendingReservationStatus(String? status) {
-  final normalized = (status ?? '').trim().toLowerCase();
-  return normalized.contains('pending') ||
-      normalized.contains('processing') ||
-      normalized.contains('waiting') ||
-      normalized.contains('review');
-}
-
-bool _isApprovedReservationStatus(String? status) {
-  final normalized = (status ?? '').trim().toLowerCase();
-  return normalized.contains('approved') ||
-      normalized.contains('completed') ||
-      normalized.contains('confirmed');
 }
 
 bool _reservationOverlapsWindow({
@@ -223,7 +189,13 @@ class ReservationService {
   }) {
     final normalizedOverallStatus = overallStatus.trim().toLowerCase();
     if (normalizedOverallStatus == 'to return' ||
-        normalizedOverallStatus == 'timed out') {
+        normalizedOverallStatus == 'timed out' ||
+        normalizedOverallStatus == 'overdue' ||
+        normalizedOverallStatus == 'returned' ||
+        normalizedOverallStatus == 'cancelled' ||
+        normalizedOverallStatus == 'canceled' ||
+        normalizedOverallStatus == 'rejected' ||
+        normalizedOverallStatus == 'denied') {
       return overallStatus;
     }
 
@@ -289,75 +261,27 @@ class ReservationService {
     return ItemModel.normalizeAvailableQuantity(total, usage);
   }
 
-  Future<String?> enforceReservationLifecycle(int userId) async {
-    try {
-      final response = await _client
-          .from('reservations')
-          .select(
-            'reservation_id, activity_name, overall_status, Date_of_Activity, Start_of_activity, End_of_Activity',
-          )
-          .eq('user_id', userId);
-      final now = DateTime.now();
-      final returnRequired = <String>[];
-
-      for (final rawReservation in response as List) {
-        final reservation = Map<String, dynamic>.from(rawReservation as Map);
-        final reservationId = reservation['reservation_id'] as int?;
-        if (reservationId == null) continue;
-
-        final status =
-            (reservation['overall_status'] as String?) ?? 'Pending Approval';
-        final start = DateTime.tryParse(
-          (reservation['Start_of_activity'] ?? '').toString(),
-        );
-        final end = DateTime.tryParse(
-          (reservation['End_of_Activity'] ?? '').toString(),
-        );
-        if (start == null || end == null) continue;
-
-        String? nextStatus;
-        if (_isPendingReservationStatus(status) && !now.isBefore(start)) {
-          nextStatus = 'Timed Out';
-        } else if (_isApprovedReservationStatus(status) && !now.isBefore(end)) {
-          nextStatus = 'To Return';
-        }
-
-        if (nextStatus != null &&
-            status.trim().toLowerCase() != nextStatus.toLowerCase()) {
-          returnRequired.add('__update__:$reservationId:$nextStatus');
-        }
-
-        final effectiveStatus = nextStatus ?? status;
-        if (effectiveStatus.toLowerCase() == 'to return' &&
-            !now.isBefore(end.add(const Duration(hours: 24)))) {
-          final title = (reservation['activity_name'] as String?)?.trim();
-          final deadline = _formatDateTime(end.add(const Duration(hours: 24)));
-          returnRequired.add(
-            '${title?.isNotEmpty == true ? title : 'Reservation #$reservationId'} (return deadline: $deadline)',
-          );
-        }
-      }
-
-      final updates = returnRequired
-          .where((entry) => entry.startsWith('__update__:'))
-          .map((entry) {
-            final parts = entry.split(':');
-            return _client
-                .from('reservations')
-                .update({'overall_status': parts[2]})
-                .eq('reservation_id', int.parse(parts[1]));
-          });
-      await Future.wait(updates);
-
-      final deadlines = returnRequired
-          .where((entry) => !entry.startsWith('__update__:'))
-          .toList();
-      if (deadlines.isEmpty) return null;
-      return 'Please return the following request(s) before making a new reservation:\n\n${deadlines.join('\n')}';
-    } catch (e) {
-      print('Error enforcing reservation lifecycle: $e');
-      return null;
+  Future<String?> enforceReservationLifecycle() async {
+    final response = await _client.rpc('get_current_reservation_return_lock');
+    if (response == null) return null;
+    if (response is! String) {
+      throw const FormatException(
+        'The reservation eligibility check returned an invalid response.',
+      );
     }
+    final message = response.trim();
+    return message.isEmpty ? null : message;
+  }
+
+  String? reservationReturnLockFromError(Object error) {
+    const prefix = 'Please accomplish return/settle your reservation.';
+    final message = error.toString();
+    final start = message.indexOf(prefix);
+    if (start < 0) return null;
+    final detailsStart = message.indexOf(', code:', start);
+    return detailsStart < 0
+        ? message.substring(start)
+        : message.substring(start, detailsStart);
   }
 
   Future<void> _recalculateItemUsageFromUnits(int itemId) async {
@@ -1014,12 +938,8 @@ class ReservationService {
   Future<List<ReservationRecord>> getReservationRecordsForUser(
     int userId, {
     bool includeDetails = true,
-    bool updateLifecycle = true,
   }) async {
     try {
-      if (updateLifecycle) {
-        await enforceReservationLifecycle(userId);
-      }
       final reservationsResponse = await _client
           .from('reservations')
           .select(

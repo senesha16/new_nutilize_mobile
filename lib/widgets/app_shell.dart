@@ -118,7 +118,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       final records = await ReservationService().getReservationRecordsForUser(
         userId,
         includeDetails: includeDetails,
-        updateLifecycle: includeDetails,
       );
       if (!mounted) {
         return;

@@ -390,6 +390,8 @@ List<ReservationRecord> collectAllReservations(DateTime now) {
 }
 
 List<ReservationRecord> recentReservations(DateTime now, {int limit = 3}) {
+  if (limit <= 0) return [];
+
   final allReservations = collectReservations(now);
 
   bool isUpcoming(ReservationRecord reservation) {
@@ -401,6 +403,18 @@ List<ReservationRecord> recentReservations(DateTime now, {int limit = 3}) {
     final today = DateTime(now.year, now.month, now.day);
     return !reservationDate.isBefore(today);
   }
+
+  final overdueReservations = allReservations
+      .where(
+        (reservation) =>
+            reservation.reservationStatus.toLowerCase().contains('overdue'),
+      )
+      .toList()
+    ..sort(
+      (a, b) => (b.lastUpdatedAt ?? b.date).compareTo(
+        a.lastUpdatedAt ?? a.date,
+      ),
+    );
 
   final upcomingReservations = allReservations.where(isUpcoming).toList();
 
@@ -420,8 +434,12 @@ List<ReservationRecord> recentReservations(DateTime now, {int limit = 3}) {
   }).toList()..sort((a, b) => a.date.compareTo(b.date));
 
   final result = <ReservationRecord>[];
+  result.addAll(overdueReservations);
   result.addAll(approvedReservations);
   for (final reservation in pendingReservations) {
+    if (result.any((item) => item.stableId == reservation.stableId)) {
+      continue;
+    }
     if (result.length >= limit) {
       break;
     }
@@ -461,6 +479,7 @@ enum NotificationCategory {
   reservationSubmitted,
   reservationApproved,
   reservationRejected,
+  reservationOverdue,
   reservationCancelled,
   reservationReminder,
   announcement,
@@ -530,6 +549,7 @@ class NotificationRecord {
       NotificationCategory.reservationSubmitted => Icons.event_note_rounded,
       NotificationCategory.reservationApproved => Icons.verified_rounded,
       NotificationCategory.reservationRejected => Icons.cancel_rounded,
+      NotificationCategory.reservationOverdue => Icons.warning_rounded,
       NotificationCategory.reservationCancelled => Icons.event_busy_rounded,
       NotificationCategory.reservationReminder =>
         Icons.notifications_active_rounded,
@@ -544,6 +564,7 @@ class NotificationRecord {
       NotificationCategory.reservationSubmitted => const Color(0xFF35489A),
       NotificationCategory.reservationApproved => const Color(0xFF2E9D50),
       NotificationCategory.reservationRejected => const Color(0xFFD22828),
+      NotificationCategory.reservationOverdue => const Color(0xFFD22828),
       NotificationCategory.reservationCancelled => const Color(0xFFD22828),
       NotificationCategory.reservationReminder => const Color(0xFFF6A700),
       NotificationCategory.announcement => const Color(0xFFE94545),
@@ -601,6 +622,8 @@ class NotificationRepository {
       final reservation = entry.value;
       final status = reservation.reservationStatus.toLowerCase();
       final category = switch (status) {
+        _ when status.contains('overdue') =>
+          NotificationCategory.reservationOverdue,
         _ when status.contains('approved') || status.contains('completed') =>
           NotificationCategory.reservationApproved,
         _ when status.contains('reject') || status.contains('denied') =>
@@ -612,6 +635,7 @@ class NotificationRepository {
       final title = switch (category) {
         NotificationCategory.reservationApproved => 'Reservation Approved',
         NotificationCategory.reservationRejected => 'Reservation Rejected',
+        NotificationCategory.reservationOverdue => 'Reservation Overdue',
         NotificationCategory.reservationCancelled => 'Reservation Cancelled',
         _ => 'Reservation Submitted',
       };
@@ -628,6 +652,8 @@ class NotificationRepository {
               : '${reservation.roomName} was not approved. Review the details for more information.',
         NotificationCategory.reservationCancelled =>
           '${reservation.roomName} reservation has been cancelled.',
+        NotificationCategory.reservationOverdue =>
+          '${reservation.roomName} is overdue. Please return or settle this reservation.',
         _ =>
           statusSummary.isNotEmpty
               ? '$title — $statusSummary'
@@ -886,12 +912,16 @@ class NotificationActivityStore {
         status.contains('canceled') ||
         status.contains('returned') ||
         status == 'to return' ||
+        status.contains('overdue') ||
         status.contains('timed out');
   }
 
   static NotificationCategory _categoryForStatus(String status) {
     if (status.contains('approved'))
       return NotificationCategory.reservationApproved;
+    if (status.contains('overdue')) {
+      return NotificationCategory.reservationOverdue;
+    }
     if (status.contains('rejected') ||
         status.contains('denied') ||
         status.contains('timed out')) {
@@ -910,6 +940,7 @@ class NotificationActivityStore {
     if (status.contains('cancelled') || status.contains('canceled'))
       return 'Reservation Cancelled';
     if (status.contains('timed out')) return 'Reservation Timed Out';
+    if (status.contains('overdue')) return 'Reservation Overdue';
     if (status == 'to return') return 'Reservation To Return';
     if (approvalSummary != null && approvalSummary.trim().isNotEmpty) {
       return 'Reservation Update';
