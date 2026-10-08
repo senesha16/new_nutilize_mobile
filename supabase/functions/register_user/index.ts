@@ -128,6 +128,13 @@ serve(async (req) => {
       affiliation: body.affiliation ?? body.profile?.affiliation,
       program_id: body.program_id ?? body.profile?.program_id,
     });
+    const requestedRole = String(profile.role ?? 'student').trim().toLowerCase();
+    if (requestedRole !== 'student' && requestedRole !== 'faculty') {
+      return new Response(
+        JSON.stringify({ error: 'invalid_registration_role' }),
+        { status: 400 },
+      );
+    }
 
     if (!email || !password || !verificationCode) {
       return new Response(JSON.stringify({ error: 'Missing email, password, or verification code' }), { status: 400 });
@@ -296,10 +303,10 @@ serve(async (req) => {
     // Build a payload with only common profile fields to reduce schema mismatch
     const incoming = Object.assign({}, profile || {});
     const payload: any = {};
-    payload.email = incoming.email || email;
+    payload.email = email;
     payload.username = incoming.username || email;
     payload.password = passwordHash;
-    payload.role = incoming.role || 'student';
+    payload.role = requestedRole;
     payload.auth_user_id = user.id;
     if (incoming.first_name) payload.first_name = incoming.first_name;
     if (incoming.last_name) payload.last_name = incoming.last_name;
@@ -308,7 +315,6 @@ serve(async (req) => {
     if (incoming.full_name) payload.full_name = incoming.full_name;
     if (incoming.middle_initial) payload.middle_initial = incoming.middle_initial;
     if (incoming.suffix) payload.suffix = incoming.suffix;
-    if (incoming.office_id) payload.office_id = Number(incoming.office_id);
     if (incoming.affiliation) payload.affiliation = incoming.affiliation;
     if (incoming.program_id) {
       payload.program_id = Number(incoming.program_id);

@@ -29,7 +29,15 @@ function buildFromHeader(rawFrom: string): string {
 }
 
 function generateCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
+  const range = 900_000;
+  const limit = Math.floor(0x1_0000_0000 / range) * range;
+  const randomValue = new Uint32Array(1);
+
+  do {
+    crypto.getRandomValues(randomValue);
+  } while (randomValue[0] >= limit);
+
+  return (100_000 + (randomValue[0] % range)).toString();
 }
 
 async function readResponse(conn: Deno.Reader): Promise<string> {
