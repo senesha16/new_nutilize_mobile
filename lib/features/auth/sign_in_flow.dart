@@ -173,6 +173,11 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
 
   bool _isSavingAccount = false;
 
+  bool _isNuRegistrationEmail(String email) {
+    final domain = email.trim().toLowerCase().split('@').last;
+    return domain == 'students.nu-lipa.edu.ph' || domain == 'nu-lipa.edu.ph';
+  }
+
   Future<void> _sendRegistrationCode({bool resend = false}) async {
     final email = _emailController.text.trim();
     if (email.isEmpty) {
@@ -184,6 +189,12 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                 : 'Please enter your email',
           ),
         ),
+      );
+      return;
+    }
+    if (!_isNuRegistrationEmail(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('only NU email allowed')),
       );
       return;
     }
@@ -221,7 +232,8 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            error == 'Email is already taken.'
+            error == 'Email is already taken.' ||
+                    error == 'only NU email allowed'
                 ? error
                 : 'Failed to send code: $error',
           ),

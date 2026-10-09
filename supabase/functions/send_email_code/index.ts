@@ -10,6 +10,11 @@ const SMTP_PASS = Deno.env.get('SMTP_PASS');
 const SMTP_FROM_NAME = Deno.env.get('SMTP_FROM_NAME')?.trim() || '';
 const SMTP_EHLO_DOMAIN = 'localhost';
 
+function isNuRegistrationEmail(email: string): boolean {
+  const domain = email.trim().toLowerCase().split('@').pop() ?? '';
+  return domain === 'students.nu-lipa.edu.ph' || domain === 'nu-lipa.edu.ph';
+}
+
 function parseFromEmail(rawFrom: string): string {
   const angleMatch = rawFrom.match(/<([^>]+)>/);
   if (angleMatch) {
@@ -355,6 +360,17 @@ serve(async (req) => {
     const otpPurpose = purpose === 'password_reset' || purpose === 'account_deletion'
       ? purpose
       : 'verification';
+
+    if (otpPurpose === 'verification' && !isNuRegistrationEmail(email)) {
+      return new Response(
+        JSON.stringify({
+          ok: false,
+          error: 'nu_email_required',
+          message: 'only NU email allowed',
+        }),
+        { status: 400 },
+      );
+    }
 
     if (otpPurpose === 'verification') {
       let emailTaken: boolean;
