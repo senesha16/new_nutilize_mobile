@@ -5,6 +5,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/services/supabase_service.dart';
 
+/// Visible name for an approval office. The stored office stays unchanged.
+String approvalOfficeLabel(String officeName) {
+  if (officeName.trim().toLowerCase() == 'do') return 'Safety';
+  return officeName;
+}
+
 // MARK: - Models
 
 class Room {
@@ -1870,7 +1876,7 @@ class ReservationService {
 
       // Now build entries preserving slot order
       for (final slot in slots) {
-        final displayName = slot['displayName'] as String;
+        final displayName = approvalOfficeLabel(slot['displayName'] as String);
         final matchIndex = slot['matchIndex'] as int;
 
         String status = 'Pending';
@@ -2565,13 +2571,14 @@ class ReservationService {
         );
 
         for (final office in approvalChain.offices) {
+          final label = approvalOfficeLabel(office);
           timeline.add(
             ReservationTimelineEntry(
-              title: office,
+              title: label,
               status: 'Pending',
               date: dateOfActivity,
               timestamp: 'Pending',
-              description: 'Waiting for approval from $office.',
+              description: 'Waiting for approval from $label.',
             ),
           );
         }

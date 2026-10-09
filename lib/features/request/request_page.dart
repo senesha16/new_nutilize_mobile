@@ -741,12 +741,13 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         final reservationTime =
             '${_timeLabel(_selectedStartTime)} - ${_timeLabel(_selectedEndTime)}';
         final timeline = approvalChain.offices.map((office) {
+          final label = approvalOfficeLabel(office);
           return ReservationTimelineEntry(
-            title: office,
+            title: label,
             status: 'Pending',
             date: _selectedDate!,
             timestamp: 'Pending',
-            description: 'Waiting for approval from $office.',
+            description: 'Waiting for approval from $label.',
           );
         }).toList();
 
