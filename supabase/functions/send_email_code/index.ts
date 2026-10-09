@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.199.0/http/server.ts';
-import { isRegistrationEmailTaken } from '../_shared/registration_email.ts';
+import { hasRegistrationProfile } from '../_shared/registration_email.ts';
 
 const PROJECT_URL = Deno.env.get('PROJECT_URL');
 const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY');
@@ -7,7 +7,8 @@ const SMTP_HOST = Deno.env.get('SMTP_HOST') || 'smtp.gmail.com';
 const SMTP_PORT = Number(Deno.env.get('SMTP_PORT') || '465');
 const SMTP_USER = Deno.env.get('SMTP_USER');
 const SMTP_PASS = Deno.env.get('SMTP_PASS');
-const SMTP_FROM = Deno.env.get('SMTP_FROM') || SMTP_USER;
+const SMTP_FROM_NAME = Deno.env.get('SMTP_FROM_NAME')?.trim() || '';
+const SMTP_EHLO_DOMAIN = 'localhost';
 
 function parseFromEmail(rawFrom: string): string {
   const angleMatch = rawFrom.match(/<([^>]+)>/);
@@ -17,15 +18,32 @@ function parseFromEmail(rawFrom: string): string {
   return rawFrom.trim();
 }
 
-function buildFromHeader(rawFrom: string): string {
-  const cleanFrom = parseFromEmail(rawFrom);
-  if (!cleanFrom) {
-    return 'NUtilize';
+function formatRfc5322Date(date = new Date()): string {
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const pad = (value: number) => value.toString().padStart(2, '0');
+  const local = new Date(date.getTime() + 8 * 60 * 60 * 1000);
+  return `${days[local.getUTCDay()]}, ${pad(local.getUTCDate())} ${months[local.getUTCMonth()]} ${local.getUTCFullYear()} ${pad(local.getUTCHours())}:${pad(local.getUTCMinutes())}:${pad(local.getUTCSeconds())} +0800`;
+}
+
+function spaceDigits(code: string): string {
+  return code.split('').join(' ');
+}
+
+function buildFromHeader(fromEmail: string): string {
+  if (!SMTP_FROM_NAME || /[\r\n<>]/.test(SMTP_FROM_NAME)) {
+    return fromEmail;
   }
-  if (rawFrom.includes('<')) {
-    return rawFrom.trim();
-  }
-  return `NUtilize <${cleanFrom}>`;
+  return `${SMTP_FROM_NAME} <${fromEmail}>`;
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
 }
 
 function generateCode() {
@@ -38,6 +56,88 @@ function generateCode() {
   } while (randomValue[0] >= limit);
 
   return (100_000 + (randomValue[0] % range)).toString();
+}
+
+type OtpPurpose = 'verification' | 'password_reset' | 'account_deletion';
+
+function buildOtpEmail(purpose: OtpPurpose, code: string) {
+  const content = {
+    verification: {
+      subject: 'NUtilize',
+      line: 'Use this number to continue creating your NUtilize account.',
+      notice: 'If you did not start creating an account, you can ignore this email.',
+    },
+    password_reset: {
+      subject: 'NUtilize password',
+      line: 'Use this number to reset your NUtilize password.',
+      notice: 'If you did not request a password reset, you can ignore this email. Your password will not change.',
+    },
+    account_deletion: {
+      subject: 'NUtilize account',
+      line: 'Use this number to delete your NUtilize account.',
+      notice: 'If you did not request account deletion, do not share this number. Your account will not be deleted unless the request is verified.',
+    },
+  }[purpose];
+
+  const shown = spaceDigits(code);
+  const textBody = [
+    'Hi,',
+    '',
+    content.line,
+    '',
+    shown,
+    '',
+    'It can be used for 10 minutes.',
+    '',
+    content.notice,
+  ].join('\r\n');
+
+  const line = escapeHtml(content.line);
+  const notice = escapeHtml(content.notice);
+  const htmlBody = [
+    '<html>',
+    '<body style="margin:0;padding:0;background-color:#f3f5fb;">',
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3f5fb;">',
+    '<tr><td align="center" style="padding:24px 12px;">',
+    '<table role="presentation" width="560" cellpadding="0" cellspacing="0" border="0" style="width:560px;max-width:560px;background-color:#ffffff;">',
+    '<tr><td style="padding:22px 28px;background-color:#35489a;border-bottom:4px solid #f2c94c;font-family:Arial,sans-serif;">',
+    '<div style="font-size:22px;font-weight:bold;color:#ffffff;">NUtilize</div>',
+    '<div style="margin-top:4px;font-size:12px;color:#ffffff;">Reservation and campus services</div>',
+    '</td></tr>',
+    '<tr><td style="padding:28px;font-family:Arial,sans-serif;color:#1a2254;">',
+    '<p style="margin:0 0 12px;font-size:16px;">Hi,</p>',
+    `<p style="margin:0 0 20px;font-size:15px;line-height:1.5;">${line}</p>`,
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color:#f3f5fb;border:1px solid #e6eaf9;">',
+    '<tr><td align="center" style="padding:18px 12px;font-family:Arial,sans-serif;">',
+    `<div style="font-size:28px;font-weight:bold;color:#35489a;">${escapeHtml(shown)}</div>`,
+    '</td></tr></table>',
+    '<p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#4053a7;">It can be used for 10 minutes.</p>',
+    `<p style="margin:16px 0 0;font-size:13px;line-height:1.5;color:#4053a7;">${notice}</p>`,
+    '</td></tr>',
+    '<tr><td style="padding:14px 28px;background-color:#fafbfe;border-top:1px solid #e6eaf9;font-family:Arial,sans-serif;font-size:12px;color:#7a8092;">',
+    'NUtilize',
+    '</td></tr>',
+    '</table>',
+    '</td></tr>',
+    '</table>',
+    '</body>',
+    '</html>',
+  ].join('\r\n');
+
+  const boundary = `000000000000${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
+  const mimeBody = [
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="UTF-8"',
+    '',
+    textBody,
+    `--${boundary}`,
+    'Content-Type: text/html; charset="UTF-8"',
+    '',
+    htmlBody,
+    `--${boundary}--`,
+  ].join('\r\n');
+
+  return { subject: content.subject, boundary, mimeBody };
 }
 
 async function readResponse(conn: Deno.Reader): Promise<string> {
@@ -62,7 +162,14 @@ async function readResponse(conn: Deno.Reader): Promise<string> {
   return response;
 }
 
-async function sendSmtpMail(headerFrom: string, mailFrom: string, to: string, subject: string, body: string) {
+async function sendSmtpMail(
+  headerFrom: string,
+  mailFrom: string,
+  to: string,
+  subject: string,
+  body: string,
+  boundary: string,
+) {
   // Support immediate TLS (port 465) and STARTTLS upgrade (port 587)
   let conn: Deno.Conn | null = null;
   try {
@@ -78,13 +185,23 @@ async function sendSmtpMail(headerFrom: string, mailFrom: string, to: string, su
     }
 
     const encoder = new TextEncoder();
+    const writeAll = async (data: Uint8Array) => {
+      let offset = 0;
+      while (offset < data.length) {
+        const bytesWritten = await conn!.write(data.subarray(offset));
+        if (bytesWritten === 0) {
+          throw new Error('SMTP connection closed while writing data.');
+        }
+        offset += bytesWritten;
+      }
+    };
     const writeLine = async (line: string) => {
-      await conn!.write(encoder.encode(`${line}\r\n`));
+      await writeAll(encoder.encode(`${line}\r\n`));
       return await readResponse(conn!);
     };
 
     // If we connected plain (587) we must issue EHLO, STARTTLS, then upgrade
-    response = await writeLine('EHLO localhost');
+    response = await writeLine(`EHLO ${SMTP_EHLO_DOMAIN}`);
     if (!response.startsWith('250')) {
       // Some servers respond with multiple 250- lines; accept those that start with 250 or 220 after EHLO
       // We'll continue and attempt STARTTLS if port 587
@@ -103,7 +220,7 @@ async function sendSmtpMail(headerFrom: string, mailFrom: string, to: string, su
       conn = await Deno.startTls(conn!, { hostname: SMTP_HOST });
 
       // After TLS upgrade, re-run EHLO to reset capabilities
-      response = await writeLine('EHLO localhost');
+      response = await writeLine(`EHLO ${SMTP_EHLO_DOMAIN}`);
       if (!response.startsWith('250')) {
         throw new Error(`SMTP EHLO after STARTTLS failed: ${response}`);
       }
@@ -146,15 +263,16 @@ async function sendSmtpMail(headerFrom: string, mailFrom: string, to: string, su
       `From: ${headerFrom}`,
       `To: ${to}`,
       `Subject: ${subject}`,
+      `Date: ${formatRfc5322Date()}`,
+      `Message-ID: <${crypto.randomUUID().replaceAll('-', '')}@mail.gmail.com>`,
       'MIME-Version: 1.0',
-      'Content-Type: text/plain; charset=utf-8',
-      'Content-Transfer-Encoding: 7bit',
-      'X-Mailer: NUtilize',
+      `Content-Type: multipart/alternative; boundary="${boundary}"`,
       '',
       body,
       '.',
     ].join('\r\n');
-    response = await writeLine(message);
+    await writeAll(encoder.encode(`${message}\r\n`));
+    response = await readResponse(conn!);
     if (!response.startsWith('250')) {
       throw new Error(`SMTP message send failed: ${response}`);
     }
@@ -241,7 +359,7 @@ serve(async (req) => {
     if (otpPurpose === 'verification') {
       let emailTaken: boolean;
       try {
-        emailTaken = await isRegistrationEmailTaken(
+        emailTaken = await hasRegistrationProfile(
           PROJECT_URL,
           SERVICE_ROLE_KEY,
           email,
@@ -289,26 +407,20 @@ serve(async (req) => {
     }
 
     try {
-      const fromEmail = parseFromEmail(SMTP_FROM ?? SMTP_USER ?? '');
-      const fromHeader = buildFromHeader(SMTP_FROM ?? SMTP_USER ?? fromEmail);
-      const emailBody = [
-        'Hello,',
-        '',
-        `Your NUtilize verification code is: ${code}`,
-        '',
-        'This code expires in 10 minutes.',
-        '',
-        'If you did not request this code, you can ignore this email.',
-      ].join('\n');
+      const fromEmail = parseFromEmail(SMTP_USER ?? '');
+      if (!fromEmail) {
+        throw new Error('SMTP_USER must be the authenticated sender email address.');
+      }
+      const fromHeader = buildFromHeader(fromEmail);
+      const mailContent = buildOtpEmail(otpPurpose, code);
 
       await sendSmtpMail(
         fromHeader,
         fromEmail,
         email,
-        otpPurpose === 'account_deletion'
-          ? 'Your NUtilize account deletion code'
-          : 'Your NUtilize verification code',
-        emailBody,
+        mailContent.subject,
+        mailContent.mimeBody,
+        mailContent.boundary,
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

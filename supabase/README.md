@@ -12,8 +12,16 @@ rows in `public.reservation_issues`.
 - `verify_email_code` validates signup and password-reset codes without
   consuming them; the operation that completes registration or reset consumes
   the code.
+- `send_email_code` sends multipart plain-text and full-document HTML emails.
+  The visible sender name is `SMTP_FROM_NAME` at the authenticated `SMTP_USER` mailbox.
+  The mailbox stays `SMTP_USER`; `SMTP_FROM_NAME` only changes the name Outlook shows.
+  Signup verification, password reset, and account deletion each use distinct
+  subjects and instructions; all retain the existing 10-minute code expiry.
 - Configure `PROJECT_URL`, `SERVICE_ROLE_KEY`, `SMTP_HOST`, `SMTP_PORT`,
-  `SMTP_USER`, `SMTP_PASS`, and `SMTP_FROM` as Edge Function secrets.
+  `SMTP_USER`, and `SMTP_PASS` as Edge Function secrets. `SMTP_HOST` and
+  `SMTP_PORT` default to `smtp.gmail.com` and `465`.
+- `SMTP_USER` must be the complete sending mailbox address and `SMTP_PASS` its
+  permitted SMTP credential.
 - Never include the service-role key in the Flutter app or a client `.env`.
 
 ## Deploy functions
