@@ -8,11 +8,13 @@ class AppShellScope extends InheritedWidget {
     required super.child,
     required this.currentIndex,
     required this.onTabSelected,
+    this.onRefreshNotifications,
     this.shellRoute,
   });
 
   final int currentIndex;
   final ValueChanged<int> onTabSelected;
+  final Future<void> Function()? onRefreshNotifications;
   final ModalRoute<dynamic>? shellRoute;
 
   static AppShellScope? maybeOf(BuildContext context) {
@@ -53,6 +55,7 @@ class AppShellScope extends InheritedWidget {
   bool updateShouldNotify(AppShellScope oldWidget) {
     return currentIndex != oldWidget.currentIndex ||
         onTabSelected != oldWidget.onTabSelected ||
+        onRefreshNotifications != oldWidget.onRefreshNotifications ||
         shellRoute != oldWidget.shellRoute;
   }
 }

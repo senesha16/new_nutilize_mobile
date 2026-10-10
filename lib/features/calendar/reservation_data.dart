@@ -1,5 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
+
+const Object _notificationUnset = Object();
 
 class ReservationTimelineEntry {
   const ReservationTimelineEntry({
@@ -527,6 +532,7 @@ class NotificationRecord {
     String? detailBody,
     String? roomName,
     String? roomDetails,
+    Object? reservation = _notificationUnset,
   }) {
     return NotificationRecord(
       id: id,
@@ -536,7 +542,9 @@ class NotificationRecord {
       date: date ?? this.date,
       targetKind: targetKind,
       isRead: isRead ?? this.isRead,
-      reservation: reservation,
+      reservation: identical(reservation, _notificationUnset)
+          ? this.reservation
+          : reservation as ReservationRecord?,
       detailTitle: detailTitle ?? this.detailTitle,
       detailBody: detailBody ?? this.detailBody,
       roomName: roomName ?? this.roomName,
@@ -728,10 +736,12 @@ class NotificationRepository {
 class NotificationActivityStore {
   static final ValueNotifier<List<NotificationRecord>> listenable =
       ValueNotifier<List<NotificationRecord>>([]);
+  static const FlutterSecureStorage _storage = FlutterSecureStorage();
 
   static bool _seeded = false;
   static bool _hasStatusBaseline = false;
   static DateTime? _sessionStartedAt;
+  static int? _loadedForUserId;
   static final Map<String, String> _knownReservationStates = {};
 
   static List<NotificationRecord> get notifications =>
@@ -759,12 +769,148 @@ class NotificationActivityStore {
     return '${notification.id}|${notification.title}|${notification.description}|${notification.category.name}|${notification.targetKind.name}|$reservationStatus';
   }
 
+  static int? get _currentUserId {
+    final rawUserId = AuthService.currentUser?['user_id'];
+    if (rawUserId is int) return rawUserId;
+    return int.tryParse(rawUserId?.toString() ?? '');
+  }
+
+  static String _storageKey(int userId) => 'nutilize.notifications.$userId';
+
+  static Future<void> saveForCurrentUser() async {
+    final userId = _currentUserId;
+    if (userId == null) return;
+    try {
+      await _storage.write(
+        key: _storageKey(userId),
+        value: jsonEncode({
+          'knownStates': _knownReservationStates,
+          'notifications': listenable.value.map(_notificationToJson).toList(),
+        }),
+      );
+    } catch (_) {
+      // Keep the in-memory list if the device cannot store it yet.
+    }
+  }
+
+  static Future<void> restoreForCurrentUser() async {
+    final userId = _currentUserId;
+    if (userId == null || _loadedForUserId == userId) return;
+    _loadedForUserId = userId;
+    try {
+      final raw = await _storage.read(key: _storageKey(userId));
+      if (raw == null || raw.trim().isEmpty) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+
+      final savedStates = decoded['knownStates'];
+      if (savedStates is Map) {
+        _knownReservationStates
+          ..clear()
+          ..addAll(
+            savedStates.map(
+              (key, value) => MapEntry(key.toString(), value.toString()),
+            ),
+          );
+      }
+
+      final savedNotifications = decoded['notifications'];
+      final restored = savedNotifications is List
+          ? savedNotifications
+                .map(_notificationFromJson)
+                .whereType<NotificationRecord>()
+                .toList()
+          : <NotificationRecord>[];
+      if (restored.isEmpty && _knownReservationStates.isEmpty) return;
+
+      restored.sort((a, b) => b.date.compareTo(a.date));
+      _hasStatusBaseline = true;
+      _seeded = true;
+      listenable.value = restored;
+    } catch (_) {
+      _loadedForUserId = null;
+    }
+  }
+
+  static Map<String, dynamic> _notificationToJson(
+    NotificationRecord notification,
+  ) {
+    return {
+      'id': notification.id,
+      'category': notification.category.name,
+      'title': notification.title,
+      'description': notification.description,
+      'date': notification.date.toIso8601String(),
+      'targetKind': notification.targetKind.name,
+      'isRead': notification.isRead,
+      'detailTitle': notification.detailTitle,
+      'detailBody': notification.detailBody,
+      'roomName': notification.roomName,
+      'roomDetails': notification.roomDetails,
+      'reservationId': notification.reservation?.stableId,
+    };
+  }
+
+  static NotificationRecord? _notificationFromJson(Object? raw) {
+    if (raw is! Map) return null;
+    final id = raw['id']?.toString() ?? '';
+    final title = raw['title']?.toString() ?? '';
+    final description = raw['description']?.toString() ?? '';
+    final date = DateTime.tryParse(raw['date']?.toString() ?? '');
+    if (id.isEmpty || title.isEmpty || date == null) return null;
+
+    final category = NotificationCategory.values.where(
+      (value) => value.name == raw['category']?.toString(),
+    );
+    final targetKind = NotificationTargetKind.values.where(
+      (value) => value.name == raw['targetKind']?.toString(),
+    );
+    final reservationId = raw['reservationId']?.toString();
+
+    return NotificationRecord(
+      id: id,
+      category: category.isEmpty
+          ? NotificationCategory.reservationReminder
+          : category.first,
+      title: title,
+      description: description,
+      date: date,
+      targetKind: targetKind.isEmpty
+          ? NotificationTargetKind.none
+          : targetKind.first,
+      isRead: raw['isRead'] == true,
+      detailTitle: raw['detailTitle']?.toString(),
+      detailBody: raw['detailBody']?.toString(),
+      roomName: raw['roomName']?.toString(),
+      roomDetails: raw['roomDetails']?.toString(),
+      reservation: reservationId == null || reservationId.isEmpty
+          ? null
+          : ReservationRecord(
+              id: reservationId,
+              reservationTitle: title,
+              roomName: raw['roomName']?.toString() ?? 'Reservation',
+              reservationType: 'Reservation',
+              reservationStatus: '',
+              date: date,
+              reservationTime: '',
+            ),
+    );
+  }
+
+  static void _publish(List<NotificationRecord> notifications) {
+    listenable.value = notifications;
+    if (_currentUserId != null) {
+      Future<void>(() => saveForCurrentUser());
+    }
+  }
+
   static void ensureSeeded([DateTime? now]) {
     if (AuthService.currentUser == null) {
       listenable.value = [];
       _seeded = false;
       _hasStatusBaseline = false;
       _sessionStartedAt = null;
+      _loadedForUserId = null;
       _knownReservationStates.clear();
       return;
     }
@@ -812,6 +958,7 @@ class NotificationActivityStore {
       _seeded = false;
       _hasStatusBaseline = false;
       _sessionStartedAt = null;
+      _loadedForUserId = null;
       _knownReservationStates.clear();
       return;
     }
@@ -829,8 +976,7 @@ class NotificationActivityStore {
           ),
         );
       _hasStatusBaseline = true;
-      final initialNotifications = _initialNotificationsFor(reservations);
-      listenable.value = initialNotifications;
+      _publish(_initialNotificationsFor(reservations));
       return;
     }
 
@@ -869,12 +1015,21 @@ class NotificationActivityStore {
     final currentByReservationId = <String, ReservationRecord>{
       for (final reservation in reservations) reservation.stableId: reservation,
     };
-    final filtered = updated.where((notification) {
+    final refreshed = updated.map((notification) {
+      final reservation = notification.reservation;
+      if (reservation == null) return notification;
+      final currentReservation = currentByReservationId[reservation.stableId];
+      if (currentReservation == null) return notification;
+      return notification.copyWith(reservation: currentReservation);
+    }).toList();
+    final filtered = refreshed.where((notification) {
       final reservation = notification.reservation;
       if (reservation == null) return true;
 
       final currentReservation = currentByReservationId[reservation.stableId];
-      if (currentReservation == null) return false;
+      if (currentReservation == null) {
+        return reservations.isEmpty;
+      }
 
       final currentStatus = currentReservation.reservationStatus.toLowerCase();
       final isCancelled =
@@ -887,7 +1042,7 @@ class NotificationActivityStore {
     }).toList();
 
     filtered.sort((a, b) => b.date.compareTo(a.date));
-    listenable.value = filtered;
+    _publish(filtered);
   }
 
   static String _reservationState(ReservationRecord reservation) {
@@ -960,28 +1115,39 @@ class NotificationActivityStore {
   }
 
   static void markAllAsRead() {
-    listenable.value = listenable.value
-        .map((notification) => notification.copyWith(isRead: true))
-        .toList();
+    _publish(
+      listenable.value
+          .map((notification) => notification.copyWith(isRead: true))
+          .toList(),
+    );
   }
 
   static void markAsRead(String id) {
-    listenable.value = listenable.value
-        .map(
-          (notification) => notification.id == id
-              ? notification.copyWith(isRead: true)
-              : notification,
-        )
-        .toList();
+    _publish(
+      listenable.value
+          .map(
+            (notification) => notification.id == id
+                ? notification.copyWith(isRead: true)
+                : notification,
+          )
+          .toList(),
+    );
   }
 
   static void removeById(String id) {
-    listenable.value = listenable.value
-        .where((notification) => notification.id != id)
-        .toList();
+    _publish(
+      listenable.value
+          .where((notification) => notification.id != id)
+          .toList(),
+    );
   }
 
   static void clear() {
     listenable.value = [];
+    _seeded = false;
+    _hasStatusBaseline = false;
+    _sessionStartedAt = null;
+    _loadedForUserId = null;
+    _knownReservationStates.clear();
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_details_page.dart';
+import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
 import 'package:new_nutilize_mobile/widgets/secondary_header.dart';
 
 class NotificationPage extends StatefulWidget {
@@ -18,8 +19,12 @@ class _NotificationPageState extends State<NotificationPage> {
   }
 
   Future<void> _refresh() async {
+    final refresh = AppShellScope.maybeOf(context)?.onRefreshNotifications;
+    if (refresh != null) {
+      await refresh();
+      return;
+    }
     NotificationActivityStore.syncFromReservations(DateTime.now());
-    await Future<void>.delayed(const Duration(milliseconds: 350));
   }
 
   void _markAllAsRead() {

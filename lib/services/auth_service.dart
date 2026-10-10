@@ -314,6 +314,7 @@ class AuthService {
         );
       }
       currentUser = profile;
+      await NotificationActivityStore.restoreForCurrentUser();
       debugPrint('[AuthService] signIn: success for $normalizedEmail');
       return session.accessToken;
     } on AuthException catch (e) {
@@ -586,6 +587,7 @@ class AuthService {
     }
 
     currentUser = profile;
+    await NotificationActivityStore.restoreForCurrentUser();
     return token;
   }
 
@@ -703,11 +705,13 @@ class AuthService {
           'user_id': null,
           'auth_user_id': session.user.id,
         };
+    await NotificationActivityStore.restoreForCurrentUser();
     return currentUser;
   }
 
   // Clear the current session and cached user.
   static Future<void> signOut() async {
+    await NotificationActivityStore.saveForCurrentUser();
     currentUser = null;
     ReservationActivityStore.clear();
     await Supabase.instance.client.auth.signOut();
@@ -1006,6 +1010,7 @@ class AuthService {
         final body = jsonDecode(resp.body);
         if (body['ok'] == true) {
           try {
+            await NotificationActivityStore.saveForCurrentUser();
             currentUser = null;
             ReservationActivityStore.clear();
             NotificationActivityStore.clear();

@@ -28,7 +28,11 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late int _currentIndex;
   Timer? _refreshTimer;
+  Timer? _statusTimer;
   bool _isRefreshing = false;
+  bool _isRefreshingStatuses = false;
+  bool _statusRefreshQueued = false;
+  bool _detailsReady = false;
   bool _hasSeenInitialNotifications = false;
   List<NotificationRecord> _lastNotifications = [];
   String? _lastShownNotificationId;
@@ -54,6 +58,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _refreshTimer?.cancel();
+    _statusTimer?.cancel();
     _dismissNotificationOverlay();
     _approvalsChannel?.unsubscribe();
     _reservationsChannel?.unsubscribe();
@@ -70,6 +75,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshNotificationStatuses());
       unawaited(_refreshReservations());
     }
   }
@@ -79,6 +85,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     _refreshTimer = Timer.periodic(const Duration(seconds: 30), (_) {
       if (mounted) {
         unawaited(_refreshReservations());
+      }
+    });
+  }
+
+  void _scheduleStatusRefresh() {
+    _statusTimer?.cancel();
+    _statusTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+      if (mounted) {
+        unawaited(_refreshNotificationStatuses());
       }
     });
   }
@@ -137,6 +152,164 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       // Ignore refresh failures and keep the shell responsive.
     } finally {
       _isRefreshing = false;
+      if (includeDetails && !_detailsReady && mounted) {
+        _detailsReady = true;
+        _scheduleStatusRefresh();
+        unawaited(_refreshNotificationStatuses());
+      }
+    }
+  }
+
+  Future<void> _refreshNotificationStatuses() async {
+    if (!_detailsReady) return;
+    if (_isRefreshingStatuses) {
+      _statusRefreshQueued = true;
+      return;
+    }
+
+    final session = Supabase.instance.client.auth.currentSession;
+    if (session == null) return;
+
+    _isRefreshingStatuses = true;
+    try {
+      do {
+        _statusRefreshQueued = false;
+        final profile =
+            AuthService.currentUser ?? await AuthService.restoreCurrentUser();
+        final rawUserId = profile?['user_id'];
+        final userId = rawUserId is int
+            ? rawUserId
+            : int.tryParse(rawUserId?.toString() ?? '');
+        if (userId == null) return;
+
+        final snapshots = await ReservationService()
+            .getReservationStatusSnapshots(userId);
+        if (!mounted) return;
+
+        final currentRecords = ReservationActivityStore.reservations;
+        final currentById = {
+          for (final record in currentRecords) record.stableId: record,
+        };
+        final mergedIds = <String>{};
+        final merged = <ReservationRecord>[];
+        var needsCanonicalRefresh = false;
+        for (final snapshot in snapshots) {
+          final current = currentById[snapshot.stableId];
+          if (current == null || current.timeline.length < 2) {
+            needsCanonicalRefresh = true;
+            continue;
+          }
+          merged.add(_mergeStatusSnapshot(current, snapshot));
+          mergedIds.add(snapshot.stableId);
+        }
+        final untouched = currentRecords.where(
+          (record) => !mergedIds.contains(record.stableId),
+        );
+        ReservationActivityStore.replaceAll([
+          ...merged,
+          ...untouched,
+        ]);
+        if (needsCanonicalRefresh && !_isRefreshing) {
+          unawaited(_refreshReservations());
+        }
+      } while (_statusRefreshQueued && mounted);
+    } catch (_) {
+      // Keep the last notifications if a status check fails.
+    } finally {
+      _isRefreshingStatuses = false;
+    }
+  }
+
+  ReservationRecord _mergeStatusSnapshot(
+    ReservationRecord current,
+    ReservationRecord snapshot,
+  ) {
+    return ReservationRecord(
+      id: current.id ?? snapshot.id,
+      userId: current.userId ?? snapshot.userId,
+      reservationTitle: current.reservationTitle,
+      roomName: current.roomName,
+      reservationType: current.reservationType,
+      reservationStatus: snapshot.reservationStatus,
+      date: current.date,
+      reservationTime: current.reservationTime,
+      lastUpdatedAt: snapshot.lastUpdatedAt ?? current.lastUpdatedAt,
+      timeline: _applyStatusesWithoutReordering(
+        current.timeline,
+        snapshot.timeline,
+      ),
+      reservedItems: current.reservedItems,
+      rejectionReason: snapshot.rejectionReason,
+      rejectedBy: snapshot.rejectedBy,
+    );
+  }
+
+  List<ReservationTimelineEntry> _applyStatusesWithoutReordering(
+    List<ReservationTimelineEntry> current,
+    List<ReservationTimelineEntry> snapshot,
+  ) {
+    if (current.isEmpty || snapshot.isEmpty) return current;
+
+    final used = List<bool>.filled(snapshot.length, false);
+    return [
+      for (final entry in current)
+        _entryWithMatchedStatus(entry, snapshot, used),
+    ];
+  }
+
+  ReservationTimelineEntry _entryWithMatchedStatus(
+    ReservationTimelineEntry entry,
+    List<ReservationTimelineEntry> snapshot,
+    List<bool> used,
+  ) {
+    if (entry.title.trim().toLowerCase() == 'request submitted') {
+      return entry;
+    }
+
+    final title = entry.title.trim().toLowerCase();
+    var match = -1;
+    for (var index = 0; index < snapshot.length; index++) {
+      if (used[index]) continue;
+      if (snapshot[index].title.trim().toLowerCase() == title) {
+        match = index;
+        break;
+      }
+    }
+    if (match == -1 || snapshot[match].status == entry.status) {
+      if (match != -1) used[match] = true;
+      return entry;
+    }
+
+    used[match] = true;
+    return ReservationTimelineEntry(
+      title: entry.title,
+      status: snapshot[match].status,
+      date: entry.date,
+      description: _approvalStepDescription(
+        entry.title,
+        snapshot[match].status,
+      ),
+      timestamp: snapshot[match].timestamp,
+      approvedAt: entry.approvedAt,
+    );
+  }
+
+  String _approvalStepDescription(String title, String status) {
+    switch (status) {
+      case 'Approved':
+        return 'Your reservation has been approved by $title.';
+      case 'Completed':
+        return 'This reservation has been completed.';
+      case 'Returned':
+        return 'This reservation has been returned and the item units are available again.';
+      case 'Rejected':
+        return 'Your reservation was rejected by $title.';
+      case 'Cancelled':
+        return 'This reservation was cancelled.';
+      case 'Submitted':
+        return 'Your reservation request was submitted successfully.';
+      default:
+        return 'Waiting for approval from $title.';
     }
   }
 
@@ -152,7 +325,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         table: 'reservation_approvals',
       ),
       (payload, [_]) {
-        unawaited(_refreshReservations());
+        unawaited(_refreshNotificationStatuses());
       },
     );
     _approvalsChannel?.subscribe();
@@ -162,7 +335,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       RealtimeListenTypes.postgresChanges,
       ChannelFilter(event: '*', schema: 'public', table: 'reservations'),
       (payload, [_]) {
-        unawaited(_refreshReservations());
+        unawaited(_refreshNotificationStatuses());
       },
     );
     _reservationsChannel?.subscribe();
@@ -243,6 +416,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final shellScope = AppShellScope(
       currentIndex: _currentIndex,
       onTabSelected: _selectTab,
+      onRefreshNotifications: _refreshNotificationStatuses,
       shellRoute: ModalRoute.of(context),
       child: Scaffold(
         backgroundColor: const Color(0xFFF3F5FB),
