@@ -126,10 +126,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       final locallyKnown = ReservationActivityStore.reservations
           .where((record) => !fetchedIds.contains(record.stableId))
           .toList();
-      ReservationActivityStore.replaceAll(
-        [...records, ...locallyKnown],
-        syncNotifications: includeDetails,
-      );
+      ReservationActivityStore.replaceAll([
+        ...records,
+        ...locallyKnown,
+      ], syncNotifications: includeDetails);
       if (includeDetails) {
         NotificationActivityStore.syncFromReservations(DateTime.now());
       }
@@ -243,6 +243,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final shellScope = AppShellScope(
       currentIndex: _currentIndex,
       onTabSelected: _selectTab,
+      shellRoute: ModalRoute.of(context),
       child: Scaffold(
         backgroundColor: const Color(0xFFF3F5FB),
         body: SafeArea(

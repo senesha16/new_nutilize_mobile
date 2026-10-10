@@ -8,10 +8,12 @@ class AppShellScope extends InheritedWidget {
     required super.child,
     required this.currentIndex,
     required this.onTabSelected,
+    this.shellRoute,
   });
 
   final int currentIndex;
   final ValueChanged<int> onTabSelected;
+  final ModalRoute<dynamic>? shellRoute;
 
   static AppShellScope? maybeOf(BuildContext context) {
     return context.dependOnInheritedWidgetOfExactType<AppShellScope>() ??
@@ -28,6 +30,19 @@ class AppShellScope extends InheritedWidget {
     }
   }
 
+  static bool selectTabFrom(BuildContext context, int index) {
+    final scope = maybeOf(context);
+    if (scope == null) return false;
+
+    final route = scope.shellRoute;
+    final navigator = Navigator.maybeOf(context, rootNavigator: true);
+    if (route != null && navigator != null) {
+      navigator.popUntil((candidate) => identical(candidate, route));
+    }
+    scope.onTabSelected(index);
+    return true;
+  }
+
   static AppShellScope of(BuildContext context) {
     final scope = maybeOf(context);
     assert(scope != null, 'AppShellScope not found in context');
@@ -37,6 +52,7 @@ class AppShellScope extends InheritedWidget {
   @override
   bool updateShouldNotify(AppShellScope oldWidget) {
     return currentIndex != oldWidget.currentIndex ||
-        onTabSelected != oldWidget.onTabSelected;
+        onTabSelected != oldWidget.onTabSelected ||
+        shellRoute != oldWidget.shellRoute;
   }
 }

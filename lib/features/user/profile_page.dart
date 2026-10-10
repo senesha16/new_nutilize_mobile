@@ -41,28 +41,28 @@ class ProfilePage extends StatelessWidget {
                     child: Column(
                       children: [
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(22, 16, 22, 0),
+                          padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
                           child: Container(
-                            padding: const EdgeInsets.all(16),
+                            padding: const EdgeInsets.all(18),
                             decoration: BoxDecoration(
                               color: Colors.white,
-                              borderRadius: BorderRadius.circular(18),
+                              borderRadius: BorderRadius.circular(20),
                               boxShadow: const [
                                 BoxShadow(
-                                  color: Color(0x12000000),
-                                  blurRadius: 16,
-                                  offset: Offset(0, 8),
+                                  color: Color(0x0A172554),
+                                  blurRadius: 14,
+                                  offset: Offset(0, 5),
                                 ),
                               ],
                             ),
                             child: Row(
                               children: [
                                 Container(
-                                  width: 64,
-                                  height: 64,
+                                  width: 60,
+                                  height: 60,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFE4E9FA),
-                                    borderRadius: BorderRadius.circular(16),
+                                    color: const Color(0xFFE9EDFF),
+                                    borderRadius: BorderRadius.circular(18),
                                   ),
                                   child: const Icon(
                                     Icons.person_outline_rounded,
@@ -124,17 +124,16 @@ class ProfilePage extends StatelessWidget {
                         ),
                         // Main Content
                         Padding(
-                          padding: const EdgeInsets.fromLTRB(22, 28, 22, 32),
+                          padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const SizedBox(height: 24),
                               // Reservation Stats
                               _ReservationStats(),
-                              const SizedBox(height: 28),
+                              const SizedBox(height: 24),
                               // Activity Section
                               _SectionTitle(title: 'Activity'),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 10),
                               _ActivityCard(
                                 icon: Icons.history_rounded,
                                 title: 'Reservation History',
@@ -147,7 +146,9 @@ class ProfilePage extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 28),
+                              const SizedBox(height: 22),
+                              _SectionTitle(title: 'Support'),
+                              const SizedBox(height: 10),
                               _ActivityCard(
                                 icon: Icons.menu_book_rounded,
                                 title: 'Need help?',
@@ -169,7 +170,7 @@ class ProfilePage extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 28),
+                              const SizedBox(height: 24),
                               // Logout Button
                               SizedBox(
                                 width: double.infinity,
@@ -183,13 +184,13 @@ class ProfilePage extends StatelessWidget {
                                   style: OutlinedButton.styleFrom(
                                     foregroundColor: const Color(0xFFE53935),
                                     side: const BorderSide(
-                                      color: Color(0xFFE53935),
+                                      color: Color(0xFFE7B8B5),
                                     ),
                                     padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
+                                      vertical: 13,
                                     ),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
                                 ),
@@ -220,10 +221,10 @@ class ProfilePage extends StatelessWidget {
                                     foregroundColor: Colors.white,
                                     elevation: 0,
                                     padding: const EdgeInsets.symmetric(
-                                      vertical: 12,
+                                      vertical: 13,
                                     ),
                                     shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10),
+                                      borderRadius: BorderRadius.circular(12),
                                     ),
                                   ),
                                 ),

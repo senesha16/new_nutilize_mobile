@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
 
 class AppBottomNav extends StatelessWidget {
   const AppBottomNav({super.key, this.selectedIndex = 0, this.onTap});
@@ -15,6 +16,8 @@ class AppBottomNav extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final shell = AppShellScope.maybeOf(context);
+    final activeIndex = shell?.currentIndex ?? selectedIndex;
     return Container(
       height: 84,
       decoration: const BoxDecoration(
@@ -31,7 +34,7 @@ class AppBottomNav extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: List.generate(_items.length, (index) {
           final item = _items[index];
-          final bool isSelected = selectedIndex == index;
+          final bool isSelected = activeIndex == index;
           return Semantics(
             button: true,
             selected: isSelected,
@@ -41,7 +44,10 @@ class AppBottomNav extends StatelessWidget {
               child: InkWell(
                 borderRadius: BorderRadius.circular(16),
                 splashColor: Colors.white24,
-                onTap: onTap == null ? null : () => onTap!(index),
+                onTap: () {
+                  if (AppShellScope.selectTabFrom(context, index)) return;
+                  onTap?.call(index);
+                },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 12,
