@@ -35,6 +35,17 @@ rows in `public.reservation_issues`.
 - Apply `migrations/0012_user_experience_ratings.sql` to the `security_db`
   project before deploying the app changes.
 
+## User feedback survey
+
+- The User page links to a feedback survey with four required satisfaction
+  answers (navigation, reservation process, responsiveness, and information
+  clarity) and an optional comment of up to 2,000 characters.
+- The authenticated `submit_user_feedback` function associates each response
+  with the current user's profile and saves it to `public.user_feedback`.
+  Direct client table access is disabled by row-level security.
+- Apply `migrations/0013_user_feedback_survey.sql` to the `security_db` project
+  before deploying the app changes.
+
 ## Deploy functions
 
 Log in to Supabase CLI, then deploy the functions to the intended project:

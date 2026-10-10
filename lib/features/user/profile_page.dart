@@ -10,8 +10,8 @@ import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
 import 'package:new_nutilize_mobile/features/request/reservation_history_page.dart';
-import 'package:new_nutilize_mobile/features/user/request_history_page.dart';
 import 'package:new_nutilize_mobile/features/user/user_guide_page.dart';
+import 'package:new_nutilize_mobile/features/user/feedback_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key, this.showBottomNavigation = true});
@@ -128,16 +128,6 @@ class ProfilePage extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              _ActivityCard(
-                                icon: Icons.menu_book_rounded,
-                                title: 'Need help?',
-                                subtitle: 'Open the step-by-step user guide',
-                                onTap: () => Navigator.of(context).push(
-                                  MaterialPageRoute(
-                                    builder: (_) => const UserGuidePage(),
-                                  ),
-                                ),
-                              ),
                               const SizedBox(height: 24),
                               // Reservation Stats
                               _ReservationStats(),
@@ -157,14 +147,25 @@ class ProfilePage extends StatelessWidget {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 28),
                               _ActivityCard(
-                                icon: Icons.receipt_long_rounded,
-                                title: 'Request History',
-                                subtitle: 'Review your submitted requests',
+                                icon: Icons.menu_book_rounded,
+                                title: 'Need help?',
+                                subtitle: 'Open the step-by-step user guide',
                                 onTap: () => Navigator.of(context).push(
                                   MaterialPageRoute(
-                                    builder: (_) => const RequestHistoryPage(),
+                                    builder: (_) => const UserGuidePage(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              _ActivityCard(
+                                icon: Icons.feedback_outlined,
+                                title: 'Feedback',
+                                subtitle: 'Share your experience with NUtilize',
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const FeedbackPage(),
                                   ),
                                 ),
                               ),
