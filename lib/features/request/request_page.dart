@@ -783,8 +783,8 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
             ReservationTimelineEntry(
               title: 'Request Submitted',
               status: 'Completed',
-              date: _selectedDate!,
-              timestamp: _formatTimestamp(_selectedDate!),
+              date: DateTime.now(),
+              timestamp: _formatTimestamp(DateTime.now()),
               description:
                   'Your reservation request was submitted successfully.',
             ),

@@ -395,74 +395,40 @@ class ReservationService {
     }
   }
 
-  /// Check if a specific room has time conflicts
-  /// Excludes: Cancelled, Rejected, Denied, Returned statuses
-  /// Includes: Pending, Approved, Completed (blocks availability)
+  /// A room is taken while another booking overlaps this time, including
+  /// requests that are still waiting for approval. Rejected, cancelled, and
+  /// non-overlapping times leave the room available.
   Future<bool> hasTimeConflict({
     required int roomId,
     required DateTime startTime,
     required DateTime endTime,
     required DateTime reservationDate,
+  }) {
+    return _roomTimeIsTaken(
+      roomId: roomId,
+      reservationDate: reservationDate,
+      startTime: startTime,
+      endTime: endTime,
+    );
+  }
+
+  Future<bool> _roomTimeIsTaken({
+    required int roomId,
+    required DateTime reservationDate,
+    required DateTime startTime,
+    required DateTime endTime,
   }) async {
     try {
-      final dayStart = DateTime(
-        reservationDate.year,
-        reservationDate.month,
-        reservationDate.day,
+      final result = await _client.rpc(
+        'room_time_is_taken',
+        params: {
+          'p_room_id': roomId,
+          'p_date_of_activity': reservationDate.toIso8601String(),
+          'p_start_of_activity': startTime.toIso8601String(),
+          'p_end_of_activity': endTime.toIso8601String(),
+        },
       );
-      final dayEnd = dayStart.add(const Duration(days: 1));
-
-      // Only check reservations with blocking statuses: Pending, Approved, Completed
-      final response = await _client
-          .from('reservations')
-          .select(
-            'reservation_id, Date_of_Activity, Start_of_activity, End_of_Activity, overall_status',
-          )
-          .gte('Date_of_Activity', dayStart.toIso8601String())
-          .lt('Date_of_Activity', dayEnd.toIso8601String())
-          .in_('overall_status', ['Pending Approval', 'Approved', 'Completed']);
-
-      if (response.isEmpty) {
-        return false;
-      }
-
-      for (final res in response as List) {
-        final resDate = DateTime.parse(res['Date_of_Activity'] as String);
-        if (resDate.year != reservationDate.year ||
-            resDate.month != reservationDate.month ||
-            resDate.day != reservationDate.day) {
-          continue;
-        }
-
-        final resStart = DateTime.parse(res['Start_of_activity'] as String);
-        final resEnd = DateTime.parse(res['End_of_Activity'] as String);
-
-        if (startTime.isBefore(resEnd) && endTime.isAfter(resStart)) {
-          final detailResponse = await _client
-              .from('reservation_details')
-              .select('reservation_rooms_id')
-              .eq('reservation_id', res['reservation_id']);
-
-          for (final detail in detailResponse as List) {
-            final roomReservationId = detail['reservation_rooms_id'] as int?;
-            if (roomReservationId == null) {
-              continue;
-            }
-
-            final roomSelection = await _client
-                .from('reservation_rooms')
-                .select('room_id')
-                .eq('reservation_rooms_id', roomReservationId)
-                .maybeSingle();
-
-            if (roomSelection != null && roomSelection['room_id'] == roomId) {
-              return true;
-            }
-          }
-        }
-      }
-
-      return false;
+      return result == true;
     } catch (e) {
       print('Error checking time conflict: $e');
       return false;
@@ -1086,6 +1052,7 @@ class ReservationService {
             reservationId,
             date,
             approvalRowsByReservation[reservationId] ?? const [],
+            submittedAt: DateTime.tryParse(res['created_at']?.toString() ?? ''),
           );
           final reservedItemsFuture = _fetchReservationItemNames(reservationId);
           final detailCheckFuture = _client
@@ -1253,12 +1220,14 @@ class ReservationService {
         }
         databaseTimestamps.sort();
 
+        final submittedAt =
+            DateTime.tryParse(res['created_at']?.toString() ?? '') ?? date;
         final timeline = <ReservationTimelineEntry>[
           ReservationTimelineEntry(
             title: 'Request Submitted',
             status: 'Completed',
-            date: date,
-            timestamp: _formatTimestamp(date),
+            date: submittedAt,
+            timestamp: _formatTimestamp(submittedAt),
             description: 'Your reservation request was submitted successfully.',
           ),
           for (final row in approvalRows)
@@ -1345,11 +1314,9 @@ class ReservationService {
     } else {
       status = 'Pending';
     }
-    final updatedAt = DateTime.tryParse(row['updated_at']?.toString() ?? '');
-    final createdAt = DateTime.tryParse(row['created_at']?.toString() ?? '');
     final timestamp = status == 'Pending'
         ? 'Pending'
-        : _formatTimestamp(updatedAt ?? createdAt ?? date);
+        : _formatStoredApprovalTime(row, date);
     final description = switch (status) {
       'Approved' => 'Your reservation has been approved by $title.',
       'Completed' => 'This reservation has been completed.',
@@ -1522,6 +1489,15 @@ class ReservationService {
     final minute = date.minute.toString().padLeft(2, '0');
     final period = date.hour >= 12 ? 'PM' : 'AM';
     return '${date.month}/${date.day}/${date.year} $hour:$minute $period';
+  }
+
+  /// The time an office actually approved, kept as the Manila clock stored
+  /// in the database. approved_at is that moment; updated_at can be UTC.
+  String _formatStoredApprovalTime(Map<String, dynamic> row, DateTime fallback) {
+    final stored = DateTime.tryParse(row['approved_at']?.toString() ?? '') ??
+        DateTime.tryParse(row['updated_at']?.toString() ?? '') ??
+        DateTime.tryParse(row['created_at']?.toString() ?? '');
+    return _formatTimestamp(stored ?? fallback);
   }
 
   DateTime buildApprovalTimestampForStep(int step, {DateTime? baseTime}) {
@@ -1931,8 +1907,9 @@ class ReservationService {
   Future<List<ReservationTimelineEntry>> _buildApprovalTimeline(
     int reservationId,
     DateTime date,
-    List<Map<String, dynamic>> approvals,
-  ) async {
+    List<Map<String, dynamic>> approvals, {
+    DateTime? submittedAt,
+  }) async {
     try {
       // Use canonical chain to force UI order, but read DB rows for status/timestamps.
       final prerequisites = await Future.wait([
@@ -1981,13 +1958,14 @@ class ReservationService {
         );
       }
 
+      final submitted = submittedAt ?? date;
       final entries = <ReservationTimelineEntry>[];
       entries.add(
         ReservationTimelineEntry(
           title: 'Request Submitted',
           status: 'Completed',
-          date: date,
-          timestamp: _formatTimestamp(date),
+          date: submitted,
+          timestamp: _formatTimestamp(submitted),
           description: 'Your reservation request was submitted successfully.',
         ),
       );
@@ -2119,8 +2097,6 @@ class ReservationService {
           final row = rawApprovals[matchIndex];
           final rowStatus =
               (row['status'] as String?)?.trim().toLowerCase() ?? 'pending';
-          final createdAt = row['created_at'] as String?;
-          final updatedAt = row['updated_at'] as String?;
           if (rowStatus.contains('returned')) {
             status = 'Returned';
           } else if (rowStatus == 'approved' || rowStatus == 'accepted') {
@@ -2137,11 +2113,7 @@ class ReservationService {
           if (status == 'Pending') {
             timestamp = 'Pending';
           } else {
-            timestamp = _formatTimestamp(
-              DateTime.parse(
-                updatedAt ?? createdAt ?? DateTime.now().toIso8601String(),
-              ),
-            );
+            timestamp = _formatStoredApprovalTime(row, date);
           }
           description = status == 'Approved'
               ? 'Your reservation has been approved by $displayName.'
@@ -2174,8 +2146,8 @@ class ReservationService {
         ReservationTimelineEntry(
           title: 'Request Submitted',
           status: 'Completed',
-          date: date,
-          timestamp: _formatTimestamp(date),
+          date: submittedAt ?? date,
+          timestamp: _formatTimestamp(submittedAt ?? date),
           description: 'Your reservation request was submitted successfully.',
         ),
         ReservationTimelineEntry(
@@ -2363,11 +2335,11 @@ class ReservationService {
       }
 
       // Prevent overlapping reservations for the same room/time
-      final conflict = await _hasRoomTimeConflict(
-        roomId,
-        dateOfActivity,
-        startTime,
-        endTime,
+      final conflict = await _roomTimeIsTaken(
+        roomId: roomId,
+        reservationDate: dateOfActivity,
+        startTime: startTime,
+        endTime: endTime,
       );
       if (conflict) {
         print(
@@ -2494,88 +2466,6 @@ class ReservationService {
       return reservationId;
     } catch (error, stackTrace) {
       Error.throwWithStackTrace(error, stackTrace);
-    }
-  }
-
-  /// Check whether the given room has any reservation on the same date that
-  /// overlaps the requested time range. Returns true if a conflict exists.
-  Future<bool> _hasRoomTimeConflict(
-    int roomId,
-    DateTime dateOfActivity,
-    DateTime startTime,
-    DateTime endTime,
-  ) async {
-    try {
-      // Find reservation_rooms entries for this room
-      final roomResp = await _client
-          .from('reservation_rooms')
-          .select('reservation_rooms_id')
-          .eq('room_id', roomId);
-
-      if (roomResp == null) return false;
-
-      final roomIds = <int>[];
-      for (final r in roomResp as List) {
-        final id = r['reservation_rooms_id'] as int?;
-        if (id != null) roomIds.add(id);
-      }
-
-      if (roomIds.isEmpty) return false;
-
-      // Find reservation_details that reference those reservation_rooms_ids
-      final detailsResp = await _client
-          .from('reservation_details')
-          .select('reservation_id')
-          .in_('reservation_rooms_id', roomIds);
-
-      if (detailsResp == null) return false;
-
-      final reservationIds = <int>{};
-      for (final d in detailsResp as List) {
-        final rid = d['reservation_id'] as int?;
-        if (rid != null) reservationIds.add(rid);
-      }
-
-      if (reservationIds.isEmpty) return false;
-
-      // Fetch reservations by id and check date/time overlap
-      final reservationsResp = await _client
-          .from('reservations')
-          .select(
-            'reservation_id, Date_of_Activity, Start_of_activity, End_of_Activity, overall_status',
-          )
-          .in_('reservation_id', reservationIds.toList());
-
-      if (reservationsResp == null) return false;
-
-      for (final res in reservationsResp as List) {
-        if (!_isBlockingReservationStatus(res['overall_status'] as String?)) {
-          continue;
-        }
-        final dateStr = res['Date_of_Activity'] as String?;
-        final startStr = res['Start_of_activity'] as String?;
-        final endStr = res['End_of_Activity'] as String?;
-        if (dateStr == null || startStr == null || endStr == null) continue;
-
-        final existingDate = DateTime.parse(dateStr);
-        if (existingDate.year == dateOfActivity.year &&
-            existingDate.month == dateOfActivity.month &&
-            existingDate.day == dateOfActivity.day) {
-          final existingStart = DateTime.parse(startStr);
-          final existingEnd = DateTime.parse(endStr);
-
-          if (startTime.isBefore(existingEnd) &&
-              endTime.isAfter(existingStart)) {
-            return true;
-          }
-        }
-      }
-
-      return false;
-    } catch (e) {
-      print('Error checking room time conflicts: $e');
-      // Fail-safe: assume no conflict so we don't block valid reservations
-      return false;
     }
   }
 
@@ -2796,8 +2686,8 @@ class ReservationService {
           ReservationTimelineEntry(
             title: 'Request Submitted',
             status: 'Completed',
-            date: dateOfActivity,
-            timestamp: _formatTimestamp(dateOfActivity),
+            date: DateTime.now(),
+            timestamp: _formatTimestamp(DateTime.now()),
             description: 'Your reservation request was submitted successfully.',
           ),
         );
