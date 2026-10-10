@@ -8,6 +8,7 @@ import 'package:new_nutilize_mobile/features/request/item_reservation_page.dart'
 import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/services/reservation_service.dart';
 import 'package:new_nutilize_mobile/widgets/reservation_return_lock_dialog.dart';
+import 'package:new_nutilize_mobile/widgets/experience_rating_prompt.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
 import 'package:new_nutilize_mobile/widgets/top_message_banner.dart';
 
@@ -795,7 +796,11 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
 
         if (mounted) {
           showTopMessage(context, 'Room reservation submitted successfully.');
-          Navigator.of(context).pop();
+          await showExperienceRatingPrompt(
+            context,
+            reservationId: reservationId,
+          );
+          if (mounted) Navigator.of(context).pop();
         }
       } else {
         _showError('Reservation failed. Please try again.');

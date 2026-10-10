@@ -11,6 +11,7 @@ import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
 import 'package:new_nutilize_mobile/features/request/reservation_history_page.dart';
 import 'package:new_nutilize_mobile/features/user/request_history_page.dart';
+import 'package:new_nutilize_mobile/features/user/user_guide_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key, this.showBottomNavigation = true});
@@ -127,6 +128,17 @@ class ProfilePage extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              _ActivityCard(
+                                icon: Icons.menu_book_rounded,
+                                title: 'Need help?',
+                                subtitle: 'Open the step-by-step user guide',
+                                onTap: () => Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => const UserGuidePage(),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 24),
                               // Reservation Stats
                               _ReservationStats(),
                               const SizedBox(height: 28),

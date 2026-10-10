@@ -5,6 +5,7 @@ import 'dart:io';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/services/reservation_service.dart';
 import 'package:new_nutilize_mobile/widgets/reservation_return_lock_dialog.dart';
+import 'package:new_nutilize_mobile/widgets/experience_rating_prompt.dart';
 import 'package:new_nutilize_mobile/widgets/top_message_banner.dart';
 
 class ItemReservationPage extends StatefulWidget {
@@ -433,9 +434,8 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
 
       if (reservationId != null) {
         showTopMessage(context, 'Item reservation submitted successfully!');
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted) Navigator.of(context).pop();
-        });
+        await showExperienceRatingPrompt(context, reservationId: reservationId);
+        if (mounted) Navigator.of(context).pop();
       } else {
         _showError('Reservation failed: no confirmation from server');
       }

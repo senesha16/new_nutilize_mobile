@@ -24,6 +24,17 @@ rows in `public.reservation_issues`.
   permitted SMTP credential.
 - Never include the service-role key in the Flutter app or a client `.env`.
 
+## Experience ratings
+
+- After a user's first successful reservation request, and then every tenth
+  request after that (requests 11, 21, and so on), the app offers an optional
+  five-star experience rating.
+- Submitted ratings are linked to the user's reservation in
+  `public.user_experience_ratings`. Database functions verify ownership and
+  eligibility; direct client table access is disabled by row-level security.
+- Apply `migrations/0012_user_experience_ratings.sql` to the `security_db`
+  project before deploying the app changes.
+
 ## Deploy functions
 
 Log in to Supabase CLI, then deploy the functions to the intended project:

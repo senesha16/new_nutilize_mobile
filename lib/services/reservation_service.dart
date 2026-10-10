@@ -189,6 +189,24 @@ class ReservationService {
   final Map<String, Future<Map<String, dynamic>?>> _officeByNameRequests = {};
   final Map<int, Future<Map<String, dynamic>?>> _officeByIdRequests = {};
 
+  Future<bool> shouldPromptExperienceRating(int reservationId) async {
+    final result = await _client.rpc(
+      'should_prompt_experience_rating',
+      params: {'p_reservation_id': reservationId},
+    );
+    return result == true;
+  }
+
+  Future<void> submitExperienceRating({
+    required int reservationId,
+    required int rating,
+  }) async {
+    await _client.rpc(
+      'submit_experience_rating',
+      params: {'p_reservation_id': reservationId, 'p_rating': rating},
+    );
+  }
+
   static String resolveApprovalStatusFromRows({
     required String overallStatus,
     required List<Map<String, dynamic>> approvalRows,
