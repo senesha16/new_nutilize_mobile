@@ -150,6 +150,11 @@ bool _isUnitAvailableForRequest(
       normalized == 'borrowed';
 }
 
+bool _isRejectedStatus(String status) {
+  final normalized = status.trim().toLowerCase();
+  return normalized.contains('rejected') || normalized.contains('denied');
+}
+
 bool _isBlockingReservationStatus(String? status) {
   final normalized = (status ?? '').trim().toLowerCase();
   if (normalized.isEmpty) return true;
@@ -1096,14 +1101,14 @@ class ReservationService {
             timeline: timeline,
             reservedItems: reservedItems,
             rejectionReason:
-                effectiveStatus == 'Rejected' &&
+                _isRejectedStatus(effectiveStatus) &&
                     rejectionReason?.isNotEmpty == true
                 ? rejectionReason
                 : null,
             rejectedBy:
-                effectiveStatus == 'Rejected' &&
+                _isRejectedStatus(effectiveStatus) &&
                     rejectingOffice?.isNotEmpty == true
-                ? rejectingOffice
+                ? approvalOfficeLabel(rejectingOffice!)
                 : null,
           );
         } catch (e) {
@@ -1250,11 +1255,13 @@ class ReservationService {
               : databaseTimestamps.last,
           timeline: timeline,
           rejectionReason:
-              effectiveStatus == 'Rejected' && rejectionReason?.isNotEmpty == true
+              _isRejectedStatus(effectiveStatus) &&
+                  rejectionReason?.isNotEmpty == true
               ? rejectionReason
               : null,
           rejectedBy:
-              effectiveStatus == 'Rejected' && rejectingOffice?.isNotEmpty == true
+              _isRejectedStatus(effectiveStatus) &&
+                  rejectingOffice?.isNotEmpty == true
               ? approvalOfficeLabel(rejectingOffice!)
               : null,
         );

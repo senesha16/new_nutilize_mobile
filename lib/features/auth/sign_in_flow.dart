@@ -172,6 +172,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
   }
 
   bool _isSavingAccount = false;
+  bool _acceptedDataPrivacy = false;
 
   bool _isNuRegistrationEmail(String email) {
     final domain = email.trim().toLowerCase().split('@').last;
@@ -457,6 +458,148 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     }
   }
 
+  void _showDataPrivacyNotice() {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return Dialog(
+          insetPadding: const EdgeInsets.symmetric(
+            horizontal: 22,
+            vertical: 28,
+          ),
+          backgroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420, maxHeight: 560),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.fromLTRB(20, 18, 20, 16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF35489A),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                  ),
+                  child: const Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Data Privacy Notice',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      SizedBox(height: 4),
+                      Text(
+                        'Republic Act No. 10173',
+                        style: TextStyle(
+                          color: Color(0xFFF6C914),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    child: const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'We value your privacy and are committed to protecting your personal information. This notice explains how NUtilize collects, uses, and safeguards your data. By creating an account, you acknowledge that your information will be handled for the purposes described here, in line with the Data Privacy Act of 2012 (Republic Act No. 10173).',
+                          style: TextStyle(
+                            color: Color(0xFF2C3142),
+                            fontSize: 12.5,
+                            height: 1.45,
+                          ),
+                        ),
+                        SizedBox(height: 12),
+                        Text(
+                          'This notice applies to students and other NU Lipa users of NUtilize, the room and item reservation system. It describes what this app collects, why it is processed, how it is protected, who can see it, and your rights under RA 10173.',
+                          style: TextStyle(
+                            color: Color(0xFF2C3142),
+                            fontSize: 12.5,
+                            height: 1.45,
+                          ),
+                        ),
+                        SizedBox(height: 14),
+                        _PrivacySection(
+                          title: 'Personal Data We Collect',
+                          body:
+                              'When you register and use NUtilize, we collect your name, NU email address, contact number, role, and academic program. We also keep the password you set, the email verification used to create your account, and the reservation details you submit, including the room or item, date and time, purpose, and the approval or rejection history of that request.\n\nNUtilize does not collect grades, enrollment records, employment or payroll records, health information, or government ID numbers.',
+                        ),
+                        _PrivacySection(
+                          title: 'Why We Process Your Personal Data',
+                          body:
+                              'Your information is used only for this reservation service: to create and secure your account, to confirm that registration uses an NU Lipa email, to receive and route requests to the offices assigned to approve them, to show you the status of those requests, and to keep rooms and items from being double-booked.',
+                        ),
+                        _PrivacySection(
+                          title: 'How NUtilize Uses Your Data',
+                          body:
+                              'You enter your details on the registration and reservation screens. NUtilize uses them to create your account, limit what you can see after you sign in, process room and item requests, update their status, and notify you when a request is approved, rejected, or still waiting on an office.',
+                        ),
+                        _PrivacySection(
+                          title: 'Sharing and Disclosure',
+                          body:
+                              'NUtilize does not sell your personal data. Your account details and reservation requests are available to you, and a request is shared with the offices assigned to review and approve it. It is not shared for marketing or for purposes outside this reservation service.',
+                        ),
+                        _PrivacySection(
+                          title: 'Retention',
+                          body:
+                              'Account and reservation records are kept for as long as they are needed to operate NUtilize and to keep a record of requests and their results. These records are not official academic credentials, such as a transcript of records.',
+                        ),
+                        _PrivacySection(
+                          title: 'Security Measures',
+                          body:
+                              'Access is limited to your account and to the offices assigned to a request. Your password is used only to sign in. Approval history stays with the reservation so the status of a request can be reviewed.',
+                        ),
+                        _PrivacySection(
+                          title: 'Your Rights',
+                          body:
+                              'Under RA 10173, you have the right to be informed, to access your personal data, to object, to correct inaccurate information, to suspend or withdraw processing where the law allows, to request erasure or blocking, and to file a complaint with the National Privacy Commission. Checking the box means you have read and understood this notice.',
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 16),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: FilledButton(
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: const Color(0xFFF6C914),
+                        foregroundColor: const Color(0xFF1A2254),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      child: const Text(
+                        'CLOSE',
+                        style: TextStyle(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   Future<void> _attemptSignUp() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
@@ -479,6 +622,16 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Passwords do not match')));
+      return;
+    }
+    if (!_acceptedDataPrivacy) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Please confirm that you have read and understood the Data Privacy Notice.',
+          ),
+        ),
+      );
       return;
     }
 
@@ -1331,6 +1484,67 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                   ),
                 ],
               ),
+              const SizedBox(height: 16),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: 22,
+                    height: 22,
+                    child: Checkbox(
+                      value: _acceptedDataPrivacy,
+                      onChanged: (value) {
+                        setState(() {
+                          _acceptedDataPrivacy = value ?? false;
+                        });
+                      },
+                      activeColor: const Color(0xFFF6C914),
+                      checkColor: const Color(0xFF1A2254),
+                      side: const BorderSide(color: Colors.white),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text.rich(
+                        TextSpan(
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
+                          children: [
+                            const TextSpan(
+                              text: 'I have read and understood the ',
+                            ),
+                            WidgetSpan(
+                              alignment: PlaceholderAlignment.baseline,
+                              baseline: TextBaseline.alphabetic,
+                              child: GestureDetector(
+                                onTap: _showDataPrivacyNotice,
+                                child: const Text(
+                                  'Data Privacy Notice',
+                                  style: TextStyle(
+                                    color: Color(0xFF8EC5FF),
+                                    fontSize: 12,
+                                    height: 1.35,
+                                    fontWeight: FontWeight.w700,
+                                    decoration: TextDecoration.underline,
+                                    decorationColor: Color(0xFF8EC5FF),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
               const SizedBox(height: 18),
               if (_isSavingAccount)
                 const Padding(
@@ -1365,6 +1579,42 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
           ),
         );
     }
+  }
+}
+
+class _PrivacySection extends StatelessWidget {
+  const _PrivacySection({required this.title, required this.body});
+
+  final String title;
+  final String body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              color: Color(0xFF35489A),
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            body,
+            style: const TextStyle(
+              color: Color(0xFF2C3142),
+              fontSize: 12.5,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 

@@ -1811,14 +1811,57 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
             color: const Color(0xFFF7F8FC),
             borderRadius: BorderRadius.circular(18),
           ),
-          child: SingleChildScrollView(
-            child: const Text(
-              'By proceeding, you agree to the room and equipment rental policies. You must maintain cleanliness, return any borrowed equipment on time, and report any damage immediately. Rooms must be vacated on or before the approved end time. Unauthorized materials, disruptive behavior, or damage to facilities are not permitted.',
-              style: TextStyle(
-                color: Color(0xFF6A6F86),
-                fontSize: 14,
-                height: 1.5,
-              ),
+          child: const SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'POLICIES AND GUIDELINES ON THE USE OF SCHOOL FACILITIES',
+                  style: TextStyle(
+                    color: Color(0xFF35489A),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    height: 1.4,
+                  ),
+                ),
+                SizedBox(height: 10),
+                _FacilityPolicy(
+                  'Fill up and submit the reservation form together with the layout of the venue (if applicable).',
+                ),
+                _FacilityPolicy(
+                  'Processing of documents please wait 2 to 3 business days.',
+                ),
+                _FacilityPolicy(
+                  'The venue shall be used only for the purpose stated in the reservation form.',
+                ),
+                _FacilityPolicy(
+                  'All decorations must be arranged/setup in coordination with the Physical Facilities Management Office. Decorations should not be hung from or placed on ceilings, fire safety equipment or overhead lighting. At no time may any items be attached to or hung from sprinkler system piping.',
+                ),
+                _FacilityPolicy(
+                  'Posting of banners, temporary signage, decorations and other materials that can possibly damage the facilities are strictly prohibited.',
+                ),
+                _FacilityPolicy(
+                  'The organization/department must assume the responsibility of preparing the place. Removal of decorations, posters and any related items and cleaning the facility are likewise the responsibilities of the organization/department.',
+                ),
+                _FacilityPolicy(
+                  'The organization/department must see to it that the facility is not filled beyond its capacity.',
+                ),
+                _FacilityPolicy(
+                  'Bringing of alcoholic beverages and drugs are strictly prohibited.',
+                ),
+                _FacilityPolicy(
+                  'Persons under influence of alcohol/drug are not allowed within the premises.',
+                ),
+                _FacilityPolicy(
+                  'The organization/department must peacefully vacate the facility after the reserved date and time.',
+                ),
+                _FacilityPolicy(
+                  'The organization must observe cleanliness and orderliness within and after the duration of the activity.',
+                ),
+                _FacilityPolicy(
+                  'Final coordination with the Physical Facilities Management Office three or four days before the scheduled activity is a must.',
+                ),
+              ],
             ),
           ),
         ),
@@ -1976,6 +2019,27 @@ class _ReservationInputField extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+class _FacilityPolicy extends StatelessWidget {
+  const _FacilityPolicy(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Text(
+        '• $text',
+        style: const TextStyle(
+          color: Color(0xFF6A6F86),
+          fontSize: 14,
+          height: 1.5,
+        ),
+      ),
     );
   }
 }
