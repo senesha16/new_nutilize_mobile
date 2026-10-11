@@ -481,26 +481,26 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
 
       print('DEBUG _loadAvailableRooms: Fetched ${rooms.length} rooms');
 
+      final takenRoomIds = await _reservationService.takenRoomIds(
+        startTime: DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          _selectedStartTime!.hour,
+          _selectedStartTime!.minute,
+        ),
+        endTime: DateTime(
+          _selectedDate!.year,
+          _selectedDate!.month,
+          _selectedDate!.day,
+          _selectedEndTime!.hour,
+          _selectedEndTime!.minute,
+        ),
+      );
+
       final available = <Room>[];
       for (final room in rooms) {
-        final hasConflict = await _reservationService.hasTimeConflict(
-          roomId: room.roomId,
-          reservationDate: _selectedDate!,
-          startTime: DateTime(
-            _selectedDate!.year,
-            _selectedDate!.month,
-            _selectedDate!.day,
-            _selectedStartTime!.hour,
-            _selectedStartTime!.minute,
-          ),
-          endTime: DateTime(
-            _selectedDate!.year,
-            _selectedDate!.month,
-            _selectedDate!.day,
-            _selectedEndTime!.hour,
-            _selectedEndTime!.minute,
-          ),
-        );
+        final hasConflict = takenRoomIds.contains(room.roomId);
         // Only add room if no time conflict and attendance matches
         if (!hasConflict && _matchesAttendance(room)) {
           print('DEBUG _loadAvailableRooms: Adding room ${room.roomNumber}');
@@ -519,7 +519,9 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
       });
     } catch (e) {
       setState(() {
-        _loadError = 'Unable to load available rooms. Please try again.';
+        _availableRooms = [];
+        _loadError =
+            'Unable to check which rooms are already reserved. Please try again.';
       });
     } finally {
       if (mounted) {

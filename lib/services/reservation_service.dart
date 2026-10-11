@@ -167,12 +167,24 @@ bool _isBlockingReservationStatus(String? status) {
       !normalized.contains('void');
 }
 
+bool _sameCalendarDay(DateTime a, DateTime b) {
+  return a.year == b.year && a.month == b.month && a.day == b.day;
+}
+
 bool _reservationOverlapsWindow({
   required DateTime reservationStart,
   required DateTime reservationEnd,
   required DateTime requestStart,
   required DateTime requestEnd,
+  DateTime? activityDate,
 }) {
+  // A finished event no longer holds the room or the equipment.
+  if (!reservationEnd.isAfter(DateTime.now())) return false;
+  final reservationDay = activityDate ?? reservationStart;
+  if (!_sameCalendarDay(reservationDay, requestStart) ||
+      !_sameCalendarDay(reservationDay, requestEnd)) {
+    return false;
+  }
   return reservationStart.isBefore(requestEnd) &&
       reservationEnd.isAfter(requestStart);
 }
@@ -417,27 +429,62 @@ class ReservationService {
     );
   }
 
+  Set<int> _roomIdsFromRpc(dynamic result) {
+    final ids = <int>{};
+    if (result is List) {
+      for (final raw in result) {
+        if (raw is Map) {
+          final id = _asInt(raw['room_id']);
+          if (id != null) ids.add(id);
+          continue;
+        }
+        final id = _asInt(raw);
+        if (id != null) ids.add(id);
+      }
+      return ids;
+    }
+    if (result is String) {
+      final inner = result
+          .replaceAll('{', '')
+          .replaceAll('}', '')
+          .replaceAll('[', '')
+          .replaceAll(']', '')
+          .trim();
+      if (inner.isEmpty) return <int>{};
+      return inner
+          .split(',')
+          .map((part) => int.tryParse(part.trim()))
+          .whereType<int>()
+          .toSet();
+    }
+    final single = _asInt(result);
+    if (single == null) return <int>{};
+    return {single};
+  }
+
+  /// Room ids already booked by any account for this exact overlap.
+  Future<Set<int>> takenRoomIds({
+    required DateTime startTime,
+    required DateTime endTime,
+  }) async {
+    final result = await _client.rpc(
+      'taken_room_ids',
+      params: {
+        'p_start_of_activity': _scheduleTimestamp(startTime),
+        'p_end_of_activity': _scheduleTimestamp(endTime),
+      },
+    );
+    return _roomIdsFromRpc(result);
+  }
+
   Future<bool> _roomTimeIsTaken({
     required int roomId,
     required DateTime reservationDate,
     required DateTime startTime,
     required DateTime endTime,
   }) async {
-    try {
-      final result = await _client.rpc(
-        'room_time_is_taken',
-        params: {
-          'p_room_id': roomId,
-          'p_date_of_activity': reservationDate.toIso8601String(),
-          'p_start_of_activity': startTime.toIso8601String(),
-          'p_end_of_activity': endTime.toIso8601String(),
-        },
-      );
-      return result == true;
-    } catch (e) {
-      print('Error checking time conflict: $e');
-      return false;
-    }
+    final taken = await takenRoomIds(startTime: startTime, endTime: endTime);
+    return taken.contains(roomId);
   }
 
   /// Get all reservations for a specific room on a specific date
@@ -502,6 +549,46 @@ class ReservationService {
 
   // MARK: - Item Operations
 
+  int? _asInt(dynamic value) {
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value?.toString() ?? '');
+  }
+
+  String _scheduleTimestamp(DateTime value) {
+    final local = value.toLocal();
+    String two(int number) => number.toString().padLeft(2, '0');
+    return '${local.year}-${two(local.month)}-${two(local.day)} '
+        '${two(local.hour)}:${two(local.minute)}:${two(local.second)}';
+  }
+
+  /// Unit ids held by any account during this time. Other students cannot
+  /// read those reservations directly, so stock has to come from this check.
+  Future<Map<int, Set<int>>> _unavailableUnitsOnSharedSchedule(
+    List<int> itemIds,
+    DateTime requestStart,
+    DateTime requestEnd,
+  ) async {
+    final result = await _client.rpc(
+      'reserved_item_unit_ids',
+      params: {
+        'p_item_ids': itemIds,
+        'p_start_of_activity': _scheduleTimestamp(requestStart),
+        'p_end_of_activity': _scheduleTimestamp(requestEnd),
+      },
+    );
+
+    final unavailableByItem = <int, Set<int>>{};
+    for (final raw in (result as List? ?? const [])) {
+      if (raw is! Map) continue;
+      final itemId = _asInt(raw['item_id']);
+      final unitId = _asInt(raw['unit_id']);
+      if (itemId == null || unitId == null) continue;
+      unavailableByItem.putIfAbsent(itemId, () => <int>{}).add(unitId);
+    }
+    return unavailableByItem;
+  }
+
   Future<Map<int, Set<int>>> _getUnavailableUnitIdsForItems(
     List<int> itemIds, {
     DateTime? requestStart,
@@ -509,9 +596,20 @@ class ReservationService {
   }) async {
     final unavailableByItem = <int, Set<int>>{};
     if (itemIds.isEmpty) return unavailableByItem;
+    if (requestStart == null || requestEnd == null) return unavailableByItem;
 
-    final targetStart = requestStart ?? DateTime.now();
-    final targetEnd = requestEnd ?? targetStart.add(const Duration(hours: 1));
+    final targetStart = requestStart;
+    final targetEnd = requestEnd;
+
+    try {
+      return await _unavailableUnitsOnSharedSchedule(
+        itemIds,
+        targetStart,
+        targetEnd,
+      );
+    } catch (e) {
+      print('Shared equipment availability unavailable: $e');
+    }
 
     try {
       final reservationItemsResponse = await _client
@@ -605,6 +703,7 @@ class ReservationService {
           continue;
         }
 
+        final activityRaw = row['Date_of_Activity'] as String?;
         final reservationStartRaw = row['Start_of_activity'] as String?;
         final reservationEndRaw = row['End_of_Activity'] as String?;
         if (reservationStartRaw == null || reservationEndRaw == null) continue;
@@ -612,11 +711,15 @@ class ReservationService {
         try {
           final reservationStart = DateTime.parse(reservationStartRaw);
           final reservationEnd = DateTime.parse(reservationEndRaw);
+          final activityDate = activityRaw == null
+              ? null
+              : DateTime.parse(activityRaw);
           if (!_reservationOverlapsWindow(
             reservationStart: reservationStart,
             reservationEnd: reservationEnd,
             requestStart: targetStart,
             requestEnd: targetEnd,
+            activityDate: activityDate,
           )) {
             continue;
           }

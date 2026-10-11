@@ -286,7 +286,7 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
     return '$hour:$minute $period';
   }
 
-  void _goToNextStep() {
+  Future<void> _goToNextStep() async {
     if (_currentStep == 1) {
       if (_activityController.text.isEmpty) {
         _showError('Enter activity name');
@@ -317,6 +317,8 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
         _showError('Please upload proof of consent before submitting.');
         return;
       }
+      await _loadItems();
+      if (!mounted) return;
       setState(() => _currentStep = 2);
       return;
     }
