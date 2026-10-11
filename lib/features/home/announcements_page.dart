@@ -95,16 +95,23 @@ class _AnnouncementsPageState extends State<AnnouncementsPage> {
               );
             }
 
-            return ListView.builder(
-              padding: const EdgeInsets.fromLTRB(22, 16, 22, 16),
-              itemCount: announcements.length,
-              itemBuilder: (context, index) {
-                final announcement = announcements[index];
-                return Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _AnnouncementDetailCard(
-                    announcement: announcement,
-                  ),
+            return LayoutBuilder(
+              builder: (context, constraints) {
+                final side = constraints.maxWidth > 760
+                    ? (constraints.maxWidth - 720) / 2
+                    : 22.0;
+                return ListView.builder(
+                  padding: EdgeInsets.fromLTRB(side, 16, side, 16),
+                  itemCount: announcements.length,
+                  itemBuilder: (context, index) {
+                    final announcement = announcements[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _AnnouncementDetailCard(
+                        announcement: announcement,
+                      ),
+                    );
+                  },
                 );
               },
             );
@@ -161,6 +168,8 @@ class _AnnouncementDetailCard extends StatelessWidget {
                   children: [
                     Text(
                       announcement.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Color(0xFF111111),
                         fontSize: 16,

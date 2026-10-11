@@ -26,18 +26,16 @@ class AnnouncementRecord {
 
   factory AnnouncementRecord.fromJson(Map<String, dynamic> json) {
     return AnnouncementRecord(
-      announcementId: json['announcement_id'] as int,
+      announcementId: _asInt(json['announcement_id']),
       title: json['title'] as String? ?? '',
       body: json['body'] as String? ?? '',
       isActive: json['is_active'] as bool? ?? false,
-      createdAt: DateTime.parse(
-        json['created_at'] as String? ?? DateTime.now().toIso8601String(),
-      ),
+      createdAt: _parseTimestamp(json['created_at']),
       publishedAt: json['published_at'] != null
-          ? DateTime.parse(json['published_at'] as String)
+          ? _parseTimestamp(json['published_at'])
           : null,
       expiresAt: json['expires_at'] != null
-          ? DateTime.parse(json['expires_at'] as String)
+          ? _parseTimestamp(json['expires_at'])
           : null,
       announcerName: json['announcer_name'] as String?,
     );
@@ -49,7 +47,9 @@ class AnnouncementRecord {
     final now = DateTime.now();
     final diff = now.difference(createdAt);
 
-    if (diff.inMinutes < 60) {
+    if (diff.isNegative || diff.inMinutes < 1) {
+      return 'Just now';
+    } else if (diff.inMinutes < 60) {
       return '${diff.inMinutes}m ago';
     } else if (diff.inHours < 24) {
       return '${diff.inHours}h ago';
@@ -82,8 +82,11 @@ class AnnouncementsService extends ChangeNotifier {
 
   final List<AnnouncementRecord> _announcements = [];
   RealtimeChannel? _subscription;
+  StreamSubscription<AuthState>? _authSubscription;
   Timer? _refreshTimer;
   bool _isFetching = false;
+  bool _fetchAgain = false;
+  bool _realtimeJoined = false;
   DateTime? _lastFetchAt;
 
   List<AnnouncementRecord> get announcements =>
@@ -93,6 +96,8 @@ class AnnouncementsService extends ChangeNotifier {
   Future<List<AnnouncementRecord>> fetchAnnouncements({
     bool force = false,
   }) async {
+    _ensureLiveUpdates();
+
     if (Supabase.instance.client.auth.currentSession == null) {
       return _announcements;
     }
@@ -100,11 +105,12 @@ class AnnouncementsService extends ChangeNotifier {
     final now = DateTime.now();
     if (!force &&
         _lastFetchAt != null &&
-        now.difference(_lastFetchAt!) < const Duration(seconds: 15)) {
+        now.difference(_lastFetchAt!) < const Duration(seconds: 3)) {
       return _announcements;
     }
 
     if (_isFetching) {
+      if (force) _fetchAgain = true;
       return _announcements;
     }
 
@@ -117,18 +123,31 @@ class AnnouncementsService extends ChangeNotifier {
           .from('announcements')
           .select(
             'announcement_id, title, body, is_active, created_at, '
-            'published_at, expires_at, announcer_name',
+            'published_at, announcer_name',
           )
           .eq('is_active', true)
           .order('created_at', ascending: false);
 
-      _announcements.clear();
+      final next = <AnnouncementRecord>[];
       for (final item in response as List) {
-        _announcements.add(
-          AnnouncementRecord.fromJson(item as Map<String, dynamic>),
+        final record = AnnouncementRecord.fromJson(
+          Map<String, dynamic>.from(item as Map),
         );
+        if (!record.isActive) continue;
+        if (record.expiresAt != null &&
+            record.expiresAt!.isBefore(DateTime.now())) {
+          continue;
+        }
+        next.add(record);
       }
 
+      if (_sameAnnouncements(next)) {
+        return _announcements;
+      }
+
+      _announcements
+        ..clear()
+        ..addAll(next);
       notifyListeners();
       return _announcements;
     } catch (e) {
@@ -138,54 +157,99 @@ class AnnouncementsService extends ChangeNotifier {
       return _announcements;
     } finally {
       _isFetching = false;
+      if (_fetchAgain) {
+        _fetchAgain = false;
+        unawaited(fetchAnnouncements(force: true));
+      }
     }
   }
 
   /// Subscribe to real-time announcements updates
   Future<void> subscribeToAnnouncements() async {
+    _ensureLiveUpdates();
     try {
       final client = Supabase.instance.client;
 
-      if (client.auth.currentSession == null) {
+      if (client.auth.currentSession == null || _subscription != null) {
         return;
       }
 
-      if (_subscription != null) {
-        return;
-      }
-
-      // Unsubscribe from previous subscription if any
-      if (_subscription != null) {
-        await client.removeChannel(_subscription!);
-      }
-
-      _subscription = client.channel('announcements');
-      _subscription!.on(
+      final channel = client.channel('public:announcements');
+      channel.on(
         RealtimeListenTypes.postgresChanges,
         ChannelFilter(event: '*', schema: 'public', table: 'announcements'),
-        (payload, [ref]) async {
-          // Refetch announcements when any change is detected
-          await fetchAnnouncements(force: true);
+        (payload, [ref]) {
+          unawaited(fetchAnnouncements(force: true));
         },
       );
-      _subscription!.subscribe();
-      _refreshTimer?.cancel();
-      _refreshTimer = Timer.periodic(const Duration(minutes: 1), (_) {
-        fetchAnnouncements();
+      _subscription = channel;
+      channel.subscribe((status, [error]) {
+        if (status == 'SUBSCRIBED') {
+          _realtimeJoined = true;
+          unawaited(fetchAnnouncements(force: true));
+          return;
+        }
+        if (status == 'CHANNEL_ERROR' ||
+            status == 'TIMED_OUT' ||
+            status == 'CLOSED') {
+          _realtimeJoined = false;
+          final failed = _subscription;
+          _subscription = null;
+          if (failed != null) {
+            unawaited(client.removeChannel(failed));
+          }
+        }
       });
     } catch (e) {
+      _subscription = null;
+      _realtimeJoined = false;
       if (kDebugMode) {
         print('Error subscribing to announcements: $e');
       }
     }
   }
 
+  void _ensureLiveUpdates() {
+    _authSubscription ??= Supabase.instance.client.auth.onAuthStateChange
+        .listen((state) {
+      if (state.session == null) return;
+      unawaited(fetchAnnouncements(force: true));
+      unawaited(subscribeToAnnouncements());
+    });
+
+    _refreshTimer ??= Timer.periodic(const Duration(seconds: 5), (_) {
+      if (_subscription == null || !_realtimeJoined) {
+        unawaited(subscribeToAnnouncements());
+      }
+      unawaited(fetchAnnouncements(force: true));
+    });
+  }
+
+  bool _sameAnnouncements(List<AnnouncementRecord> next) {
+    if (_announcements.length != next.length) return false;
+    for (var i = 0; i < next.length; i++) {
+      final current = _announcements[i];
+      final incoming = next[i];
+      if (current.announcementId != incoming.announcementId ||
+          current.title != incoming.title ||
+          current.body != incoming.body ||
+          current.isActive != incoming.isActive ||
+          current.announcerName != incoming.announcerName ||
+          current.publishedAt != incoming.publishedAt) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// Unsubscribe from real-time updates
   Future<void> unsubscribeFromAnnouncements() async {
     try {
-      if (_subscription != null) {
-        await Supabase.instance.client.removeChannel(_subscription!);
-        _subscription = null;
+      final channel = _subscription;
+      _subscription = null;
+      _realtimeJoined = false;
+      if (channel != null) {
+        await Supabase.instance.client.removeChannel(channel);
       }
       _refreshTimer?.cancel();
       _refreshTimer = null;
@@ -206,4 +270,33 @@ class AnnouncementsService extends ChangeNotifier {
     _announcements.clear();
     notifyListeners();
   }
+}
+
+int _asInt(dynamic value) {
+  if (value is int) return value;
+  if (value is num) return value.toInt();
+  return int.parse(value.toString());
+}
+
+/// Announcement timestamps are stored without a timezone, in UTC.
+DateTime _parseTimestamp(dynamic value) {
+  if (value is DateTime) {
+    return value.isUtc ? value.toLocal() : value;
+  }
+  final raw = value?.toString();
+  if (raw == null || raw.isEmpty) return DateTime.now();
+  final parsed = DateTime.parse(raw);
+  if (parsed.isUtc || raw.endsWith('Z') || raw.contains('+')) {
+    return parsed.toLocal();
+  }
+  return DateTime.utc(
+    parsed.year,
+    parsed.month,
+    parsed.day,
+    parsed.hour,
+    parsed.minute,
+    parsed.second,
+    parsed.millisecond,
+    parsed.microsecond,
+  ).toLocal();
 }

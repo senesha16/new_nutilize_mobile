@@ -391,6 +391,8 @@ class _AnnouncementCard extends StatelessWidget {
                   children: [
                     Text(
                       announcement.displayName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         color: Color(0xFF111111),
                         fontSize: 16,
