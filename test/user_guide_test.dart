@@ -30,11 +30,13 @@ void main() {
     expect(find.text('Follow its progress'), findsOneWidget);
 
     await tester.scrollUntilVisible(
-      find.text('Contact Support'),
+      find.text('Complete the reservation'),
       250,
       scrollable: scrollable,
     );
-    expect(find.text('Contact Support'), findsOneWidget);
+    expect(find.text('Complete the reservation'), findsOneWidget);
+    expect(find.text('Still need assistance?'), findsNothing);
+    expect(find.text('Contact Support'), findsNothing);
 
     await tester.tap(find.byTooltip('Back'));
     await tester.pumpAndSettle();

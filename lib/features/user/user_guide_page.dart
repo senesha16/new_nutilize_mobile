@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:new_nutilize_mobile/features/user/report_issue_page.dart';
 import 'package:new_nutilize_mobile/widgets/secondary_header.dart';
 
 class UserGuidePage extends StatelessWidget {
@@ -81,8 +80,6 @@ class UserGuidePage extends StatelessWidget {
                     ),
                     if (index != _steps.length - 1) const SizedBox(height: 10),
                   ],
-                  const SizedBox(height: 14),
-                  const _SupportCard(),
                 ],
               ),
             ),
@@ -262,63 +259,6 @@ class _GuideStepCard extends StatelessWidget {
                   ),
                 ),
               ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SupportCard extends StatelessWidget {
-  const _SupportCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFF9DF),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF2E6AE)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Still need assistance?',
-            style: TextStyle(
-              color: Color(0xFF1A2254),
-              fontSize: 15,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: 5),
-          const Text(
-            'Send a report to the NUtilize support team from the app.',
-            style: TextStyle(
-              color: Color(0xFF6A6F86),
-              fontSize: 12,
-              height: 1.5,
-            ),
-          ),
-          const SizedBox(height: 13),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: () => Navigator.of(context).push(
-                MaterialPageRoute(builder: (_) => const ReportIssuePage()),
-              ),
-              icon: const Icon(Icons.support_agent_rounded, size: 19),
-              label: const Text('Contact Support'),
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF35489A),
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 13),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
             ),
           ),
         ],
