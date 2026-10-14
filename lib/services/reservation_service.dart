@@ -123,6 +123,58 @@ class ApprovalChain {
   ApprovalChain({required this.offices, required this.officeIds});
 }
 
+class FacultyProfile {
+  const FacultyProfile({
+    required this.userId,
+    required this.displayName,
+    required this.email,
+  });
+
+  final int userId;
+  final String displayName;
+  final String email;
+
+  factory FacultyProfile.fromJson(Map<String, dynamic> json) {
+    return FacultyProfile(
+      userId: json['user_id'] as int,
+      displayName: json['display_name'] as String,
+      email: json['email'] as String,
+    );
+  }
+}
+
+class FacultyApprovalRequest {
+  const FacultyApprovalRequest({
+    required this.approvalId,
+    required this.reservationId,
+    required this.activityName,
+    required this.requesterName,
+    required this.requesterEmail,
+    required this.dateOfActivity,
+    required this.startTime,
+    required this.endTime,
+    required this.submittedAt,
+    required this.hasOutsideParticipants,
+    required this.itemSummaries,
+    this.chairsQuantity,
+    this.roomName,
+  });
+
+  final int approvalId;
+  final int reservationId;
+  final String activityName;
+  final String requesterName;
+  final String requesterEmail;
+  final DateTime dateOfActivity;
+  final DateTime startTime;
+  final DateTime endTime;
+  final DateTime submittedAt;
+  final bool hasOutsideParticipants;
+  final List<String> itemSummaries;
+  final int? chairsQuantity;
+  final String? roomName;
+}
+
 bool _isUnitAvailableStatus(String? status) {
   final normalized = (status ?? '').trim().toLowerCase();
   return normalized == 'available' ||
@@ -205,6 +257,223 @@ class ReservationService {
   final Map<int, Map<String, dynamic>?> _officeByIdCache = {};
   final Map<String, Future<Map<String, dynamic>?>> _officeByNameRequests = {};
   final Map<int, Future<Map<String, dynamic>?>> _officeByIdRequests = {};
+
+  Future<List<FacultyProfile>> searchActiveFaculty(String query) async {
+    final response = await _client.rpc(
+      'search_active_faculty',
+      params: {'p_search_query': query.trim()},
+    );
+    return (response as List)
+        .map(
+          (row) =>
+              FacultyProfile.fromJson(Map<String, dynamic>.from(row as Map)),
+        )
+        .toList();
+  }
+
+  Future<List<FacultyApprovalRequest>> getFacultyApprovalRequests({
+    required int facultyUserId,
+  }) async {
+    List<Map<String, dynamic>> rows(dynamic response) => (response as List)
+        .map((row) => Map<String, dynamic>.from(row as Map))
+        .toList();
+
+    final approvalRows = rows(
+      await _client
+          .from('reservation_approvals')
+          .select('approval_id, reservation_id, created_at')
+          .eq('approver_user_id', facultyUserId)
+          .eq('status', 'Pending')
+          .order('created_at'),
+    );
+    if (approvalRows.isEmpty) return [];
+
+    final reservationIds = approvalRows
+        .map((row) => row['reservation_id'] as int)
+        .toSet()
+        .toList();
+    final reservationRows = rows(
+      await _client
+          .from('reservations')
+          .select(
+            'reservation_id, user_id, activity_name, Date_of_Activity, '
+            'Start_of_activity, End_of_Activity, created_at, outside_participants',
+          )
+          .in_('reservation_id', reservationIds),
+    );
+    final reservationsById = {
+      for (final row in reservationRows) row['reservation_id'] as int: row,
+    };
+    final requesterIds = reservationRows
+        .map((row) => row['user_id'] as int)
+        .toSet()
+        .toList();
+
+    final requesterRows = requesterIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : rows(
+            await _client
+                .from('users')
+                .select(
+                  'user_id, full_name, first_name, middle_initial, last_name, email',
+                )
+                .in_('user_id', requesterIds),
+          );
+    final requestersById = {
+      for (final row in requesterRows) row['user_id'] as int: row,
+    };
+
+    final roomLinks = rows(
+      await _client
+          .from('reservation_rooms')
+          .select('reservation_id, room_id')
+          .in_('reservation_id', reservationIds),
+    );
+    final roomIds = roomLinks
+        .map((row) => row['room_id'] as int)
+        .toSet()
+        .toList();
+    final roomRows = roomIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : rows(
+            await _client
+                .from('rooms')
+                .select('room_id, room_number, room_type, room_table_type')
+                .in_('room_id', roomIds),
+          );
+    final roomsById = {for (final row in roomRows) row['room_id'] as int: row};
+    final roomNameByReservation = <int, String>{};
+    for (final link in roomLinks) {
+      final reservationId = link['reservation_id'] as int;
+      final room = roomsById[link['room_id'] as int];
+      if (room != null) {
+        final tableType = (room['room_table_type'] as String?)?.trim();
+        final roomDescription = '${room['room_type']} ${room['room_number']}'
+            .trim();
+        roomNameByReservation[reservationId] = tableType?.isNotEmpty == true
+            ? '$roomDescription ($tableType tables)'
+            : roomDescription;
+      }
+    }
+
+    final itemLinks = rows(
+      await _client
+          .from('reservation_items')
+          .select('reservation_id, reservation_items_id, item_id')
+          .in_('reservation_id', reservationIds),
+    );
+    final itemIds = itemLinks
+        .map((row) => row['item_id'] as int)
+        .toSet()
+        .toList();
+    final itemRows = itemIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : rows(
+            await _client
+                .from('items')
+                .select('item_id, item_name')
+                .in_('item_id', itemIds),
+          );
+    final itemNamesById = {
+      for (final row in itemRows)
+        row['item_id'] as int: row['item_name'] as String,
+    };
+    final detailRows = rows(
+      await _client
+          .from('reservation_details')
+          .select(
+            'reservation_id, reservation_rooms_id, reservation_items_id, quantity',
+          )
+          .in_('reservation_id', reservationIds),
+    );
+    final quantitiesByItemLinkId = <int, int>{};
+    final chairsByReservationId = <int, int>{};
+    for (final row in detailRows) {
+      final itemLinkId = row['reservation_items_id'] as int?;
+      if (itemLinkId != null) {
+        quantitiesByItemLinkId[itemLinkId] = row['quantity'] as int? ?? 1;
+      } else if (row['reservation_rooms_id'] == null) {
+        final reservationId = row['reservation_id'] as int;
+        chairsByReservationId[reservationId] =
+            (chairsByReservationId[reservationId] ?? 0) +
+            (row['quantity'] as int? ?? 0);
+      }
+    }
+    final itemSummariesByReservation = <int, List<String>>{};
+    for (final link in itemLinks) {
+      final reservationId = link['reservation_id'] as int;
+      final itemId = link['item_id'] as int;
+      final itemLinkId = link['reservation_items_id'] as int;
+      final itemName = itemNamesById[itemId] ?? 'Item $itemId';
+      final quantity = quantitiesByItemLinkId[itemLinkId] ?? 1;
+      itemSummariesByReservation
+          .putIfAbsent(reservationId, () => [])
+          .add('$itemName (quantity: $quantity)');
+    }
+
+    final requests = <FacultyApprovalRequest>[];
+    for (final approval in approvalRows) {
+      final reservationId = approval['reservation_id'] as int;
+      final reservation = reservationsById[reservationId];
+      if (reservation == null) continue;
+      final requester = requestersById[reservation['user_id'] as int];
+      final requesterFullName = (requester?['full_name'] as String?)?.trim();
+      final requesterName = requesterFullName?.isNotEmpty == true
+          ? requesterFullName!
+          : [
+                  requester?['first_name'],
+                  requester?['middle_initial'],
+                  requester?['last_name'],
+                ]
+                .whereType<String>()
+                .where((part) => part.trim().isNotEmpty)
+                .join(' ');
+
+      requests.add(
+        FacultyApprovalRequest(
+          approvalId: approval['approval_id'] as int,
+          reservationId: reservationId,
+          activityName: reservation['activity_name'] as String,
+          requesterName: requesterName.isEmpty
+              ? 'Student requester'
+              : requesterName,
+          requesterEmail: requester?['email'] as String? ?? '',
+          dateOfActivity: DateTime.parse(
+            reservation['Date_of_Activity'].toString(),
+          ),
+          startTime: DateTime.parse(
+            reservation['Start_of_activity'].toString(),
+          ),
+          endTime: DateTime.parse(reservation['End_of_Activity'].toString()),
+          submittedAt: DateTime.parse(reservation['created_at'].toString()),
+          hasOutsideParticipants:
+              reservation['outside_participants'] as bool? ?? false,
+          itemSummaries: itemSummariesByReservation[reservationId] ?? const [],
+          chairsQuantity: chairsByReservationId[reservationId],
+          roomName: roomNameByReservation[reservationId],
+        ),
+      );
+    }
+    return requests;
+  }
+
+  Future<void> respondToFacultyApproval({
+    required int approvalId,
+    required bool approved,
+    String? rejectionReason,
+  }) async {
+    final result = await _client.rpc(
+      'respond_to_faculty_approval',
+      params: {
+        'p_approval_id': approvalId,
+        'p_decision': approved ? 'approve' : 'reject',
+        'p_rejection_reason': rejectionReason,
+      },
+    );
+    if (result != true) {
+      throw StateError('The faculty approval response was not confirmed.');
+    }
+  }
 
   Future<bool> shouldPromptExperienceRating(int reservationId) async {
     final result = await _client.rpc(
@@ -1061,7 +1330,8 @@ class ReservationService {
           : await _client
                 .from('reservation_approvals')
                 .select(
-                  'reservation_id, office_id, status, approved_at, created_at, updated_at, rejection_reason',
+                  'reservation_id, office_id, approver_user_id, status, '
+                  'approved_at, created_at, updated_at, rejection_reason',
                 )
                 .in_('reservation_id', reservationIds);
 
@@ -1118,6 +1388,10 @@ class ReservationService {
               : rejectedApproval.first['rejection_reason']?.toString().trim();
           final rejectingOffice = rejectedApproval.isEmpty
               ? null
+              : rejectedApproval.first['approver_user_id'] != null
+              ? await _getUserDisplayName(
+                  rejectedApproval.first['approver_user_id'] as int,
+                )
               : await _getOfficeNameById(
                   rejectedApproval.first['office_id'] as int?,
                 );
@@ -1257,7 +1531,8 @@ class ReservationService {
           : await _client
                 .from('reservation_approvals')
                 .select(
-                  'reservation_id, office_id, status, approved_at, created_at, updated_at, rejection_reason',
+                  'reservation_id, office_id, approver_user_id, status, '
+                  'approved_at, created_at, updated_at, rejection_reason',
                 )
                 .in_('reservation_id', reservationIds);
       final approvalRowsByReservation = <int, List<Map<String, dynamic>>>{};
@@ -1276,24 +1551,35 @@ class ReservationService {
           .whereType<int>()
           .toSet();
       final officeNames = await _officeNamesById(officeIds);
+      final facultyUserIds = approvalRowsByReservation.values
+          .expand((rows) => rows.map((row) => row['approver_user_id'] as int?))
+          .whereType<int>()
+          .toSet();
+      final facultyNames = await _userNamesById(facultyUserIds);
 
       return resList.where((res) => res['reservation_id'] is int).map((res) {
         final reservationId = res['reservation_id'] as int;
         final date = DateTime.parse(res['Date_of_Activity'] as String);
         final startTime = DateTime.parse(res['Start_of_activity'] as String);
         final endTime = DateTime.parse(res['End_of_Activity'] as String);
-        final approvalRows = List<Map<String, dynamic>>.from(
-          approvalRowsByReservation[reservationId] ?? const [],
-        )..sort((a, b) {
-          final aCreated = DateTime.tryParse(a['created_at']?.toString() ?? '');
-          final bCreated = DateTime.tryParse(b['created_at']?.toString() ?? '');
-          if (aCreated == null && bCreated == null) return 0;
-          if (aCreated == null) return 1;
-          if (bCreated == null) return -1;
-          return aCreated.compareTo(bCreated);
-        });
+        final approvalRows =
+            List<Map<String, dynamic>>.from(
+              approvalRowsByReservation[reservationId] ?? const [],
+            )..sort((a, b) {
+              final aCreated = DateTime.tryParse(
+                a['created_at']?.toString() ?? '',
+              );
+              final bCreated = DateTime.tryParse(
+                b['created_at']?.toString() ?? '',
+              );
+              if (aCreated == null && bCreated == null) return 0;
+              if (aCreated == null) return 1;
+              if (bCreated == null) return -1;
+              return aCreated.compareTo(bCreated);
+            });
         final effectiveStatus = resolveApprovalStatusFromRows(
-          overallStatus: (res['overall_status'] as String?) ?? 'Pending Approval',
+          overallStatus:
+              (res['overall_status'] as String?) ?? 'Pending Approval',
           approvalRows: approvalRows,
         );
         final rejectedApproval = approvalRows.where((approval) {
@@ -1305,10 +1591,15 @@ class ReservationService {
         final rejectionReason = rejectedApproval.isEmpty
             ? null
             : rejectedApproval.first['rejection_reason']?.toString().trim();
+        final rejectedByUserId = rejectedApproval.isEmpty
+            ? null
+            : rejectedApproval.first['approver_user_id'] as int?;
         final rejectingOfficeId = rejectedApproval.isEmpty
             ? null
             : rejectedApproval.first['office_id'] as int?;
-        final rejectingOffice = rejectingOfficeId == null
+        final rejectingOffice = rejectedByUserId != null
+            ? facultyNames[rejectedByUserId]
+            : rejectingOfficeId == null
             ? null
             : officeNames[rejectingOfficeId];
         final databaseTimestamps = <DateTime>[];
@@ -1339,7 +1630,7 @@ class ReservationService {
             description: 'Your reservation request was submitted successfully.',
           ),
           for (final row in approvalRows)
-            _timelineEntryForApprovalRow(row, date, officeNames),
+            _timelineEntryForApprovalRow(row, date, officeNames, facultyNames),
         ];
 
         return ReservationRecord(
@@ -1399,16 +1690,48 @@ class ReservationService {
     }
   }
 
+  Future<Map<int, String>> _userNamesById(Set<int> userIds) async {
+    if (userIds.isEmpty) return {};
+    final response = await _client
+        .from('users')
+        .select('user_id, full_name, first_name, last_name')
+        .in_('user_id', userIds.toList());
+    final names = <int, String>{};
+    for (final row in response as List) {
+      final profile = Map<String, dynamic>.from(row as Map);
+      final userId = profile['user_id'] as int?;
+      if (userId == null) continue;
+      final fullName = (profile['full_name'] as String?)?.trim();
+      final name = fullName?.isNotEmpty == true
+          ? fullName!
+          : [profile['first_name'], profile['last_name']]
+                .whereType<String>()
+                .where((part) => part.trim().isNotEmpty)
+                .join(' ');
+      if (name.isNotEmpty) names[userId] = name;
+    }
+    return names;
+  }
+
   ReservationTimelineEntry _timelineEntryForApprovalRow(
     Map<String, dynamic> row,
     DateTime date,
     Map<int, String> officeNames,
+    Map<int, String> facultyNames,
   ) {
     final officeId = row['office_id'] as int?;
     final officeName = officeId == null ? null : officeNames[officeId];
-    final title = approvalOfficeLabel(
-      officeName == null || officeName.trim().isEmpty ? 'Office' : officeName,
-    );
+    final facultyUserId = row['approver_user_id'] as int?;
+    final facultyName = facultyUserId == null
+        ? null
+        : facultyNames[facultyUserId];
+    final title = facultyUserId != null
+        ? 'Faculty Approval${facultyName == null ? '' : ' - $facultyName'}'
+        : approvalOfficeLabel(
+            officeName == null || officeName.trim().isEmpty
+                ? 'Office'
+                : officeName,
+          );
     final rowStatus = (row['status'] as String? ?? '').trim().toLowerCase();
     final String status;
     if (rowStatus.contains('returned')) {
@@ -1432,7 +1755,9 @@ class ReservationService {
       'Completed' => 'This reservation has been completed.',
       'Returned' =>
         'This reservation has been returned and the item units are available again.',
-      'Rejected' => 'Your reservation was rejected by $title.',
+      'Rejected' =>
+        'Your reservation was rejected by $title'
+            '${(row['rejection_reason'] as String?)?.trim().isNotEmpty == true ? ': ${row['rejection_reason']}' : '.'}',
       'Cancelled' => 'This reservation was cancelled.',
       _ => 'Waiting for approval from $title.',
     };
@@ -1603,8 +1928,12 @@ class ReservationService {
 
   /// The time an office actually approved, kept as the Manila clock stored
   /// in the database. approved_at is that moment; updated_at can be UTC.
-  String _formatStoredApprovalTime(Map<String, dynamic> row, DateTime fallback) {
-    final stored = DateTime.tryParse(row['approved_at']?.toString() ?? '') ??
+  String _formatStoredApprovalTime(
+    Map<String, dynamic> row,
+    DateTime fallback,
+  ) {
+    final stored =
+        DateTime.tryParse(row['approved_at']?.toString() ?? '') ??
         DateTime.tryParse(row['updated_at']?.toString() ?? '') ??
         DateTime.tryParse(row['created_at']?.toString() ?? '');
     return _formatTimestamp(stored ?? fallback);
@@ -2014,6 +2343,21 @@ class ReservationService {
     return office?['department_name'] as String?;
   }
 
+  Future<String?> _getUserDisplayName(int userId) async {
+    final profile = await _client
+        .from('users')
+        .select('full_name, first_name, last_name')
+        .eq('user_id', userId)
+        .maybeSingle();
+    final fullName = (profile?['full_name'] as String?)?.trim();
+    if (fullName?.isNotEmpty == true) return fullName;
+    final name = [
+      profile?['first_name'],
+      profile?['last_name'],
+    ].whereType<String>().where((part) => part.trim().isNotEmpty).join(' ');
+    return name.isEmpty ? null : name;
+  }
+
   Future<List<ReservationTimelineEntry>> _buildApprovalTimeline(
     int reservationId,
     DateTime date,
@@ -2032,15 +2376,29 @@ class ReservationService {
         roomType: roomType ?? '',
         itemIds: itemIds.isEmpty ? null : itemIds,
       );
-      final approvalsResponse = List<Map<String, dynamic>>.from(approvals)
-        ..sort((a, b) {
-          final aCreated = DateTime.tryParse(a['created_at']?.toString() ?? '');
-          final bCreated = DateTime.tryParse(b['created_at']?.toString() ?? '');
-          if (aCreated == null && bCreated == null) return 0;
-          if (aCreated == null) return 1;
-          if (bCreated == null) return -1;
-          return aCreated.compareTo(bCreated);
-        });
+      final allApprovalRows = List<Map<String, dynamic>>.from(approvals);
+      final facultyApprovalRows = allApprovalRows
+          .where((row) => row['approver_user_id'] != null)
+          .toList();
+      final facultyApproval = facultyApprovalRows.isEmpty
+          ? null
+          : facultyApprovalRows.first;
+      final approvalsResponse =
+          allApprovalRows
+              .where((row) => row['approver_user_id'] == null)
+              .toList()
+            ..sort((a, b) {
+              final aCreated = DateTime.tryParse(
+                a['created_at']?.toString() ?? '',
+              );
+              final bCreated = DateTime.tryParse(
+                b['created_at']?.toString() ?? '',
+              );
+              if (aCreated == null && bCreated == null) return 0;
+              if (aCreated == null) return 1;
+              if (bCreated == null) return -1;
+              return aCreated.compareTo(bCreated);
+            });
 
       final rawApprovals = <Map<String, dynamic>>[];
       final augmentedApprovals = await Future.wait(
@@ -2079,6 +2437,51 @@ class ReservationService {
           description: 'Your reservation request was submitted successfully.',
         ),
       );
+
+      if (facultyApproval != null) {
+        final facultyName =
+            await _getUserDisplayName(
+              facultyApproval['approver_user_id'] as int,
+            ) ??
+            'Selected faculty';
+        final approvalStatus =
+            (facultyApproval['status'] as String? ?? 'pending')
+                .trim()
+                .toLowerCase();
+        final status = switch (approvalStatus) {
+          'approved' || 'accepted' || 'completed' => 'Approved',
+          'rejected' || 'denied' => 'Rejected',
+          'cancelled' || 'canceled' => 'Cancelled',
+          _ => 'Pending',
+        };
+        final reason =
+            (facultyApproval['rejection_reason'] as String?)?.trim() ?? '';
+        final approvalDate =
+            DateTime.tryParse(
+              facultyApproval['updated_at']?.toString() ?? '',
+            ) ??
+            submitted;
+        entries.add(
+          ReservationTimelineEntry(
+            title: 'Faculty Approval - $facultyName',
+            status: status,
+            date: approvalDate,
+            timestamp: status == 'Pending'
+                ? 'Pending'
+                : _formatTimestamp(approvalDate),
+            description: status == 'Rejected'
+                ? reason.isEmpty
+                      ? 'Rejected by $facultyName.'
+                      : 'Rejected by $facultyName: $reason'
+                : status == 'Approved'
+                ? 'Approved by $facultyName.'
+                : status == 'Cancelled'
+                ? 'Cancelled because the request was rejected.'
+                : 'Waiting for $facultyName to review your request.',
+            approvedAt: status == 'Approved' ? approvalDate : null,
+          ),
+        );
+      }
 
       final used = List<bool>.filled(rawApprovals.length, false);
       final itemOwnerOfficeId = await _getOfficeIdByName('Item Owner');
@@ -2403,6 +2806,7 @@ class ReservationService {
     required bool hasOutsideParticipants,
     required List<int> approvalChain,
     String? proofOfConsentUrl,
+    int? facultyApproverId,
   }) async {
     try {
       final normalizedItemQuantities = <int, int>{};
@@ -2558,10 +2962,25 @@ class ReservationService {
       }
 
       final approvalBaseTime = DateTime.now().toUtc();
+      var firstOfficeStep = 0;
+      if (facultyApproverId != null) {
+        final facultyTimestamp = buildApprovalTimestampForStep(
+          0,
+          baseTime: approvalBaseTime,
+        );
+        await _client.from('reservation_approvals').insert({
+          'reservation_id': reservationId,
+          'approver_user_id': facultyApproverId,
+          'status': 'Pending',
+          'created_at': facultyTimestamp.toIso8601String(),
+          'updated_at': facultyTimestamp.toIso8601String(),
+        });
+        firstOfficeStep = 1;
+      }
       for (var index = 0; index < approvalChain.length; index++) {
         final officeId = approvalChain[index];
         final approvalTimestamp = buildApprovalTimestampForStep(
-          index,
+          index + firstOfficeStep,
           baseTime: approvalBaseTime,
         );
         await _client.from('reservation_approvals').insert({
@@ -2674,6 +3093,7 @@ class ReservationService {
     required Map<int, int> itemQuantities, // item_id -> quantity
     required bool hasOutsideParticipants,
     String? proofOfConsentUrl,
+    int? facultyApproverId,
     DateTime? requestStart,
     DateTime? requestEnd,
   }) async {
@@ -2774,10 +3194,25 @@ class ReservationService {
         itemIds: itemQuantities.keys.toList(),
       );
       final approvalBaseTime = DateTime.now().toUtc();
+      var firstOfficeStep = 0;
+      if (facultyApproverId != null) {
+        final facultyTimestamp = buildApprovalTimestampForStep(
+          0,
+          baseTime: approvalBaseTime,
+        );
+        await _client.from('reservation_approvals').insert({
+          'reservation_id': reservationId,
+          'approver_user_id': facultyApproverId,
+          'status': 'Pending',
+          'created_at': facultyTimestamp.toIso8601String(),
+          'updated_at': facultyTimestamp.toIso8601String(),
+        });
+        firstOfficeStep = 1;
+      }
       for (var index = 0; index < approvalChain.officeIds.length; index++) {
         final officeId = approvalChain.officeIds[index];
         final approvalTimestamp = buildApprovalTimestampForStep(
-          index,
+          index + firstOfficeStep,
           baseTime: approvalBaseTime,
         );
         await _client.from('reservation_approvals').insert({
@@ -2802,6 +3237,26 @@ class ReservationService {
           ),
         );
 
+        if (facultyApproverId != null) {
+          final faculty = await _client
+              .from('users')
+              .select('user_id, full_name')
+              .eq('user_id', facultyApproverId)
+              .maybeSingle();
+          final facultyName =
+              (faculty?['full_name'] as String?)?.trim().isNotEmpty == true
+              ? (faculty!['full_name'] as String).trim()
+              : 'Selected faculty';
+          timeline.add(
+            ReservationTimelineEntry(
+              title: 'Faculty Approval - $facultyName',
+              status: 'Pending',
+              date: dateOfActivity,
+              timestamp: 'Pending',
+              description: 'Waiting for $facultyName to review your request.',
+            ),
+          );
+        }
         for (final office in approvalChain.offices) {
           final label = approvalOfficeLabel(office);
           timeline.add(

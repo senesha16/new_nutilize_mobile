@@ -11,6 +11,7 @@ import 'package:new_nutilize_mobile/widgets/reservation_return_lock_dialog.dart'
 import 'package:new_nutilize_mobile/widgets/experience_rating_prompt.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
 import 'package:new_nutilize_mobile/widgets/top_message_banner.dart';
+import 'package:new_nutilize_mobile/widgets/faculty_selector.dart';
 
 class _ReservationCard extends StatelessWidget {
   const _ReservationCard({
@@ -193,6 +194,16 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   List<File> _proofOfConsentFiles = [];
   List<String> _proofOfConsentUrls = [];
   bool _isUploadingProof = false;
+  FacultyProfile? _selectedFaculty;
+
+  String get _normalizedRole =>
+      (AuthService.currentUser?['role'] as String?)?.toLowerCase() ?? '';
+
+  bool get _isStudent => _normalizedRole == 'student';
+
+  bool get _requiresConsent =>
+      !_isStudent &&
+      const {'teacher', 'faculty', 'faculty_member'}.contains(_normalizedRole);
 
   static const _roomTypes = [
     'Classroom',
@@ -562,17 +573,12 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         _showError('Select a classroom table type.');
         return;
       }
-      // Require proof of consent for students and faculty/teachers on venue requests
-      final user = AuthService.currentUser;
-      final role = user?['role'] as String?;
-      final normalizedRole = role?.toLowerCase() ?? '';
-      final requiresConsent =
-          normalizedRole == 'student' ||
-          normalizedRole == 'teacher' ||
-          normalizedRole == 'faculty' ||
-          normalizedRole == 'faculty_member';
-
-      if (requiresConsent && _proofOfConsentUrls.isEmpty) {
+      // Faculty retain proof-of-consent uploads; students select their approver.
+      if (_isStudent && _selectedFaculty == null) {
+        _showError('Select the faculty member who gave permission.');
+        return;
+      }
+      if (_requiresConsent && _proofOfConsentUrls.isEmpty) {
         _showError('Please upload proof of consent before submitting.');
         return;
       }
@@ -669,6 +675,10 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         _showError('Please sign in again.');
         return;
       }
+      if (_isStudent && _selectedFaculty == null) {
+        _showError('Select the faculty member who gave permission.');
+        return;
+      }
 
       final returnLock = await _reservationService
           .enforceReservationLifecycle();
@@ -738,6 +748,7 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
         hasOutsideParticipants: _hasOutsideParticipants,
         approvalChain: approvalChain.officeIds,
         proofOfConsentUrl: _proofOfConsentUrl,
+        facultyApproverId: _isStudent ? _selectedFaculty!.userId : null,
       );
 
       if (reservationId != null) {
@@ -753,6 +764,19 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
             description: 'Waiting for approval from $label.',
           );
         }).toList();
+        if (_isStudent && _selectedFaculty != null) {
+          timeline.insert(
+            0,
+            ReservationTimelineEntry(
+              title: 'Faculty Approval - ${_selectedFaculty!.displayName}',
+              status: 'Pending',
+              date: _selectedDate!,
+              timestamp: 'Pending',
+              description:
+                  'Waiting for ${_selectedFaculty!.displayName} to review your request.',
+            ),
+          );
+        }
 
         final newRecord = ReservationRecord(
           id: reservationId.toString(),
@@ -878,15 +902,6 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
   }
 
   Widget _buildStepOne() {
-    final user = AuthService.currentUser;
-    final role = user?['role'] as String?;
-    final normalizedRole = role?.toLowerCase() ?? '';
-    final requiresConsent =
-        normalizedRole == 'student' ||
-        normalizedRole == 'teacher' ||
-        normalizedRole == 'faculty' ||
-        normalizedRole == 'faculty_member';
-
     return _buildFormCard(
       children: [
         _buildDropdownField(
@@ -1001,7 +1016,13 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
                 setState(() => _selectedRoomTableType = value),
           ),
         ],
-        if (requiresConsent) ...[
+        if (_isStudent) ...[
+          const SizedBox(height: 16),
+          FacultySelector(
+            selectedFaculty: _selectedFaculty,
+            onChanged: (faculty) => setState(() => _selectedFaculty = faculty),
+          ),
+        ] else if (_requiresConsent) ...[
           const SizedBox(height: 16),
           _buildProofOfConsentUpload(),
         ],

@@ -3,6 +3,7 @@ import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_details_page.dart';
 import 'package:new_nutilize_mobile/features/request/reservation_history_page.dart';
 import 'package:new_nutilize_mobile/features/home/announcements_page.dart';
+import 'package:new_nutilize_mobile/features/home/faculty_approval_page.dart';
 import 'package:new_nutilize_mobile/services/announcements_service.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
@@ -43,9 +44,17 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final firstName = (AuthService.currentUser?['first_name'] as String?)?.trim();
+    final firstName = (AuthService.currentUser?['first_name'] as String?)
+        ?.trim();
     final userName = firstName?.isNotEmpty == true ? firstName! : 'User';
-    
+    final role =
+        (AuthService.currentUser?['role'] as String?)?.toLowerCase() ?? '';
+    final isFaculty = const {
+      'faculty',
+      'teacher',
+      'faculty_member',
+    }.contains(role);
+
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5FB),
       body: SafeArea(
@@ -161,6 +170,18 @@ class _HomePageState extends State<HomePage> {
                       },
                     ),
                     const SizedBox(height: 22),
+                    if (isFaculty) ...[
+                      _FacultyApprovalEntry(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => const FacultyApprovalPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                    ],
                     const Text(
                       'Quick Actions',
                       style: TextStyle(
@@ -270,7 +291,9 @@ class _AnnouncementCarouselState extends State<_AnnouncementCarousel> {
 
   @override
   Widget build(BuildContext context) {
-    final topAnnouncements = widget.announcementsService.getTopAnnouncements(limit: 3);
+    final topAnnouncements = widget.announcementsService.getTopAnnouncements(
+      limit: 3,
+    );
 
     if (topAnnouncements.isEmpty) {
       return Container(
@@ -290,10 +313,7 @@ class _AnnouncementCarouselState extends State<_AnnouncementCarousel> {
         child: const Center(
           child: Text(
             'No announcements yet',
-            style: TextStyle(
-              color: Color(0xFF60667B),
-              fontSize: 12,
-            ),
+            style: TextStyle(color: Color(0xFF60667B), fontSize: 12),
           ),
         ),
       );
@@ -321,9 +341,7 @@ class _AnnouncementCarouselState extends State<_AnnouncementCarousel> {
                       ),
                     );
                   },
-                  child: _AnnouncementCard(
-                    announcement: announcement,
-                  ),
+                  child: _AnnouncementCard(announcement: announcement),
                 ),
               );
             },
@@ -717,6 +735,95 @@ class _RecentActivityCard extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _FacultyApprovalEntry extends StatelessWidget {
+  const _FacultyApprovalEntry({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final shape = RoundedRectangleBorder(
+      borderRadius: BorderRadius.circular(18),
+      side: const BorderSide(color: Color(0xFFE2E7F3)),
+    );
+    return Material(
+      color: Colors.white,
+      elevation: 1,
+      shadowColor: const Color(0xFF24304C).withAlpha(18),
+      shape: shape,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 16),
+          child: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE9EDFF),
+                  borderRadius: BorderRadius.circular(15),
+                ),
+                child: const Icon(
+                  Icons.fact_check_outlined,
+                  color: Color(0xFF35489A),
+                  size: 25,
+                ),
+              ),
+              const SizedBox(width: 13),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Faculty workspace',
+                      style: TextStyle(
+                        color: Color(0xFF707891),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.7,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Student approval requests',
+                      style: TextStyle(
+                        color: Color(0xFF1C2541),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    SizedBox(height: 3),
+                    Text(
+                      'Review assigned reservation requests',
+                      style: TextStyle(color: Color(0xFF707891), fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF3F5FB),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.arrow_forward_rounded,
+                  color: Color(0xFF35489A),
+                  size: 19,
+                ),
               ),
             ],
           ),

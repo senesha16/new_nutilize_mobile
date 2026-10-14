@@ -7,6 +7,7 @@ import 'package:new_nutilize_mobile/services/reservation_service.dart';
 import 'package:new_nutilize_mobile/widgets/reservation_return_lock_dialog.dart';
 import 'package:new_nutilize_mobile/widgets/experience_rating_prompt.dart';
 import 'package:new_nutilize_mobile/widgets/top_message_banner.dart';
+import 'package:new_nutilize_mobile/widgets/faculty_selector.dart';
 
 class ItemReservationPage extends StatefulWidget {
   const ItemReservationPage({super.key});
@@ -35,6 +36,16 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
   Map<int, int> _selectedItemQuantities = {}; // item_id -> quantity
   bool _isLoadingItems = false;
   bool _isLoadingStep2 = false;
+  FacultyProfile? _selectedFaculty;
+
+  String get _normalizedRole =>
+      (AuthService.currentUser?['role'] as String?)?.toLowerCase() ?? '';
+
+  bool get _isStudent => _normalizedRole == 'student';
+
+  bool get _requiresConsent =>
+      !_isStudent &&
+      const {'teacher', 'faculty', 'faculty_member'}.contains(_normalizedRole);
 
   @override
   void initState() {
@@ -304,16 +315,11 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
         _showError('End time must be after start time');
         return;
       }
-      final user = AuthService.currentUser;
-      final role = user?['role'] as String?;
-      final normalizedRole = role?.toLowerCase() ?? '';
-      final requiresConsent =
-          normalizedRole == 'student' ||
-          normalizedRole == 'teacher' ||
-          normalizedRole == 'faculty' ||
-          normalizedRole == 'faculty_member';
-
-      if (requiresConsent && _proofOfConsentUrls.isEmpty) {
+      if (_isStudent && _selectedFaculty == null) {
+        _showError('Select the faculty member who gave permission.');
+        return;
+      }
+      if (_requiresConsent && _proofOfConsentUrls.isEmpty) {
         _showError('Please upload proof of consent before submitting.');
         return;
       }
@@ -366,6 +372,10 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
       final currentUser = AuthService.currentUser;
       if (currentUser == null || currentUser['user_id'] == null) {
         _showError('Please sign in again');
+        return;
+      }
+      if (_isStudent && _selectedFaculty == null) {
+        _showError('Select the faculty member who gave permission.');
         return;
       }
 
@@ -430,6 +440,7 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
         itemQuantities: _selectedItemQuantities,
         hasOutsideParticipants: _hasOutsideParticipants,
         proofOfConsentUrl: _proofOfConsentUrl,
+        facultyApproverId: _isStudent ? _selectedFaculty!.userId : null,
         requestStart: requestStart,
         requestEnd: requestEnd,
       );
@@ -587,15 +598,6 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
   }
 
   Widget _buildStepOne() {
-    final user = AuthService.currentUser;
-    final role = user?['role'] as String?;
-    final normalizedRole = role?.toLowerCase() ?? '';
-    final requiresConsent =
-        normalizedRole == 'student' ||
-        normalizedRole == 'teacher' ||
-        normalizedRole == 'faculty' ||
-        normalizedRole == 'faculty_member';
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -681,7 +683,14 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
               activeColor: const Color(0xFF35489A),
               controlAffinity: ListTileControlAffinity.leading,
             ),
-            if (requiresConsent) ...[
+            if (_isStudent) ...[
+              const SizedBox(height: 16),
+              FacultySelector(
+                selectedFaculty: _selectedFaculty,
+                onChanged: (faculty) =>
+                    setState(() => _selectedFaculty = faculty),
+              ),
+            ] else if (_requiresConsent) ...[
               const SizedBox(height: 16),
               _buildProofOfConsentUpload(),
             ],

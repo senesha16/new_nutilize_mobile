@@ -348,6 +348,37 @@ void main() {
     },
   );
 
+  test('faculty approval leaves the office chain pending', () {
+    expect(
+      ReservationService.resolveApprovalStatusFromRows(
+        overallStatus: 'Pending Approval',
+        approvalRows: [
+          {'approver_user_id': 42, 'status': 'Approved'},
+          {'office_id': 1, 'status': 'Pending'},
+          {'office_id': 2, 'status': 'Pending'},
+        ],
+      ),
+      'Pending Approval',
+    );
+  });
+
+  test(
+    'faculty rejection remains rejected after later approvals are cancelled',
+    () {
+      expect(
+        ReservationService.resolveApprovalStatusFromRows(
+          overallStatus: 'Pending Approval',
+          approvalRows: [
+            {'approver_user_id': 42, 'status': 'Rejected'},
+            {'office_id': 1, 'status': 'Cancelled'},
+            {'office_id': 2, 'status': 'Cancelled'},
+          ],
+        ),
+        'Rejected',
+      );
+    },
+  );
+
   test(
     'marks the reservation approved only after every approval office approves',
     () {
