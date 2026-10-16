@@ -45,7 +45,12 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
 
   bool get _requiresConsent =>
       !_isStudent &&
-      const {'teacher', 'faculty', 'faculty_member'}.contains(_normalizedRole);
+      (const {
+            'teacher',
+            'faculty',
+            'faculty_member',
+          }.contains(_normalizedRole) ||
+          AuthService.programIdForProgramChairRole(_normalizedRole) != null);
 
   @override
   void initState() {

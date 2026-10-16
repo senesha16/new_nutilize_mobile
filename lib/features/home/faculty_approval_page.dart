@@ -25,6 +25,16 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
   String _searchQuery = '';
 
   int? get _facultyUserId => AuthService.currentUser?['user_id'] as int?;
+  bool get _isProgramChair {
+    return AuthService.programIdForProgramChairRole(
+          AuthService.currentUser?['role']?.toString(),
+        ) !=
+        null;
+  }
+
+  bool get _isDean =>
+      (AuthService.currentUser?['role']?.toString().toLowerCase() ?? '') ==
+      'dean';
 
   List<FacultyApprovalRequest> get _visibleRequests {
     final query = _searchQuery.trim().toLowerCase();
@@ -54,11 +64,20 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
   }
 
   Future<void> _loadRequests() async {
+    final currentUser = AuthService.currentUser;
     final facultyUserId = _facultyUserId;
-    if (facultyUserId == null) {
+    final programId = int.tryParse(
+      currentUser?['program_id']?.toString() ?? '',
+    );
+    final officeId = int.tryParse(currentUser?['office_id']?.toString() ?? '');
+    if (facultyUserId == null ||
+        (_isProgramChair && programId == null) ||
+        (_isDean && officeId == null)) {
       setState(() {
         _isLoading = false;
-        _loadError = 'Your faculty profile could not be loaded. Sign in again.';
+        _loadError = _isProgramChair || _isDean
+            ? 'Your approval assignment could not be loaded. Sign in again or contact an administrator.'
+            : 'Your faculty profile could not be loaded. Sign in again.';
       });
       return;
     }
@@ -67,9 +86,19 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
       _loadError = null;
     });
     try {
-      final requests = await _reservationService.getFacultyApprovalRequests(
-        facultyUserId: facultyUserId,
-      );
+      final requests = _isProgramChair
+          ? await _reservationService.getProgramChairApprovalRequests(
+              officeId: await _reservationService.getProgramOfficeId(
+                programId!,
+              ),
+            )
+          : _isDean
+          ? await _reservationService.getDeanApprovalRequests(
+              officeId: officeId!,
+            )
+          : await _reservationService.getFacultyApprovalRequests(
+              facultyUserId: facultyUserId,
+            );
       if (!mounted) return;
       setState(() {
         _requests = requests;
@@ -79,7 +108,7 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _loadError = 'Unable to load student requests: $error';
+        _loadError = 'Unable to load approval requests: $error';
       });
     }
   }
@@ -123,26 +152,55 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
     }
   }
 
+  Future<void> _reconsider(FacultyApprovalRequest request) async {
+    final message = await showDialog<String>(
+      context: context,
+      builder: (_) => const _ReconsiderRequestDialog(),
+    );
+    if (message != null) {
+      await _respond(request, decision: 'reconsider', message: message);
+    }
+  }
+
   Future<void> _respond(
     FacultyApprovalRequest request, {
-    required bool approved,
+    bool? approved,
+    String? decision,
+    String? message,
     String? rejectionReason,
   }) async {
     setState(() => _busyApprovalIds.add(request.approvalId));
     try {
-      await _reservationService.respondToFacultyApproval(
-        approvalId: request.approvalId,
-        approved: approved,
-        rejectionReason: rejectionReason,
-      );
+      if (_isProgramChair) {
+        await _reservationService.respondToProgramChairApproval(
+          approvalId: request.approvalId,
+          decision: decision ?? (approved == true ? 'approve' : 'reject'),
+          message: message,
+          rejectionReason: rejectionReason,
+        );
+      } else if (_isDean) {
+        await _reservationService.respondToDeanApproval(
+          approvalId: request.approvalId,
+          approved: approved == true,
+          rejectionReason: rejectionReason,
+        );
+      } else {
+        await _reservationService.respondToFacultyApproval(
+          approvalId: request.approvalId,
+          approved: approved == true,
+          rejectionReason: rejectionReason,
+        );
+      }
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           behavior: SnackBarBehavior.floating,
           content: Text(
-            approved
+            decision == 'reconsider'
+                ? 'Condition sent to the requester. The request will return to you after their response.'
+                : approved == true
                 ? 'Approved. The request moved to the next approval stage.'
-                : 'Request declined. The student can see your reason.',
+                : 'Request declined. The requester can see your reason.',
           ),
         ),
       );
@@ -181,9 +239,13 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
       backgroundColor: _canvas,
       appBar: AppBar(
         titleSpacing: 20,
-        title: const Text(
-          'Student requests',
-          style: TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
+        title: Text(
+          _isProgramChair
+              ? 'Program requests'
+              : _isDean
+              ? 'Dean approvals'
+              : 'Student requests',
+          style: const TextStyle(fontSize: 19, fontWeight: FontWeight.w700),
         ),
         backgroundColor: _navy,
         foregroundColor: Colors.white,
@@ -274,23 +336,31 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
             ),
           ),
           const SizedBox(width: 14),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Review student reservations',
-                  style: TextStyle(
+                  _isDean
+                      ? 'Review Dean approvals'
+                      : _isProgramChair
+                      ? 'Review program reservations'
+                      : 'Review student reservations',
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 17,
                     height: 1.25,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                SizedBox(height: 6),
+                const SizedBox(height: 6),
                 Text(
-                  'Check the request details before approving or declining. Approved requests continue to the school offices.',
-                  style: TextStyle(
+                  _isDean
+                      ? 'Review requests sent to the Dean office and approve them to continue to the next school office.'
+                      : _isProgramChair
+                      ? 'Review requests from your assigned program. Approve, decline with a reason, or ask the requester to consider a condition.'
+                      : 'Check the request details before approving or declining. Approved requests continue to the school offices.',
+                  style: const TextStyle(
                     color: Color(0xFFE2E7FF),
                     fontSize: 12,
                     height: 1.45,
@@ -344,7 +414,7 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
       onChanged: (value) => setState(() => _searchQuery = value),
       textInputAction: TextInputAction.search,
       decoration: InputDecoration(
-        hintText: 'Search by student, activity, room, or item',
+        hintText: 'Search by requester, activity, room, or item',
         hintStyle: const TextStyle(color: _muted, fontSize: 13),
         prefixIcon: const Icon(Icons.search_rounded, color: _muted),
         suffixIcon: _searchQuery.isEmpty
@@ -378,6 +448,10 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
 
   Widget _buildRequestCard(FacultyApprovalRequest request) {
     final busy = _busyApprovalIds.contains(request.approvalId);
+    final normalizedStatus = request.status.toLowerCase();
+    final isAwaitingFinalDecision =
+        normalizedStatus == 'condition accepted' ||
+        normalizedStatus == 'condition rejected';
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -448,9 +522,9 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
                     color: const Color(0xFFFFF4DA),
                     borderRadius: BorderRadius.circular(999),
                   ),
-                  child: const Text(
-                    'PENDING',
-                    style: TextStyle(
+                  child: Text(
+                    request.status.toUpperCase(),
+                    style: const TextStyle(
                       color: Color(0xFF825900),
                       fontSize: 9,
                       letterSpacing: 0.5,
@@ -460,6 +534,29 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
                 ),
               ],
             ),
+            if (_isProgramChair && isAwaitingFinalDecision) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEFF3FF),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: const Color(0xFFD9E1FF)),
+                ),
+                child: Text(
+                  normalizedStatus == 'condition accepted'
+                      ? 'The requester accepted your condition. Make the final approval decision.'
+                      : 'The requester declined your condition. Make the final approval decision.',
+                  style: const TextStyle(
+                    color: _ink,
+                    fontSize: 12,
+                    height: 1.4,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 17),
             Text(
               request.activityName,
@@ -556,51 +653,119 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
               padding: EdgeInsets.symmetric(vertical: 15),
               child: Divider(height: 1, color: _line),
             ),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: busy ? null : () => _reject(request),
-                    icon: const Icon(Icons.close_rounded, size: 18),
-                    label: const Text('Decline'),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFFB3261E),
-                      side: const BorderSide(color: Color(0xFFE6C9C8)),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(13),
+            if (_isProgramChair && !isAwaitingFinalDecision) ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: busy ? null : () => _reject(request),
+                      icon: const Icon(Icons.close_rounded, size: 17),
+                      label: const Text('Decline'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFB3261E),
+                        side: const BorderSide(color: Color(0xFFE6C9C8)),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(13),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  flex: 2,
-                  child: FilledButton.icon(
-                    onPressed: busy ? null : () => _approve(request),
-                    icon: busy
-                        ? const SizedBox(
-                            width: 17,
-                            height: 17,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.check_rounded, size: 18),
-                    label: Text(busy ? 'Submitting' : 'Approve & forward'),
-                    style: FilledButton.styleFrom(
-                      backgroundColor: _navy,
-                      disabledBackgroundColor: _navy.withAlpha(120),
-                      padding: const EdgeInsets.symmetric(vertical: 13),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(13),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: busy ? null : () => _reconsider(request),
+                      icon: const Icon(Icons.chat_bubble_outline, size: 17),
+                      label: const Text('Reconsider'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: _navy,
+                        side: const BorderSide(color: _line),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(13),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: busy ? null : () => _approve(request),
+                      icon: busy
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.check_rounded, size: 17),
+                      label: const Text('Approve'),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _navy,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: busy ? null : () => _reject(request),
+                      icon: const Icon(Icons.close_rounded, size: 18),
+                      label: const Text('Decline'),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFFB3261E),
+                        side: const BorderSide(color: Color(0xFFE6C9C8)),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    flex: 2,
+                    child: FilledButton.icon(
+                      onPressed: busy ? null : () => _approve(request),
+                      icon: busy
+                          ? const SizedBox(
+                              width: 17,
+                              height: 17,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Icon(Icons.check_rounded, size: 18),
+                      label: Text(
+                        busy
+                            ? 'Submitting'
+                            : _isProgramChair || isAwaitingFinalDecision
+                            ? 'Final approve'
+                            : 'Approve & forward',
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: _navy,
+                        disabledBackgroundColor: _navy.withAlpha(120),
+                        padding: const EdgeInsets.symmetric(vertical: 13),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(13),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -677,7 +842,7 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
           ),
           SizedBox(height: 6),
           Text(
-            'New student requests assigned to you will appear here.',
+            'New requests assigned to you will appear here.',
             textAlign: TextAlign.center,
             style: TextStyle(color: _muted, fontSize: 13, height: 1.4),
           ),
@@ -899,6 +1064,92 @@ class _RejectRequestDialogState extends State<_RejectRequestDialog> {
           ),
           onPressed: _submit,
           child: const Text('Decline request'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ReconsiderRequestDialog extends StatefulWidget {
+  const _ReconsiderRequestDialog();
+
+  @override
+  State<_ReconsiderRequestDialog> createState() =>
+      _ReconsiderRequestDialogState();
+}
+
+class _ReconsiderRequestDialogState extends State<_ReconsiderRequestDialog> {
+  final _messageController = TextEditingController();
+  String? _validationMessage;
+
+  @override
+  void dispose() {
+    _messageController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final message = _messageController.text.trim();
+    if (message.isEmpty) {
+      setState(
+        () => _validationMessage = 'Enter the condition for the requester.',
+      );
+      return;
+    }
+    if (message.length > 1000) {
+      setState(
+        () => _validationMessage =
+            'The message must be 1,000 characters or fewer.',
+      );
+      return;
+    }
+    Navigator.of(context).pop(message);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(22)),
+      icon: const Icon(
+        Icons.chat_bubble_outline,
+        color: Color(0xFF35489A),
+        size: 30,
+      ),
+      title: const Text('Ask the requester to reconsider'),
+      content: TextField(
+        controller: _messageController,
+        autofocus: true,
+        maxLines: 5,
+        maxLength: 1000,
+        onChanged: (_) {
+          if (_validationMessage != null) {
+            setState(() => _validationMessage = null);
+          }
+        },
+        decoration: InputDecoration(
+          labelText: 'Condition or alternative',
+          hintText: 'Explain what could make this request workable.',
+          alignLabelWithHint: true,
+          errorText: _validationMessage,
+          filled: true,
+          fillColor: const Color(0xFFF5F7FB),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: const BorderSide(color: Color(0xFFE6EAF3)),
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          style: FilledButton.styleFrom(
+            backgroundColor: const Color(0xFF35489A),
+          ),
+          onPressed: _submit,
+          child: const Text('Send condition'),
         ),
       ],
     );

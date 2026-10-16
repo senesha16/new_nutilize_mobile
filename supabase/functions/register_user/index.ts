@@ -6,7 +6,7 @@
 
 import { serve } from "https://deno.land/std@0.201.0/http/server.ts";
 import { hashPassword } from "../_shared/password_hash.ts";
-import { isRegistrationEmailTaken } from "../_shared/registration_email.ts";
+import { hasRegistrationProfile } from "../_shared/registration_email.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || Deno.env.get("PROJECT_URL");
 const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -32,6 +32,28 @@ const PROGRAM_ID_BY_AFFILIATION: Record<string, number> = {
   'bs medical technology': 13,
   'bs nursing': 14,
 };
+
+const PROGRAM_ID_BY_CHAIR_ROLE: Record<string, number> = {
+  pc_multimediaarts: 1,
+  pc_computerscience: 4,
+  pc_architecture: 2,
+  pc_civilengineering: 3,
+  pc_computerengineering: 5,
+  pc_informationtechnology: 6,
+  pc_accountancy: 7,
+  pc_financialmanagement: 8,
+  pc_marketingmanagement: 9,
+  pc_managementaccounting: 10,
+  pc_tourismmanagement: 11,
+  pc_psychology: 12,
+  pc_medicaltechnology: 13,
+  pc_nursing: 14,
+};
+
+function isNuRegistrationEmail(email: string): boolean {
+  const domain = email.trim().toLowerCase().split('@').pop() ?? '';
+  return domain === 'students.nu-lipa.edu.ph' || domain === 'nu-lipa.edu.ph';
+}
 
 function normalizeAffiliation(value: unknown): string | null {
   const normalized = String(value ?? '').trim().toLowerCase();
@@ -60,7 +82,7 @@ async function resolveProgramId(affiliation: unknown): Promise<number | null> {
     const resp = await fetch(`${SUPABASE_URL}/rest/v1/academic_programs?select=program_id&${query}&limit=1`, {
       headers: {
         'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-        'apikey': SERVICE_ROLE_KEY,
+        'apikey': SERVICE_ROLE_KEY!,
         'Accept': 'application/json',
       },
     });
@@ -129,9 +151,30 @@ serve(async (req) => {
       program_id: body.program_id ?? body.profile?.program_id,
     });
     const requestedRole = String(profile.role ?? 'student').trim().toLowerCase();
-    if (requestedRole !== 'student' && requestedRole !== 'faculty') {
+    const programChairProgramId = PROGRAM_ID_BY_CHAIR_ROLE[requestedRole];
+    const isProgramChair = programChairProgramId !== undefined;
+    if (
+      requestedRole !== 'student' &&
+      requestedRole !== 'faculty' &&
+      !isProgramChair
+    ) {
       return new Response(
         JSON.stringify({ error: 'invalid_registration_role' }),
+        { status: 400 },
+      );
+    }
+
+    if (
+      email &&
+      isProgramChair &&
+      !isNuRegistrationEmail(email)
+    ) {
+      return new Response(
+        JSON.stringify({
+          error: 'program_chair_email_required',
+          message:
+            'Program Chair registration requires an NU email address.',
+        }),
         { status: 400 },
       );
     }
@@ -146,9 +189,58 @@ serve(async (req) => {
       );
     }
 
+    let programChairAssignment: {
+      program_id: number;
+      name: string;
+      office_id: number;
+    } | null = null;
+    if (isProgramChair) {
+      const assignmentResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/academic_programs?select=program_id,name,office_id&program_id=eq.${programChairProgramId}&limit=1`,
+        {
+          headers: {
+            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
+            'apikey': SERVICE_ROLE_KEY!,
+            'Accept': 'application/json',
+          },
+        },
+      );
+      if (!assignmentResponse.ok) {
+        return new Response(
+          JSON.stringify({
+            error: 'program_chair_assignment_lookup_failed',
+            message: 'Could not verify the selected Program Chair assignment.',
+          }),
+          { status: 500 },
+        );
+      }
+      const assignments = await assignmentResponse.json().catch(() => []);
+      const assignment = Array.isArray(assignments) ? assignments[0] : null;
+      if (
+        !assignment ||
+        !Number.isInteger(Number(assignment.program_id)) ||
+        !Number.isInteger(Number(assignment.office_id)) ||
+        !String(assignment.name ?? '').trim()
+      ) {
+        return new Response(
+          JSON.stringify({
+            error: 'program_chair_assignment_unavailable',
+            message:
+              'The selected Program Chair role is not configured for registration.',
+          }),
+          { status: 400 },
+        );
+      }
+      programChairAssignment = {
+        program_id: Number(assignment.program_id),
+        name: String(assignment.name).trim(),
+        office_id: Number(assignment.office_id),
+      };
+    }
+
     let emailTaken: boolean;
     try {
-      emailTaken = await isRegistrationEmailTaken(
+      emailTaken = await hasRegistrationProfile(
         SUPABASE_URL,
         SERVICE_ROLE_KEY,
         email,
@@ -198,7 +290,7 @@ serve(async (req) => {
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-        'apikey': SERVICE_ROLE_KEY,
+        'apikey': SERVICE_ROLE_KEY!,
       },
       body: JSON.stringify({
         email,
@@ -251,7 +343,7 @@ serve(async (req) => {
           {
             headers: {
               'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-              'apikey': SERVICE_ROLE_KEY,
+              'apikey': SERVICE_ROLE_KEY!,
               'Accept': 'application/json',
             },
           },
@@ -315,13 +407,20 @@ serve(async (req) => {
     if (incoming.full_name) payload.full_name = incoming.full_name;
     if (incoming.middle_initial) payload.middle_initial = incoming.middle_initial;
     if (incoming.suffix) payload.suffix = incoming.suffix;
-    if (incoming.affiliation) payload.affiliation = incoming.affiliation;
-    if (incoming.program_id) {
-      payload.program_id = Number(incoming.program_id);
+    if (isProgramChair && programChairAssignment) {
+      payload.affiliation = programChairAssignment.name;
+      payload.program_id = programChairAssignment.program_id;
+      payload.office_id = programChairAssignment.office_id;
+      payload.is_active = true;
     } else {
-      const mappedProgramId = await resolveProgramId(incoming.affiliation);
-      if (mappedProgramId) {
-        payload.program_id = mappedProgramId;
+      if (incoming.affiliation) payload.affiliation = incoming.affiliation;
+      if (incoming.program_id) {
+        payload.program_id = Number(incoming.program_id);
+      } else {
+        const mappedProgramId = await resolveProgramId(incoming.affiliation);
+        if (mappedProgramId) {
+          payload.program_id = mappedProgramId;
+        }
       }
     }
 
@@ -335,7 +434,7 @@ serve(async (req) => {
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${SERVICE_ROLE_KEY}`,
-          'apikey': SERVICE_ROLE_KEY,
+          'apikey': SERVICE_ROLE_KEY!,
           'Prefer': 'resolution=merge-duplicates,return=representation',
         },
         body: JSON.stringify(bodyObj),
@@ -365,6 +464,7 @@ serve(async (req) => {
     };
     return new Response(JSON.stringify(respBody), { status: 201 });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err?.message || String(err) }), { status: 500 });
+    const message = err instanceof Error ? err.message : String(err);
+    return new Response(JSON.stringify({ error: message }), { status: 500 });
   }
 });

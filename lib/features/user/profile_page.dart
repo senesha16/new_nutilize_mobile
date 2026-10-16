@@ -458,7 +458,8 @@ Future<void> _handleDeleteAccount(BuildContext context) async {
   if (!deleted) {
     await _showAccountDeletionError(
       context,
-      'The code is invalid or the account could not be deleted. Your account is still active.',
+      AuthService.lastAccountDeletionError ??
+          'Account deletion could not be completed. Please try again later.',
     );
     return;
   }

@@ -11,6 +11,7 @@ class AuthService {
   static String get _baseUrl => SupabaseService.supabaseUrl;
   static Map<String, dynamic>? currentUser;
   static String? lastAuthError;
+  static String? lastAccountDeletionError;
   static Map<String, String> _envVars =
       <String, String>{}; // Store env from main.dart
   static const Map<String, int> _programIdByAffiliation = {
@@ -44,6 +45,27 @@ class AuthService {
     final normalized = _normalizeAffiliation(affiliation);
     if (normalized == null) return null;
     return _programIdByAffiliation[normalized];
+  }
+
+  static int? programIdForProgramChairRole(String? role) {
+    final normalized = role?.trim().toLowerCase();
+    if (normalized == null || !normalized.startsWith('pc_')) return null;
+    return const {
+      'pc_multimediaarts': 1,
+      'pc_architecture': 2,
+      'pc_civilengineering': 3,
+      'pc_computerscience': 4,
+      'pc_computerengineering': 5,
+      'pc_informationtechnology': 6,
+      'pc_accountancy': 7,
+      'pc_financialmanagement': 8,
+      'pc_marketingmanagement': 9,
+      'pc_managementaccounting': 10,
+      'pc_tourismmanagement': 11,
+      'pc_psychology': 12,
+      'pc_medicaltechnology': 13,
+      'pc_nursing': 14,
+    }[normalized];
   }
 
   static Map<String, dynamic>? normalizeProfile(Map<String, dynamic>? profile) {
@@ -722,7 +744,7 @@ class AuthService {
     required String accessToken,
   }) async {
     final url = Uri.parse(
-      '$_baseUrl/rest/v1/users?select=user_id,email,username,first_name,role,affiliation,program_id&email=ilike.${Uri.encodeQueryComponent(email)}&limit=1',
+      '$_baseUrl/rest/v1/users?select=user_id,email,username,first_name,role,affiliation,program_id,office_id&email=ilike.${Uri.encodeQueryComponent(email)}&limit=1',
     );
 
     final resp = await http.get(
@@ -758,6 +780,7 @@ class AuthService {
       'role': user['role'],
       'affiliation': user['affiliation'],
       'program_id': user['program_id'],
+      'office_id': user['office_id'],
     };
   }
 
@@ -934,8 +957,17 @@ class AuthService {
   }
 
   static Future<bool> deleteAccount({required String code}) async {
+    lastAccountDeletionError = null;
     final session = Supabase.instance.client.auth.currentSession;
-    if (session == null || code.trim().isEmpty) return false;
+    if (session == null) {
+      lastAccountDeletionError =
+          'Your session expired. Please sign in again and retry.';
+      return false;
+    }
+    if (code.trim().isEmpty) {
+      lastAccountDeletionError = 'Enter the verification code to continue.';
+      return false;
+    }
 
     try {
       final response = await http.post(
@@ -947,13 +979,30 @@ class AuthService {
         },
         body: jsonEncode({'code': code.trim()}),
       );
+      final decoded = jsonDecode(response.body);
+      final error = decoded is Map ? decoded['error']?.toString() : null;
+      if (response.statusCode == 200 &&
+          decoded is Map &&
+          decoded['ok'] == true) {
+        return true;
+      }
+
+      lastAccountDeletionError = switch (error) {
+        'invalid_code' =>
+          'That code is invalid or expired. Request a new code and try again.',
+        'authentication_required' || 'invalid_session' =>
+          'Your session expired. Please sign in again and retry.',
+        'account_identity_mismatch' =>
+          'We could not safely match this account. Please contact support.',
+        _ => 'Account deletion could not be completed. Please try again later.',
+      };
       debugPrint(
-        '[AuthService] deleteAccount response: ${response.statusCode} ${response.body}',
+        '[AuthService] deleteAccount failed: ${response.statusCode}, ${error ?? 'unknown_error'}',
       );
-      if (response.statusCode != 200) return false;
-      final body = jsonDecode(response.body);
-      return body['ok'] == true;
+      return false;
     } catch (e) {
+      lastAccountDeletionError =
+          'Could not reach the account deletion service. Please try again.';
       debugPrint('[AuthService] deleteAccount failed: $e');
       return false;
     }

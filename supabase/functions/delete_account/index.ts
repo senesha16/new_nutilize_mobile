@@ -18,15 +18,28 @@ function serviceHeaders(extra: Record<string, string> = {}) {
   };
 }
 
-function tableUrl(table: string, filters: Array<[string, number | number[]]>) {
+type TableFilterValue = string | number | Array<string | number>;
+
+function tableUrl(
+  table: string,
+  filters: Array<[string, TableFilterValue]>,
+) {
   const url = new URL(`${PROJECT_URL}/rest/v1/${table}`);
   for (const [column, value] of filters) {
     url.searchParams.set(
       column,
-      Array.isArray(value) ? `in.(${value.join(',')})` : `eq.${value}`,
+      Array.isArray(value)
+        ? `in.(${value.join(',')})`
+        : typeof value === 'number'
+        ? `eq.${value}`
+        : value,
     );
   }
   return url;
+}
+
+function escapeLikePattern(value: string) {
+  return value.replace(/[\\%_]/g, '\\$&');
 }
 
 async function getIds(
@@ -66,7 +79,7 @@ async function getIds(
 
 async function deleteRows(
   table: string,
-  filters: Array<[string, number | number[]]>,
+  filters: Array<[string, TableFilterValue]>,
 ) {
   const response = await fetch(tableUrl(table, filters), {
     method: 'DELETE',
@@ -77,11 +90,112 @@ async function deleteRows(
   }
 }
 
+async function patchRows(
+  table: string,
+  filters: Array<[string, TableFilterValue]>,
+  payload: Record<string, unknown>,
+) {
+  const response = await fetch(tableUrl(table, filters), {
+    method: 'PATCH',
+    headers: serviceHeaders({
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    }),
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error(`Account data update failed for ${table}: ${await response.text()}`);
+  }
+}
+
 async function deleteRowsByIds(table: string, column: string, ids: number[]) {
   const batchSize = 100;
   for (let offset = 0; offset < ids.length; offset += batchSize) {
     await deleteRows(table, [[column, ids.slice(offset, offset + batchSize)]]);
   }
+}
+
+async function detachFacultyApprovals(userId: number) {
+  const approvalsUrl = tableUrl('reservation_approvals', [
+    ['approver_user_id', userId],
+  ]);
+  approvalsUrl.searchParams.set(
+    'select',
+    'approval_id,reservation_id,status,approval_stage',
+  );
+  const approvalsResponse = await fetch(approvalsUrl, {
+    headers: serviceHeaders(),
+  });
+  if (!approvalsResponse.ok) {
+    throw new Error(
+      `Faculty approval lookup failed: ${await approvalsResponse.text()}`,
+    );
+  }
+
+  const approvals = await approvalsResponse.json();
+  if (!Array.isArray(approvals)) {
+    throw new Error('Faculty approval lookup returned invalid rows.');
+  }
+
+  const pendingFacultyApprovals = approvals.filter(
+    (approval) =>
+      approval?.approval_stage === 'faculty' &&
+      String(approval?.status ?? '').toLowerCase() === 'pending',
+  );
+
+  for (const approval of pendingFacultyApprovals) {
+    const reservationId = Number(approval.reservation_id);
+    const approvalId = Number(approval.approval_id);
+    if (
+      !Number.isSafeInteger(reservationId) ||
+      !Number.isSafeInteger(approvalId)
+    ) {
+      throw new Error('Faculty approval lookup returned invalid identifiers.');
+    }
+
+    const now = new Date().toISOString();
+    await patchRows(
+      'reservation_approvals',
+      [['approval_id', approvalId]],
+      {
+        status: 'Rejected',
+        approved_at: now.slice(0, 10),
+        approved_by_user_id: userId,
+        rejection_reason: 'The assigned faculty account was deleted.',
+        updated_at: now,
+      },
+    );
+    await patchRows(
+      'reservation_approvals',
+      [
+        ['reservation_id', reservationId],
+        ['status', ['Pending', 'Waiting']],
+        ['approval_id', `neq.${approvalId}`],
+      ],
+      { status: 'Cancelled', updated_at: now },
+    );
+    await patchRows(
+      'reservations',
+      [['reservation_id', reservationId]],
+      { overall_status: 'Rejected', updated_at: now },
+    );
+  }
+
+  await patchRows(
+    'reservation_approvals',
+    [['approver_user_id', userId]],
+    { approver_user_id: null },
+  );
+  await patchRows(
+    'reservation_approvals',
+    [['approved_by_user_id', userId]],
+    { approved_by_user_id: null },
+  );
+  await patchRows(
+    'reservation_approvals',
+    [['follow_up_requested_by', userId]],
+    { follow_up_requested_by: null },
+  );
 }
 
 async function getIdsByIds(
@@ -234,7 +348,7 @@ serve(async (req) => {
       return json({ ok: false, error: 'invalid_account' }, 400);
     }
 
-    const profileResponse = await fetch(
+    let profileResponse = await fetch(
       `${PROJECT_URL}/rest/v1/users?select=user_id,auth_user_id&auth_user_id=eq.${encodeURIComponent(authUserId)}&limit=1`,
       {
         headers: {
@@ -243,14 +357,80 @@ serve(async (req) => {
         },
       },
     );
+    if (!profileResponse.ok) {
+      console.error('Account profile lookup failed:', profileResponse.status);
+      return json({ ok: false, error: 'profile_lookup_failed' }, 500);
+    }
     const profiles = await profileResponse.json().catch(() => []);
-    const profile = Array.isArray(profiles) ? profiles[0] : null;
-    const userId = profile?.user_id;
-    if (!userId) {
+    let profile = Array.isArray(profiles) ? profiles[0] : null;
+    if (!profile) {
+      const emailQuery = new URL(`${PROJECT_URL}/rest/v1/users`);
+      emailQuery.searchParams.set('select', 'user_id,auth_user_id,email');
+      emailQuery.searchParams.set(
+        'email',
+        `ilike.${escapeLikePattern(email)}`,
+      );
+      emailQuery.searchParams.set('limit', '2');
+      profileResponse = await fetch(emailQuery, {
+        headers: serviceHeaders(),
+      });
+      if (!profileResponse.ok) {
+        console.error('Account email profile lookup failed:', profileResponse.status);
+        return json({ ok: false, error: 'profile_lookup_failed' }, 500);
+      }
+      const emailProfiles = await profileResponse.json().catch(() => []);
+      profile = Array.isArray(emailProfiles) && emailProfiles.length === 1
+        ? emailProfiles[0]
+        : null;
+      if (
+        profile &&
+        profile.auth_user_id &&
+        String(profile.auth_user_id).toLowerCase() !== authUserId.toLowerCase()
+      ) {
+        return json({ ok: false, error: 'account_identity_mismatch' }, 409);
+      }
+      if (profile && !profile.auth_user_id) {
+        const profileId = Number(profile.user_id);
+        if (!Number.isSafeInteger(profileId)) {
+          return json({ ok: false, error: 'profile_not_found' }, 404);
+        }
+        await patchRows(
+          'users',
+          [
+            ['user_id', profileId],
+            ['auth_user_id', 'is.null'],
+          ],
+          { auth_user_id: authUserId },
+        );
+        const linkedProfileUrl = tableUrl('users', [
+          ['user_id', profileId],
+          ['auth_user_id', `eq.${authUserId}`],
+        ]);
+        linkedProfileUrl.searchParams.set('select', 'user_id');
+        const linkedProfileResponse = await fetch(linkedProfileUrl, {
+          headers: serviceHeaders(),
+        });
+        if (!linkedProfileResponse.ok) {
+          console.error(
+            'Account identity link verification failed:',
+            linkedProfileResponse.status,
+          );
+          return json({ ok: false, error: 'profile_lookup_failed' }, 500);
+        }
+        const linkedProfiles = await linkedProfileResponse.json().catch(() => []);
+        if (!Array.isArray(linkedProfiles) || linkedProfiles.length !== 1) {
+          return json({ ok: false, error: 'account_identity_mismatch' }, 409);
+        }
+        profile = { ...profile, auth_user_id: authUserId };
+      }
+    }
+    const userId = Number(profile?.user_id);
+    if (!Number.isSafeInteger(userId)) {
       return json({ ok: false, error: 'profile_not_found' }, 404);
     }
 
-    const otpQuery = `${PROJECT_URL}/rest/v1/email_otps?email=eq.${encodeURIComponent(email)}&code=eq.${encodeURIComponent(code)}&purpose=eq.account_deletion&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&select=id&limit=1`;
+    const emailPattern = escapeLikePattern(email);
+    const otpQuery = `${PROJECT_URL}/rest/v1/email_otps?email=ilike.${encodeURIComponent(emailPattern)}&code=eq.${encodeURIComponent(code)}&purpose=eq.account_deletion&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&select=id&limit=1`;
     const otpResponse = await fetch(otpQuery, {
       headers: {
         apikey: SERVICE_ROLE_KEY,
@@ -262,6 +442,7 @@ serve(async (req) => {
       return json({ ok: false, error: 'invalid_code' }, 200);
     }
 
+    await detachFacultyApprovals(userId);
     await removeUserStorage('reports', userId);
     await removeUserStorage('proof_of_consent', userId);
 

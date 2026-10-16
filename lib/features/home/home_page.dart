@@ -4,6 +4,7 @@ import 'package:new_nutilize_mobile/features/calendar/reservation_details_page.d
 import 'package:new_nutilize_mobile/features/request/reservation_history_page.dart';
 import 'package:new_nutilize_mobile/features/home/announcements_page.dart';
 import 'package:new_nutilize_mobile/features/home/faculty_approval_page.dart';
+import 'package:new_nutilize_mobile/features/home/program_chair_account_setup_page.dart';
 import 'package:new_nutilize_mobile/services/announcements_service.dart';
 import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/widgets/app_header.dart';
@@ -54,6 +55,10 @@ class _HomePageState extends State<HomePage> {
       'teacher',
       'faculty_member',
     }.contains(role);
+    final isProgramChair =
+        AuthService.programIdForProgramChairRole(role) != null;
+    final isDean = role == 'dean';
+    final isAdmin = role == 'admin';
 
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5FB),
@@ -170,12 +175,27 @@ class _HomePageState extends State<HomePage> {
                       },
                     ),
                     const SizedBox(height: 22),
-                    if (isFaculty) ...[
+                    if (isFaculty || isProgramChair || isDean) ...[
                       _FacultyApprovalEntry(
+                        isProgramChair: isProgramChair,
+                        isDean: isDean,
                         onTap: () {
                           Navigator.of(context).push(
                             MaterialPageRoute(
                               builder: (_) => const FacultyApprovalPage(),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                    if (isAdmin) ...[
+                      _AdminSetupEntry(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  const ProgramChairAccountSetupPage(),
                             ),
                           );
                         },
@@ -745,9 +765,15 @@ class _RecentActivityCard extends StatelessWidget {
 }
 
 class _FacultyApprovalEntry extends StatelessWidget {
-  const _FacultyApprovalEntry({required this.onTap});
+  const _FacultyApprovalEntry({
+    required this.onTap,
+    required this.isProgramChair,
+    required this.isDean,
+  });
 
   final VoidCallback onTap;
+  final bool isProgramChair;
+  final bool isDean;
 
   @override
   Widget build(BuildContext context) {
@@ -781,13 +807,17 @@ class _FacultyApprovalEntry extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: 13),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Faculty workspace',
-                      style: TextStyle(
+                      isDean
+                          ? 'DEAN OFFICE WORKSPACE'
+                          : isProgramChair
+                          ? 'PROGRAM CHAIR WORKSPACE'
+                          : 'FACULTY WORKSPACE',
+                      style: const TextStyle(
                         color: Color(0xFF707891),
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
@@ -796,8 +826,12 @@ class _FacultyApprovalEntry extends StatelessWidget {
                     ),
                     SizedBox(height: 4),
                     Text(
-                      'Student approval requests',
-                      style: TextStyle(
+                      isDean
+                          ? 'Dean approval requests'
+                          : isProgramChair
+                          ? 'Program approval requests'
+                          : 'Student approval requests',
+                      style: const TextStyle(
                         color: Color(0xFF1C2541),
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
@@ -805,8 +839,15 @@ class _FacultyApprovalEntry extends StatelessWidget {
                     ),
                     SizedBox(height: 3),
                     Text(
-                      'Review assigned reservation requests',
-                      style: TextStyle(color: Color(0xFF707891), fontSize: 11),
+                      isDean
+                          ? 'Review reservations assigned to the Dean office'
+                          : isProgramChair
+                          ? 'Review reservations from your program'
+                          : 'Review assigned reservation requests',
+                      style: const TextStyle(
+                        color: Color(0xFF707891),
+                        fontSize: 11,
+                      ),
                     ),
                   ],
                 ),
@@ -825,6 +866,47 @@ class _FacultyApprovalEntry extends StatelessWidget {
                   size: 19,
                 ),
               ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _AdminSetupEntry extends StatelessWidget {
+  const _AdminSetupEntry({required this.onTap});
+
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(18),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 15, vertical: 16),
+          child: Row(
+            children: [
+              Icon(
+                Icons.admin_panel_settings_outlined,
+                color: Color(0xFF35489A),
+              ),
+              SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  'Set up Program Chair and Dean accounts',
+                  style: TextStyle(
+                    color: Color(0xFF1C2541),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              Icon(Icons.arrow_forward_rounded, color: Color(0xFF35489A)),
             ],
           ),
         ),

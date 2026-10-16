@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
+import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/services/reservation_service.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
@@ -61,6 +62,9 @@ class ReservationDetailsPage extends StatefulWidget {
 class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
   late ReservationRecord _reservation;
   bool _isCancelling = false;
+  Map<String, dynamic>? _reconsideration;
+  bool _isRespondingToCondition = false;
+  bool _conditionLoadFailed = false;
 
   @override
   void initState() {
@@ -74,12 +78,72 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       }
     } catch (_) {}
     ReservationActivityStore.listenable.addListener(_syncReservationFromStore);
+    _loadReconsideration();
   }
 
   @override
   void dispose() {
-    ReservationActivityStore.listenable.removeListener(_syncReservationFromStore);
+    ReservationActivityStore.listenable.removeListener(
+      _syncReservationFromStore,
+    );
     super.dispose();
+  }
+
+  Future<void> _loadReconsideration() async {
+    final reservationId = int.tryParse(_reservation.id ?? '');
+    final currentUserId = AuthService.currentUser?['user_id']?.toString();
+    if (reservationId == null ||
+        currentUserId == null ||
+        _reservation.userId?.toString() != currentUserId) {
+      return;
+    }
+
+    try {
+      final reconsideration = await ReservationService()
+          .getRequesterReconsideration(reservationId);
+      if (!mounted) return;
+      setState(() {
+        _reconsideration = reconsideration;
+        _conditionLoadFailed = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _conditionLoadFailed = true);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to load the chair condition: $error')),
+      );
+    }
+  }
+
+  Future<void> _respondToCondition({required bool accepted}) async {
+    final approvalId = _reconsideration?['approval_id'] as int?;
+    if (approvalId == null) return;
+    setState(() => _isRespondingToCondition = true);
+    try {
+      await ReservationService().respondToReconsideration(
+        approvalId: approvalId,
+        accepted: accepted,
+      );
+      if (!mounted) return;
+      setState(() => _reconsideration = null);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            accepted
+                ? 'Condition accepted. The Program Chair will make the final decision.'
+                : 'Condition declined. The Program Chair will make the final decision.',
+          ),
+        ),
+      );
+      await _loadReconsideration();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Unable to send your response: $error')),
+      );
+    } finally {
+      if (mounted) setState(() => _isRespondingToCondition = false);
+    }
   }
 
   void _syncReservationFromStore() {
@@ -101,7 +165,8 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
   Future<void> _handleReportIssue() async {
     final draft = await _showReservationDialog<_ReportIssueDraft>(
       context,
-      (dialogContext) => _ReportIssueDialog(reservedItems: _reservation.reservedItems),
+      (dialogContext) =>
+          _ReportIssueDialog(reservedItems: _reservation.reservedItems),
     );
 
     if (!mounted || draft == null) {
@@ -153,7 +218,9 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       builder: (context) {
         return AlertDialog(
           title: const Text('Cancel Reservation'),
-          content: const Text('Are you sure you want to cancel this reservation request?'),
+          content: const Text(
+            'Are you sure you want to cancel this reservation request?',
+          ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
@@ -181,20 +248,26 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
         throw Exception('Invalid reservation id');
       }
 
-      final success = await ReservationService().cancelReservation(reservationId);
+      final success = await ReservationService().cancelReservation(
+        reservationId,
+      );
       if (!mounted) {
         return;
       }
 
       if (success) {
-        final updatedTimeline = List<ReservationTimelineEntry>.from(_reservation.timeline);
-        updatedTimeline.add(ReservationTimelineEntry(
-          title: 'Reservation Cancelled',
-          status: 'Completed',
-          date: DateTime.now(),
-          timestamp: _formatTimestamp(DateTime.now()),
-          description: 'This reservation has been cancelled.',
-        ));
+        final updatedTimeline = List<ReservationTimelineEntry>.from(
+          _reservation.timeline,
+        );
+        updatedTimeline.add(
+          ReservationTimelineEntry(
+            title: 'Reservation Cancelled',
+            status: 'Completed',
+            date: DateTime.now(),
+            timestamp: _formatTimestamp(DateTime.now()),
+            description: 'This reservation has been cancelled.',
+          ),
+        );
 
         setState(() {
           _reservation = ReservationRecord(
@@ -240,7 +313,9 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
   }
 
   String _formatTimestamp(DateTime dateTime) {
-    final hour = dateTime.hour == 0 ? 12 : (dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour);
+    final hour = dateTime.hour == 0
+        ? 12
+        : (dateTime.hour > 12 ? dateTime.hour - 12 : dateTime.hour);
     final minute = dateTime.minute.toString().padLeft(2, '0');
     final period = dateTime.hour >= 12 ? 'PM' : 'AM';
     return '${dateTime.month}/${dateTime.day}/${dateTime.year} $hour:$minute $period';
@@ -267,9 +342,25 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                       message: _reservation.approvalSummary,
                       approvalSteps: _reservation.approvalSteps,
                     ),
+                    if (_reconsideration != null || _conditionLoadFailed) ...[
+                      const SizedBox(height: 14),
+                      _ProgramChairConditionCard(
+                        message:
+                            _reconsideration?['reconsideration_message']
+                                as String? ??
+                            '',
+                        isLoading: _isRespondingToCondition,
+                        loadFailed: _conditionLoadFailed,
+                        onAccept: () => _respondToCondition(accepted: true),
+                        onReject: () => _respondToCondition(accepted: false),
+                        onRetry: _loadReconsideration,
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     _ApprovalTimelineCard(reservation: _reservation),
-                    if (_reservation.reservationStatus.toLowerCase().contains('rejected') &&
+                    if (_reservation.reservationStatus.toLowerCase().contains(
+                          'rejected',
+                        ) &&
                         _reservation.rejectionReason?.isNotEmpty == true) ...[
                       const SizedBox(height: 16),
                       _RejectionReasonCard(reservation: _reservation),
@@ -303,14 +394,24 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                       ],
                     ),
                     const SizedBox(height: 12),
-                    if (!_reservation.reservationStatus.toLowerCase().contains('cancel') &&
-                        !_reservation.reservationStatus.toLowerCase().contains('completed') &&
-                        !_reservation.reservationStatus.toLowerCase().contains('rejected') &&
-                        !_reservation.reservationStatus.toLowerCase().contains('denied'))
+                    if (!_reservation.reservationStatus.toLowerCase().contains(
+                          'cancel',
+                        ) &&
+                        !_reservation.reservationStatus.toLowerCase().contains(
+                          'completed',
+                        ) &&
+                        !_reservation.reservationStatus.toLowerCase().contains(
+                          'rejected',
+                        ) &&
+                        !_reservation.reservationStatus.toLowerCase().contains(
+                          'denied',
+                        ))
                       SizedBox(
                         width: double.infinity,
                         child: FilledButton(
-                          onPressed: _isCancelling ? null : _handleCancelRequest,
+                          onPressed: _isCancelling
+                              ? null
+                              : _handleCancelRequest,
                           style: FilledButton.styleFrom(
                             backgroundColor: _brandRed,
                             shape: RoundedRectangleBorder(
@@ -320,7 +421,9 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                           child: Padding(
                             padding: const EdgeInsets.symmetric(vertical: 13),
                             child: Text(
-                              _isCancelling ? 'Cancelling...' : 'Cancel Request',
+                              _isCancelling
+                                  ? 'Cancelling...'
+                                  : 'Cancel Request',
                               style: const TextStyle(
                                 fontSize: 14,
                                 fontWeight: FontWeight.w700,
@@ -354,6 +457,107 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
             }
           });
         },
+      ),
+    );
+  }
+}
+
+class _ProgramChairConditionCard extends StatelessWidget {
+  const _ProgramChairConditionCard({
+    required this.message,
+    required this.isLoading,
+    required this.loadFailed,
+    required this.onAccept,
+    required this.onReject,
+    required this.onRetry,
+  });
+
+  final String message;
+  final bool isLoading;
+  final bool loadFailed;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFEFF3FF),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFD9E1FF)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.chat_bubble_outline, color: _brandBlue, size: 20),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Program Chair asks you to reconsider',
+                  style: TextStyle(
+                    color: Color(0xFF26346F),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (loadFailed) ...[
+            const SizedBox(height: 10),
+            const Text(
+              'The condition could not be loaded.',
+              style: TextStyle(color: Color(0xFF505A78), height: 1.4),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton.icon(
+                onPressed: onRetry,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Try again'),
+              ),
+            ),
+          ] else ...[
+            const SizedBox(height: 10),
+            Text(
+              message,
+              style: const TextStyle(color: Color(0xFF39415C), height: 1.45),
+            ),
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: isLoading ? null : onReject,
+                    child: const Text('Reject condition'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: isLoading ? null : onAccept,
+                    style: FilledButton.styleFrom(backgroundColor: _brandBlue),
+                    child: isLoading
+                        ? const SizedBox(
+                            height: 18,
+                            width: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Text('Accept condition'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -518,7 +722,9 @@ class _ReportIssueDialogState extends State<_ReportIssueDialog> {
                         },
                         controlAffinity: ListTileControlAffinity.leading,
                         dense: true,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                        ),
                       );
                     }).toList(),
                   ),
@@ -1062,20 +1268,47 @@ class _ReservationSummaryCard extends StatelessWidget {
           ),
           if (reservation.reservedItems.isNotEmpty) ...[
             const SizedBox(height: 12),
-            const Text('Borrowed Items', style: TextStyle(color: Color(0xFF6A6F86), fontSize: 12, fontWeight: FontWeight.w700)),
+            const Text(
+              'Borrowed Items',
+              style: TextStyle(
+                color: Color(0xFF6A6F86),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: reservation.reservedItems.map((it) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: const [BoxShadow(color: Color(0x0F000000), blurRadius: 6, offset: Offset(0,4))],
-                ),
-                child: Text(it, style: const TextStyle(color: Color(0xFF111111), fontSize: 12, fontWeight: FontWeight.w600)),
-              )).toList(),
+              children: reservation.reservedItems
+                  .map(
+                    (it) => Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: Color(0x0F000000),
+                            blurRadius: 6,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Text(
+                        it,
+                        style: const TextStyle(
+                          color: Color(0xFF111111),
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  )
+                  .toList(),
             ),
           ],
         ],
@@ -1128,10 +1361,7 @@ class _ApprovalProcessCard extends StatelessWidget {
           const SizedBox(height: 10),
           Text(
             message,
-            style: const TextStyle(
-              fontSize: 12,
-              color: Color(0xFF6A6F86),
-            ),
+            style: const TextStyle(fontSize: 12, color: Color(0xFF6A6F86)),
           ),
           if (approvalSteps.isNotEmpty) ...[
             const SizedBox(height: 12),
@@ -1152,10 +1382,7 @@ class _ApprovalProcessCard extends StatelessWidget {
                   children: [
                     const Text(
                       '• ',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Color(0xFF6A6F86),
-                      ),
+                      style: TextStyle(fontSize: 12, color: Color(0xFF6A6F86)),
                     ),
                     Expanded(
                       child: Text(

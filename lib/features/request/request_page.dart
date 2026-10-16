@@ -203,7 +203,12 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
 
   bool get _requiresConsent =>
       !_isStudent &&
-      const {'teacher', 'faculty', 'faculty_member'}.contains(_normalizedRole);
+      (const {
+            'teacher',
+            'faculty',
+            'faculty_member',
+          }.contains(_normalizedRole) ||
+          AuthService.programIdForProgramChairRole(_normalizedRole) != null);
 
   static const _roomTypes = [
     'Classroom',

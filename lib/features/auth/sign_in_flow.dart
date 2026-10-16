@@ -60,7 +60,99 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     _ProgramOption(id: 14, label: 'BS Nursing'),
   ];
 
+  static const List<_ProgramChairRegistrationOption>
+  _programChairRegistrationOptions = [
+    _ProgramChairRegistrationOption(
+      id: 1,
+      role: 'PC_MultimediaArts',
+      affiliation: 'B Multimedia Arts',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 4,
+      role: 'PC_ComputerScience',
+      affiliation: 'BS Computer Science',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 2,
+      role: 'PC_Architecture',
+      affiliation: 'BS Architecture',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 3,
+      role: 'PC_CivilEngineering',
+      affiliation: 'BS Civil Engineering',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 5,
+      role: 'PC_ComputerEngineering',
+      affiliation: 'BS Computer Engineering',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 6,
+      role: 'PC_InformationTechnology',
+      affiliation:
+          'BS Information Technology with specialization in Mobile and Web Applications',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 7,
+      role: 'PC_Accountancy',
+      affiliation: 'BS Accountancy',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 8,
+      role: 'PC_FinancialManagement',
+      affiliation: 'BSBA Major in Financial Management',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 9,
+      role: 'PC_MarketingManagement',
+      affiliation: 'BSBA Major in Marketing Management',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 10,
+      role: 'PC_ManagementAccounting',
+      affiliation: 'BS Management Accounting',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 11,
+      role: 'PC_TourismManagement',
+      affiliation: 'BS Tourism Management',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 12,
+      role: 'PC_Psychology',
+      affiliation: 'BS Psychology',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 13,
+      role: 'PC_MedicalTechnology',
+      affiliation: 'BS Medical Technology',
+    ),
+    _ProgramChairRegistrationOption(
+      id: 14,
+      role: 'PC_Nursing',
+      affiliation: 'BS Nursing',
+    ),
+  ];
+
+  bool get _isProgramChairRegistration =>
+      AuthService.programIdForProgramChairRole(_selectedRole) != null;
+
+  bool get _isProgramChairRoleSelection =>
+      _selectedRole == 'Program Chair' || _isProgramChairRegistration;
+
+  void _selectRegistrationRole(String role) {
+    setState(() {
+      _selectedRole = role;
+      _selectedDepartment = null;
+      _selectedProgramId = null;
+    });
+  }
+
   bool canProceedFromProfilePage({String? selectedDepartment}) {
+    if (_isProgramChairRoleSelection) {
+      return _isProgramChairRegistration;
+    }
     final department = (selectedDepartment ?? _selectedDepartment)?.trim();
     return department != null && department.isNotEmpty;
   }
@@ -194,9 +286,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       return;
     }
     if (!_isNuRegistrationEmail(email)) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('only NU email allowed')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('only NU email allowed')));
       return;
     }
     if (_isSendingRegistrationCode || _isResendingRegistrationCode) return;
@@ -314,9 +406,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
 
       if (error == 'No account found, register account first') {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No account found, register account first'),
-          ),
+          SnackBar(content: Text('No account found, register account first')),
         );
         return;
       }
@@ -626,7 +716,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     }
     if (!_acceptedDataPrivacy) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
+        SnackBar(
           content: Text(
             'Please confirm that you have read and understood the Data Privacy Notice.',
           ),
@@ -635,7 +725,25 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       return;
     }
 
-    final affiliation = _selectedDepartment?.trim();
+    final programChairProgramId = _isProgramChairRegistration
+        ? AuthService.programIdForProgramChairRole(_selectedRole)
+        : null;
+    final programChairOption = programChairProgramId == null
+        ? null
+        : _programChairRegistrationOptions.firstWhere(
+            (option) => option.id == programChairProgramId,
+          );
+    if (_isProgramChairRoleSelection && programChairOption == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a valid Program Chair role.'),
+        ),
+      );
+      return;
+    }
+
+    final affiliation =
+        programChairOption?.affiliation ?? _selectedDepartment?.trim();
     if (affiliation == null || affiliation.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -647,8 +755,21 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       return;
     }
 
+    if (programChairOption != null && !_isNuRegistrationEmail(email)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Program Chair registration requires an NU email address.',
+          ),
+        ),
+      );
+      return;
+    }
+
     final programId =
-        _selectedProgramId ?? AuthService.programIdForAffiliation(affiliation);
+        programChairProgramId ??
+        _selectedProgramId ??
+        AuthService.programIdForAffiliation(affiliation);
     if (programId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1282,7 +1403,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                     child: _ChoiceChipButton(
                       label: 'Student',
                       selected: _selectedRole == 'Student',
-                      onTap: () => setState(() => _selectedRole = 'Student'),
+                      onTap: () => _selectRegistrationRole('Student'),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -1290,10 +1411,19 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                     child: _ChoiceChipButton(
                       label: 'Faculty',
                       selected: _selectedRole == 'Faculty',
-                      onTap: () => setState(() => _selectedRole = 'Faculty'),
+                      onTap: () => _selectRegistrationRole('Faculty'),
                     ),
                   ),
                 ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: _ChoiceChipButton(
+                  label: 'Program Chair',
+                  selected: _isProgramChairRoleSelection,
+                  onTap: () => _selectRegistrationRole('Program Chair'),
+                ),
               ),
               const SizedBox(height: 18),
               _PrimaryButton(
@@ -1359,46 +1489,99 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                 keyboardType: TextInputType.phone,
               ),
               const SizedBox(height: 12),
-              const Align(
+              Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  'Department',
-                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                  _isProgramChairRoleSelection
+                      ? 'Program Chair Role'
+                      : 'Department',
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ),
               const SizedBox(height: 6),
-              DropdownButtonFormField<String?>(
-                initialValue: _selectedDepartment,
-                isExpanded: true,
-                iconSize: 22,
-                dropdownColor: const Color(0xFFF8F8FA),
-                style: const TextStyle(color: Color(0xFF24304C)),
-                decoration: _fieldDecoration(
-                  hintText: 'Select your department',
-                  prefix: const Icon(Icons.apartment, color: Color(0xFFF6C914)),
-                ),
-                items: _buildProgramDropdownItems(),
-                onChanged: (value) {
-                  if (value != null) {
-                    final selected = _programOptions.firstWhere(
-                      (option) => option.label == value,
-                    );
+              if (_isProgramChairRoleSelection)
+                DropdownButtonFormField<String?>(
+                  initialValue: _isProgramChairRegistration
+                      ? _selectedRole
+                      : null,
+                  isExpanded: true,
+                  iconSize: 22,
+                  dropdownColor: const Color(0xFFF8F8FA),
+                  style: const TextStyle(color: Color(0xFF24304C)),
+                  decoration: _fieldDecoration(
+                    hintText: 'Select your Program Chair role',
+                    prefix: const Icon(
+                      Icons.badge_outlined,
+                      color: Color(0xFFF6C914),
+                    ),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('Select your Program Chair role'),
+                    ),
+                    for (final option in _programChairRegistrationOptions)
+                      DropdownMenuItem<String?>(
+                        value: option.role,
+                        child: Text(option.role),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    if (value == null) {
+                      setState(() {
+                        _selectedRole = 'Program Chair';
+                        _selectedDepartment = null;
+                        _selectedProgramId = null;
+                      });
+                      return;
+                    }
+                    final selected = _programChairRegistrationOptions
+                        .firstWhere((option) => option.role == value);
                     setState(() {
-                      _selectedDepartment = value;
+                      _selectedRole = selected.role;
+                      _selectedDepartment = selected.affiliation;
                       _selectedProgramId = selected.id;
                     });
-                  }
-                },
-              ),
+                  },
+                )
+              else
+                DropdownButtonFormField<String?>(
+                  initialValue: _selectedDepartment,
+                  isExpanded: true,
+                  iconSize: 22,
+                  dropdownColor: const Color(0xFFF8F8FA),
+                  style: const TextStyle(color: Color(0xFF24304C)),
+                  decoration: _fieldDecoration(
+                    hintText: 'Select your department',
+                    prefix: const Icon(
+                      Icons.apartment,
+                      color: Color(0xFFF6C914),
+                    ),
+                  ),
+                  items: _buildProgramDropdownItems(),
+                  onChanged: (value) {
+                    if (value != null) {
+                      final selected = _programOptions.firstWhere(
+                        (option) => option.label == value,
+                      );
+                      setState(() {
+                        _selectedDepartment = value;
+                        _selectedProgramId = selected.id;
+                      });
+                    }
+                  },
+                ),
               const SizedBox(height: 18),
               _PrimaryButton(
                 label: 'PROCEED',
                 onPressed: () {
                   if (!canProceedFromProfilePage()) {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
+                      SnackBar(
                         content: Text(
-                          'Please select your department before continuing.',
+                          _isProgramChairRoleSelection
+                              ? 'Please select your Program Chair role before continuing.'
+                              : 'Please select your department before continuing.',
                         ),
                       ),
                     );
@@ -1623,6 +1806,18 @@ class _ProgramOption {
 
   final int id;
   final String label;
+}
+
+class _ProgramChairRegistrationOption {
+  const _ProgramChairRegistrationOption({
+    required this.id,
+    required this.role,
+    required this.affiliation,
+  });
+
+  final int id;
+  final String role;
+  final String affiliation;
 }
 
 class _AuthCard extends StatelessWidget {
