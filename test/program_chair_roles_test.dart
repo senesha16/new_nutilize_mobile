@@ -30,6 +30,25 @@ void main() {
       }
     });
 
+    group('Dean role mapping', () {
+      test(
+        'recognizes the three school-scoped Dean roles case-insensitively',
+        () {
+          for (final role in ['Dean_SACE', 'Dean_SABM', 'Dean_SAHS']) {
+            expect(AuthService.isDeanRole(role), isTrue, reason: role);
+            expect(AuthService.isDeanRole('  ${role.toLowerCase()}  '), isTrue);
+          }
+        },
+      );
+
+      test('does not classify unrelated roles as Deans', () {
+        expect(AuthService.isDeanRole('dean'), isFalse);
+        expect(AuthService.isDeanRole('faculty'), isFalse);
+        expect(AuthService.isDeanRole('Dean_Unknown'), isFalse);
+        expect(AuthService.isDeanRole(null), isFalse);
+      });
+    });
+
     test(
       'matches role names case-insensitively and ignores surrounding spaces',
       () {

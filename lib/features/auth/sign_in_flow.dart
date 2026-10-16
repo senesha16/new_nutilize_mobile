@@ -135,11 +135,22 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
     ),
   ];
 
+  static const List<_DeanRegistrationOption> _deanRegistrationOptions = [
+    _DeanRegistrationOption(role: 'Dean_SACE', label: 'Dean of SACE'),
+    _DeanRegistrationOption(role: 'Dean_SABM', label: 'Dean of SABM'),
+    _DeanRegistrationOption(role: 'Dean_SAHS', label: 'Dean of SAHS'),
+  ];
+
   bool get _isProgramChairRegistration =>
       AuthService.programIdForProgramChairRole(_selectedRole) != null;
 
+  bool get _isDeanRegistration => AuthService.isDeanRole(_selectedRole);
+
   bool get _isProgramChairRoleSelection =>
       _selectedRole == 'Program Chair' || _isProgramChairRegistration;
+
+  bool get _isDeanRoleSelection =>
+      _selectedRole == 'Dean' || _isDeanRegistration;
 
   void _selectRegistrationRole(String role) {
     setState(() {
@@ -150,6 +161,7 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
   }
 
   bool canProceedFromProfilePage({String? selectedDepartment}) {
+    if (_isDeanRoleSelection) return _isDeanRegistration;
     if (_isProgramChairRoleSelection) {
       return _isProgramChairRegistration;
     }
@@ -742,9 +754,23 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       return;
     }
 
+    final deanOption = _isDeanRegistration
+        ? _deanRegistrationOptions.firstWhere(
+            (option) => option.role == _selectedRole,
+          )
+        : null;
+    if (_isDeanRoleSelection && deanOption == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select a valid Dean role.')),
+      );
+      return;
+    }
+
     final affiliation =
-        programChairOption?.affiliation ?? _selectedDepartment?.trim();
-    if (affiliation == null || affiliation.isEmpty) {
+        deanOption?.label ??
+        programChairOption?.affiliation ??
+        _selectedDepartment?.trim();
+    if (!_isDeanRegistration && (affiliation == null || affiliation.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -755,22 +781,24 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
       return;
     }
 
-    if (programChairOption != null && !_isNuRegistrationEmail(email)) {
+    if ((programChairOption != null || deanOption != null) &&
+        !_isNuRegistrationEmail(email)) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
-            'Program Chair registration requires an NU email address.',
+            'Program Chair and Dean registration requires an NU email address.',
           ),
         ),
       );
       return;
     }
 
-    final programId =
-        programChairProgramId ??
-        _selectedProgramId ??
-        AuthService.programIdForAffiliation(affiliation);
-    if (programId == null) {
+    final programId = _isDeanRegistration
+        ? null
+        : programChairProgramId ??
+              _selectedProgramId ??
+              AuthService.programIdForAffiliation(affiliation);
+    if (!_isDeanRegistration && programId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text(
@@ -792,8 +820,8 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
         'last_name': _lastNameController.text.trim(),
         'contact_number': _contactNumberController.text.trim(),
         'role': _selectedRole,
-        'affiliation': affiliation,
-        'program_id': programId,
+        if (affiliation != null) 'affiliation': affiliation,
+        if (programId != null) 'program_id': programId,
       };
 
       final result = await AuthService.signUp(
@@ -1425,6 +1453,15 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                   onTap: () => _selectRegistrationRole('Program Chair'),
                 ),
               ),
+              const SizedBox(height: 10),
+              SizedBox(
+                width: double.infinity,
+                child: _ChoiceChipButton(
+                  label: 'Dean',
+                  selected: _isDeanRoleSelection,
+                  onTap: () => _selectRegistrationRole('Dean'),
+                ),
+              ),
               const SizedBox(height: 18),
               _PrimaryButton(
                 label: 'PROCEED',
@@ -1492,14 +1529,49 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
-                  _isProgramChairRoleSelection
+                  _isDeanRoleSelection
+                      ? 'Dean Role'
+                      : _isProgramChairRoleSelection
                       ? 'Program Chair Role'
                       : 'Department',
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ),
               const SizedBox(height: 6),
-              if (_isProgramChairRoleSelection)
+              if (_isDeanRoleSelection)
+                DropdownButtonFormField<String?>(
+                  initialValue: _isDeanRegistration ? _selectedRole : null,
+                  isExpanded: true,
+                  iconSize: 22,
+                  dropdownColor: const Color(0xFFF8F8FA),
+                  style: const TextStyle(color: Color(0xFF24304C)),
+                  decoration: _fieldDecoration(
+                    hintText: 'Select your Dean role',
+                    prefix: const Icon(
+                      Icons.badge_outlined,
+                      color: Color(0xFFF6C914),
+                    ),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String?>(
+                      value: null,
+                      child: Text('Select your Dean role'),
+                    ),
+                    for (final option in _deanRegistrationOptions)
+                      DropdownMenuItem<String?>(
+                        value: option.role,
+                        child: Text(option.label),
+                      ),
+                  ],
+                  onChanged: (value) {
+                    setState(() {
+                      _selectedRole = value ?? 'Dean';
+                      _selectedDepartment = null;
+                      _selectedProgramId = null;
+                    });
+                  },
+                )
+              else if (_isProgramChairRoleSelection)
                 DropdownButtonFormField<String?>(
                   initialValue: _isProgramChairRegistration
                       ? _selectedRole
@@ -1579,7 +1651,9 @@ class _SignInFlowPageState extends State<SignInFlowPage> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text(
-                          _isProgramChairRoleSelection
+                          _isDeanRoleSelection
+                              ? 'Please select your Dean role before continuing.'
+                              : _isProgramChairRoleSelection
                               ? 'Please select your Program Chair role before continuing.'
                               : 'Please select your department before continuing.',
                         ),
@@ -1818,6 +1892,13 @@ class _ProgramChairRegistrationOption {
   final int id;
   final String role;
   final String affiliation;
+}
+
+class _DeanRegistrationOption {
+  const _DeanRegistrationOption({required this.role, required this.label});
+
+  final String role;
+  final String label;
 }
 
 class _AuthCard extends StatelessWidget {

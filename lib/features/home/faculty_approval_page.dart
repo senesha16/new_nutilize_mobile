@@ -34,7 +34,8 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
 
   bool get _isDean =>
       (AuthService.currentUser?['role']?.toString().toLowerCase() ?? '') ==
-      'dean';
+          'dean' ||
+      AuthService.isDeanRole(AuthService.currentUser?['role']?.toString());
 
   List<FacultyApprovalRequest> get _visibleRequests {
     final query = _searchQuery.trim().toLowerCase();
@@ -181,7 +182,8 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
       } else if (_isDean) {
         await _reservationService.respondToDeanApproval(
           approvalId: request.approvalId,
-          approved: approved == true,
+          decision: decision ?? (approved == true ? 'approve' : 'reject'),
+          message: message,
           rejectionReason: rejectionReason,
         );
       } else {
@@ -534,7 +536,7 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
                 ),
               ],
             ),
-            if (_isProgramChair && isAwaitingFinalDecision) ...[
+            if ((_isProgramChair || _isDean) && isAwaitingFinalDecision) ...[
               const SizedBox(height: 12),
               Container(
                 width: double.infinity,
@@ -653,7 +655,7 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
               padding: EdgeInsets.symmetric(vertical: 15),
               child: Divider(height: 1, color: _line),
             ),
-            if (_isProgramChair && !isAwaitingFinalDecision) ...[
+            if ((_isProgramChair || _isDean) && !isAwaitingFinalDecision) ...[
               Row(
                 children: [
                   Expanded(
@@ -749,7 +751,9 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
                       label: Text(
                         busy
                             ? 'Submitting'
-                            : _isProgramChair || isAwaitingFinalDecision
+                            : _isProgramChair ||
+                                  _isDean ||
+                                  isAwaitingFinalDecision
                             ? 'Final approve'
                             : 'Approve & forward',
                       ),

@@ -9,7 +9,7 @@ import { hashPassword } from "../_shared/password_hash.ts";
 import { hasRegistrationProfile } from "../_shared/registration_email.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || Deno.env.get("PROJECT_URL");
-const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY") || Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || Deno.env.get("SERVICE_ROLE_KEY");
 // Try multiple env names for the anon/publishable key to be resilient to
 // different secret naming conventions. If none exist, we will skip creating
 // a session token and return success with a warning instead of failing.
@@ -48,6 +48,24 @@ const PROGRAM_ID_BY_CHAIR_ROLE: Record<string, number> = {
   pc_psychology: 12,
   pc_medicaltechnology: 13,
   pc_nursing: 14,
+};
+
+const DEAN_LABEL_BY_ROLE: Record<string, string> = {
+  dean_sace: 'Dean of SACE',
+  dean_sabm: 'Dean of SABM',
+  dean_sahs: 'Dean of SAHS',
+};
+
+const DEAN_OFFICE_CODE_BY_ROLE: Record<string, string> = {
+  dean_sace: 'DEAN_SACE',
+  dean_sabm: 'DEAN_SABM',
+  dean_sahs: 'DEAN_SAHS',
+};
+
+const DEAN_CANONICAL_ROLE_BY_KEY: Record<string, string> = {
+  dean_sace: 'Dean_SACE',
+  dean_sabm: 'Dean_SABM',
+  dean_sahs: 'Dean_SAHS',
 };
 
 function isNuRegistrationEmail(email: string): boolean {
@@ -153,10 +171,13 @@ serve(async (req) => {
     const requestedRole = String(profile.role ?? 'student').trim().toLowerCase();
     const programChairProgramId = PROGRAM_ID_BY_CHAIR_ROLE[requestedRole];
     const isProgramChair = programChairProgramId !== undefined;
+    const deanLabel = DEAN_LABEL_BY_ROLE[requestedRole];
+    const isDean = deanLabel !== undefined;
     if (
       requestedRole !== 'student' &&
       requestedRole !== 'faculty' &&
-      !isProgramChair
+      !isProgramChair &&
+      !isDean
     ) {
       return new Response(
         JSON.stringify({ error: 'invalid_registration_role' }),
@@ -166,14 +187,14 @@ serve(async (req) => {
 
     if (
       email &&
-      isProgramChair &&
+      (isProgramChair || isDean) &&
       !isNuRegistrationEmail(email)
     ) {
       return new Response(
         JSON.stringify({
-          error: 'program_chair_email_required',
+          error: 'nu_email_required',
           message:
-            'Program Chair registration requires an NU email address.',
+            'Program Chair and Dean registration requires an NU email address.',
         }),
         { status: 400 },
       );
@@ -194,6 +215,7 @@ serve(async (req) => {
       name: string;
       office_id: number;
     } | null = null;
+    let deanOfficeId: number | null = null;
     if (isProgramChair) {
       const assignmentResponse = await fetch(
         `${SUPABASE_URL}/rest/v1/academic_programs?select=program_id,name,office_id&program_id=eq.${programChairProgramId}&limit=1`,
@@ -236,6 +258,45 @@ serve(async (req) => {
         name: String(assignment.name).trim(),
         office_id: Number(assignment.office_id),
       };
+    }
+    if (isDean) {
+      const deanOfficeCode = DEAN_OFFICE_CODE_BY_ROLE[requestedRole];
+      const deanOfficeResponse = await fetch(
+        `${SUPABASE_URL}/rest/v1/offices?select=office_id,short_code&short_code=eq.${encodeURIComponent(deanOfficeCode)}&limit=1`,
+        {
+          headers: {
+            'Authorization': `******`,
+            'apikey': SERVICE_ROLE_KEY!,
+            'Accept': 'application/json',
+          },
+        },
+      );
+      if (!deanOfficeResponse.ok) {
+        return new Response(
+          JSON.stringify({
+            error: 'dean_assignment_lookup_failed',
+            message: 'Could not verify the selected Dean assignment.',
+          }),
+          { status: 500 },
+        );
+      }
+      const deanOffices = await deanOfficeResponse.json().catch(() => []);
+      const deanOffice = Array.isArray(deanOffices) ? deanOffices[0] : null;
+      if (
+        !deanOffice ||
+        String(deanOffice.short_code ?? '').toUpperCase() !== deanOfficeCode ||
+        !Number.isInteger(Number(deanOffice.office_id))
+      ) {
+        return new Response(
+          JSON.stringify({
+            error: 'dean_assignment_unavailable',
+            message:
+              'The selected Dean role is not configured for registration.',
+          }),
+          { status: 400 },
+        );
+      }
+      deanOfficeId = Number(deanOffice.office_id);
     }
 
     let emailTaken: boolean;
@@ -412,6 +473,12 @@ serve(async (req) => {
       payload.program_id = programChairAssignment.program_id;
       payload.office_id = programChairAssignment.office_id;
       payload.is_active = true;
+    } else if (isDean && deanOfficeId != null) {
+      payload.role = DEAN_CANONICAL_ROLE_BY_KEY[requestedRole];
+      payload.affiliation = deanLabel;
+      payload.program_id = null;
+      payload.office_id = deanOfficeId;
+      payload.is_active = true;
     } else {
       if (incoming.affiliation) payload.affiliation = incoming.affiliation;
       if (incoming.program_id) {
@@ -424,7 +491,7 @@ serve(async (req) => {
       }
     }
 
-    if (!payload.program_id) {
+    if (!isDean && !payload.program_id) {
       payload.program_id = 1;
     }
     // helper to POST profile

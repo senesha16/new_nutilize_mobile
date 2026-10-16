@@ -149,6 +149,11 @@ void main() {
     ]);
   });
 
+  test('shows DO as Safety without changing the stored office name', () {
+    expect(approvalOfficeLabel('DO'), 'Safety');
+    expect(approvalOfficeLabel('SDAO'), 'SDAO');
+  });
+
   test(
     'keeps a borrowed item owner ahead of program chair in the timeline UI',
     () {
@@ -361,6 +366,23 @@ void main() {
       'Pending Approval',
     );
   });
+
+  test(
+    'Dean approval remains active when the parallel chair row is cancelled',
+    () {
+      expect(
+        ReservationService.resolveApprovalStatusFromRows(
+          overallStatus: 'Pending Approval',
+          approvalRows: [
+            {'approval_stage': 'dean', 'status': 'Approved'},
+            {'approval_stage': 'program_chair', 'status': 'Cancelled'},
+            {'approval_stage': 'office', 'status': 'Waiting'},
+          ],
+        ),
+        'Pending Approval',
+      );
+    },
+  );
 
   test(
     'faculty rejection remains rejected after later approvals are cancelled',

@@ -127,11 +127,13 @@ class ApprovalChain {
 class _RequesterApprovalRouting {
   const _RequesterApprovalRouting({
     required this.isProgramChair,
+    required this.isDean,
     required this.programChairOfficeId,
     required this.deanOfficeId,
   });
 
   final bool isProgramChair;
+  final bool isDean;
   final int? programChairOfficeId;
   final int? deanOfficeId;
 }
@@ -281,15 +283,18 @@ class ReservationService {
   }) async {
     final profile = await _client
         .from('users')
-        .select('role, affiliation')
+        .select('role, affiliation, office_id')
         .eq('user_id', userId)
         .single();
     final role = (profile['role'] as String? ?? '').trim().toLowerCase();
     final affiliation = profile['affiliation'] as String?;
+    final isDean = AuthService.isDeanRole(role);
+    final roleProgramId = AuthService.programIdForProgramChairRole(role);
+    final isProgramChair = roleProgramId != null;
     final affiliationProgramId = AuthService.programIdForAffiliation(
       affiliation,
     );
-    if (affiliationProgramId == null) {
+    if (!isDean && affiliationProgramId == null) {
       throw StateError(
         'Your profile affiliation is missing or does not match a supported academic program. Update your affiliation before submitting a reservation.',
       );
@@ -301,28 +306,28 @@ class ReservationService {
       );
     }
 
-    final roleProgramId = AuthService.programIdForProgramChairRole(role);
-    final isProgramChair = roleProgramId != null;
     if (isProgramChair && roleProgramId != affiliationProgramId) {
       throw StateError(
         'Your Program Chair role does not match your profile affiliation. Contact an administrator.',
       );
     }
 
-    final deanOfficeId = isProgramChair
-        ? await _getOfficeIdByName('Dean')
-        : null;
-    if (isProgramChair && deanOfficeId == null) {
+    final deanOfficeId = isDean
+        ? int.tryParse(profile['office_id']?.toString() ?? '')
+        : await _getDeanOfficeIdForProgram(affiliationProgramId!);
+    if (deanOfficeId == null) {
       throw StateError(
-        'The Dean approval office has not been configured. Contact an administrator before submitting.',
+        'The Dean approval assignment has not been configured for your role or program. Contact an administrator before submitting.',
       );
     }
+    final programChairOfficeId = isDean
+        ? null
+        : await getProgramOfficeId(affiliationProgramId!);
 
     return _RequesterApprovalRouting(
       isProgramChair: isProgramChair,
-      programChairOfficeId: isProgramChair
-          ? null
-          : await getProgramOfficeId(affiliationProgramId),
+      isDean: isDean,
+      programChairOfficeId: isProgramChair ? null : programChairOfficeId,
       deanOfficeId: deanOfficeId,
     );
   }
@@ -367,33 +372,76 @@ class ReservationService {
       firstOfficeStep = 1;
     }
 
+    final routedRows = <Map<String, dynamic>>[];
+    var routedOfficeStep = 0;
     for (var index = 0; index < officeIds.length; index++) {
       final sourceOfficeId = officeIds[index];
       final officeName = officeNames[sourceOfficeId]!;
-      final isProgramChairStep =
-          officeName.toLowerCase() == 'program chair' &&
-          !routing.isProgramChair;
-      final officeId = isProgramChairStep
-          ? routing.programChairOfficeId!
-          : routing.isProgramChair &&
-                officeName.toLowerCase() == 'program chair'
-          ? routing.deanOfficeId!
-          : sourceOfficeId;
+      final isProgramChairStep = officeName.toLowerCase() == 'program chair';
+      if (isProgramChairStep && routing.isDean) continue;
       final timestamp = buildApprovalTimestampForStep(
-        index + firstOfficeStep,
+        routedOfficeStep + firstOfficeStep,
         baseTime: baseTime,
       );
-      await _client.from('reservation_approvals').insert({
-        'reservation_id': reservationId,
-        'office_id': officeId,
-        'approval_stage': isProgramChairStep ? 'program_chair' : 'office',
-        'status': facultyApproverId != null || index > 0
-            ? 'Waiting'
-            : 'Pending',
-        'created_at': timestamp.toIso8601String(),
-        'updated_at': timestamp.toIso8601String(),
-      });
+      const status = 'Waiting';
+      if (isProgramChairStep && routing.isProgramChair) {
+        routedRows.add({
+          'reservation_id': reservationId,
+          'office_id': routing.deanOfficeId!,
+          'approval_stage': 'dean',
+          'status': status,
+          'created_at': timestamp.toIso8601String(),
+          'updated_at': timestamp.toIso8601String(),
+        });
+      } else if (isProgramChairStep) {
+        routedRows
+          ..add({
+            'reservation_id': reservationId,
+            'office_id': routing.programChairOfficeId!,
+            'approval_stage': 'program_chair',
+            'status': status,
+            'created_at': timestamp.toIso8601String(),
+            'updated_at': timestamp.toIso8601String(),
+          })
+          ..add({
+            'reservation_id': reservationId,
+            'office_id': routing.deanOfficeId!,
+            'approval_stage': 'dean',
+            'status': status,
+            'created_at': timestamp.toIso8601String(),
+            'updated_at': timestamp.toIso8601String(),
+          });
+      } else {
+        routedRows.add({
+          'reservation_id': reservationId,
+          'office_id': sourceOfficeId,
+          'approval_stage': 'office',
+          'status': status,
+          'created_at': timestamp.toIso8601String(),
+          'updated_at': timestamp.toIso8601String(),
+        });
+      }
+      routedOfficeStep++;
     }
+    if (routedRows.isNotEmpty) {
+      await _client.from('reservation_approvals').insert(routedRows);
+    }
+  }
+
+  Future<int?> _getDeanOfficeIdForProgram(int programId) async {
+    final assignment = await _client
+        .from('dean_program_assignments')
+        .select('dean_role')
+        .eq('program_id', programId)
+        .maybeSingle();
+    final deanRole = assignment?['dean_role'] as String?;
+    if (deanRole == null) return null;
+    final deanOffice = await _client
+        .from('dean_role_offices')
+        .select('office_id')
+        .eq('dean_role', deanRole)
+        .maybeSingle();
+    return deanOffice?['office_id'] as int?;
   }
 
   Future<void> _validateProgramChairStep(List<int> officeIds) async {
@@ -432,7 +480,12 @@ class ReservationService {
 
   Future<List<FacultyApprovalRequest>> getDeanApprovalRequests({
     required int officeId,
-  }) => _getApprovalRequests(deanOfficeId: officeId);
+  }) => _getApprovalRequests(
+    deanOfficeId: officeId,
+    legacyDean:
+        (AuthService.currentUser?['role']?.toString().toLowerCase() ?? '') ==
+        'dean',
+  );
 
   Future<int> getProgramOfficeId(int programId) async {
     final response = await _client
@@ -453,6 +506,7 @@ class ReservationService {
     int? facultyUserId,
     int? programChairOfficeId,
     int? deanOfficeId,
+    bool legacyDean = false,
   }) async {
     if ([
           facultyUserId,
@@ -490,9 +544,13 @@ class ReservationService {
               ])
               .order('created_at')
         : await approvalsQuery
-              .eq('approval_stage', 'office')
+              .eq('approval_stage', legacyDean ? 'office' : 'dean')
               .eq('office_id', deanOfficeId!)
-              .eq('status', 'Pending')
+              .in_('status', [
+                'Pending',
+                'Condition Accepted',
+                'Condition Rejected',
+              ])
               .order('created_at');
     final approvalRows = rows(rawApprovalRows);
     if (approvalRows.isEmpty) return [];
@@ -709,14 +767,16 @@ class ReservationService {
 
   Future<void> respondToDeanApproval({
     required int approvalId,
-    required bool approved,
+    required String decision,
+    String? message,
     String? rejectionReason,
   }) async {
     final result = await _client.rpc(
       'respond_to_dean_approval',
       params: {
         'p_approval_id': approvalId,
-        'p_decision': approved ? 'approve' : 'reject',
+        'p_decision': decision,
+        'p_message': message,
         'p_rejection_reason': rejectionReason,
       },
     );
@@ -732,7 +792,7 @@ class ReservationService {
         .from('reservation_approvals')
         .select('approval_id, reconsideration_message, condition_responded_at')
         .eq('reservation_id', reservationId)
-        .eq('approval_stage', 'program_chair')
+        .in_('approval_stage', ['program_chair', 'dean'])
         .eq('status', 'Condition Requested')
         .maybeSingle();
     return response == null ? null : Map<String, dynamic>.from(response);
@@ -829,10 +889,11 @@ class ReservationService {
 
     if (hasReturned) return 'Returned';
     if (hasRejected) return 'Rejected';
-    if (hasCancelled) return 'Cancelled';
-    if (hasPending || completedCount < approvalRows.length) {
+    if (hasPending) {
       return 'Pending Approval';
     }
+    if (hasCancelled) return 'Cancelled';
+    if (completedCount < approvalRows.length) return 'Pending Approval';
 
     final hasCompleted = approvalRows.any((row) {
       final normalized = (row['status'] as String? ?? '').trim().toLowerCase();
@@ -1599,6 +1660,14 @@ class ReservationService {
       }
 
       final resList = reservationsResponse as List;
+      final requesterProfile = await _client
+          .from('users')
+          .select('role')
+          .eq('user_id', userId)
+          .maybeSingle();
+      final requesterIsDean = AuthService.isDeanRole(
+        requesterProfile?['role']?.toString(),
+      );
       final reservationIds = resList
           .map((res) => res['reservation_id'] as int?)
           .whereType<int>()
@@ -1715,6 +1784,7 @@ class ReservationService {
             date,
             approvalRowsByReservation[reservationId] ?? const [],
             submittedAt: DateTime.tryParse(res['created_at']?.toString() ?? ''),
+            requesterIsDean: requesterIsDean,
           );
           final reservedItemsFuture = _fetchReservationItemNames(reservationId);
           final detailCheckFuture = _client
@@ -2644,6 +2714,7 @@ class ReservationService {
     DateTime date,
     List<Map<String, dynamic>> approvals, {
     DateTime? submittedAt,
+    bool requesterIsDean = false,
   }) async {
     try {
       // Use canonical chain to force UI order, but read DB rows for status/timestamps.
@@ -2823,6 +2894,63 @@ class ReservationService {
         });
       }
 
+      if (requesterIsDean) {
+        slots.removeWhere((slot) => slot['displayName'] == 'Program Chair');
+      }
+      final chairSlotIndex = slots.indexWhere(
+        (slot) => slot['displayName'] == 'Program Chair',
+      );
+      final programChairApprovalIndex = rawApprovals.indexWhere(
+        (row) => row['approval_stage'] == 'program_chair',
+      );
+      final deanApprovalIndex = rawApprovals.indexWhere(
+        (row) => row['approval_stage'] == 'dean',
+      );
+      if (chairSlotIndex >= 0 &&
+          programChairApprovalIndex >= 0 &&
+          deanApprovalIndex >= 0) {
+        final parallelApprovals = [
+          programChairApprovalIndex,
+          deanApprovalIndex,
+        ];
+        final preferredStatuses = [
+          'approved',
+          'rejected',
+          'condition requested',
+          'condition accepted',
+          'condition rejected',
+          'pending',
+          'waiting',
+          'completed',
+          'returned',
+          'cancelled',
+          'canceled',
+        ];
+        var selectedApprovalIndex = programChairApprovalIndex;
+        for (final preferredStatus in preferredStatuses) {
+          var found = false;
+          for (final approvalIndex in parallelApprovals) {
+            final rowStatus = (rawApprovals[approvalIndex]['status'] as String?)
+                ?.trim()
+                .toLowerCase();
+            if (rowStatus == preferredStatus) {
+              selectedApprovalIndex = approvalIndex;
+              found = true;
+              break;
+            }
+          }
+          if (found) {
+            break;
+          }
+        }
+
+        used[programChairApprovalIndex] = true;
+        used[deanApprovalIndex] = true;
+        slots[chairSlotIndex]
+          ..['displayName'] = 'Program Chair / Dean'
+          ..['matchIndex'] = selectedApprovalIndex;
+      }
+
       // Second pass: assign any remaining rows to unmatched slots using best-effort (prefer approved rows)
       final remainingRowIndexes = <int>[];
       for (var j = 0; j < rawApprovals.length; j++) {
@@ -2888,6 +3016,8 @@ class ReservationService {
       // Now build entries preserving slot order
       for (final slot in slots) {
         var displayName = slot['displayName'] as String;
+        final isParallelProgramChairDean =
+            displayName == 'Program Chair / Dean';
         final matchIndex = slot['matchIndex'] as int;
 
         String status = 'Pending';
@@ -2896,7 +3026,12 @@ class ReservationService {
 
         if (matchIndex != -1) {
           final row = rawApprovals[matchIndex];
-          if (displayName == 'Program Chair' &&
+          if (!isParallelProgramChairDean &&
+              displayName == 'Program Chair' &&
+              row['approval_stage'] == 'dean') {
+            displayName = row['office_name'] as String? ?? 'Dean';
+          } else if (!isParallelProgramChairDean &&
+              displayName == 'Program Chair' &&
               row['approval_stage'] != 'program_chair' &&
               (row['office_name'] as String?)?.toLowerCase() == 'dean') {
             displayName = 'Dean';
@@ -2932,25 +3067,34 @@ class ReservationService {
           } else {
             timestamp = _formatStoredApprovalTime(row, date);
           }
-          description = status == 'Approved'
-              ? 'Your reservation has been approved by $displayName.'
-              : status == 'Completed'
-              ? 'This reservation has been completed.'
-              : status == 'Returned'
-              ? 'This reservation has been returned and the item units are available again.'
-              : status == 'Rejected'
-              ? 'Your reservation was rejected by $displayName.'
-              : status == 'Condition Requested'
-              ? 'Program Chair asks you to reconsider: ${(row['reconsideration_message'] as String?)?.trim() ?? ''}'
-              : status == 'Condition Accepted'
-              ? 'You accepted the Program Chair condition. Waiting for the final decision.'
-              : status == 'Condition Rejected'
-              ? 'You declined the Program Chair condition. Waiting for the final decision.'
-              : status == 'Cancelled'
-              ? 'This reservation was cancelled.'
-              : status == 'Waiting'
-              ? '$displayName will review this request after the previous approval.'
-              : 'Waiting for approval from $displayName.';
+          final approvalRole = row['approval_stage'] == 'dean'
+              ? 'Dean'
+              : 'Program Chair';
+          if (isParallelProgramChairDean &&
+              (status == 'Pending' || status == 'Waiting')) {
+            description =
+                'Waiting for either the Program Chair or Dean to review this request.';
+          } else {
+            description = status == 'Approved'
+                ? 'Your reservation has been approved by the $approvalRole.'
+                : status == 'Completed'
+                ? 'This reservation has been completed.'
+                : status == 'Returned'
+                ? 'This reservation has been returned and the item units are available again.'
+                : status == 'Rejected'
+                ? 'Your reservation was rejected by the $approvalRole.'
+                : status == 'Condition Requested'
+                ? '$approvalRole asks you to reconsider: ${(row['reconsideration_message'] as String?)?.trim() ?? ''}'
+                : status == 'Condition Accepted'
+                ? 'You accepted the $approvalRole condition. Waiting for the final decision.'
+                : status == 'Condition Rejected'
+                ? 'You declined the $approvalRole condition. Waiting for the final decision.'
+                : status == 'Cancelled'
+                ? 'This reservation was cancelled.'
+                : status == 'Waiting'
+                ? '$displayName will review this request after the previous approval.'
+                : 'Waiting for approval from $displayName.';
+          }
         } else {
           displayName = approvalOfficeLabel(displayName);
         }

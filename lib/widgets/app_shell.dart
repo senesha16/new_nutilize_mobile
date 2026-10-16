@@ -205,10 +205,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         final untouched = currentRecords.where(
           (record) => !mergedIds.contains(record.stableId),
         );
-        ReservationActivityStore.replaceAll([
-          ...merged,
-          ...untouched,
-        ]);
+        ReservationActivityStore.replaceAll([...merged, ...untouched]);
         if (needsCanonicalRefresh && !_isRefreshing) {
           unawaited(_refreshReservations());
         }
@@ -249,6 +246,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     List<ReservationTimelineEntry> snapshot,
   ) {
     if (current.isEmpty || snapshot.isEmpty) return current;
+    final currentHasLegacyDeanStep = current.any(
+      (entry) => entry.title.trim().toLowerCase() == 'dean backup',
+    );
+    final snapshotHasParallelProgramChairDeanStep = snapshot.any(
+      (entry) => entry.title.trim().toLowerCase() == 'program chair / dean',
+    );
+    if (currentHasLegacyDeanStep && snapshotHasParallelProgramChairDeanStep) {
+      return snapshot;
+    }
 
     final used = List<bool>.filled(snapshot.length, false);
     return [

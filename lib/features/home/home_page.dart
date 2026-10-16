@@ -57,7 +57,7 @@ class _HomePageState extends State<HomePage> {
     }.contains(role);
     final isProgramChair =
         AuthService.programIdForProgramChairRole(role) != null;
-    final isDean = role == 'dean';
+    final isDean = role == 'dean' || AuthService.isDeanRole(role);
     final isAdmin = role == 'admin';
 
     return Scaffold(
@@ -813,7 +813,7 @@ class _FacultyApprovalEntry extends StatelessWidget {
                   children: [
                     Text(
                       isDean
-                          ? 'DEAN OFFICE WORKSPACE'
+                          ? 'DEAN WORKSPACE'
                           : isProgramChair
                           ? 'PROGRAM CHAIR WORKSPACE'
                           : 'FACULTY WORKSPACE',
@@ -840,7 +840,7 @@ class _FacultyApprovalEntry extends StatelessWidget {
                     SizedBox(height: 3),
                     Text(
                       isDean
-                          ? 'Review reservations assigned to the Dean office'
+                          ? 'Review reservations assigned to your school'
                           : isProgramChair
                           ? 'Review reservations from your program'
                           : 'Review assigned reservation requests',

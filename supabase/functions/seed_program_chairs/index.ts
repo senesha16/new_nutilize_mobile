@@ -151,91 +151,6 @@ async function createOrLinkAccount(
   };
 }
 
-async function createDeanAccount(admin: ReturnType<typeof createClient>) {
-  const { data: deanOffice, error: officeError } = await admin
-    .from('offices')
-    .select('office_id')
-    .ilike('department_name', 'Dean')
-    .single();
-  if (officeError) throw officeError;
-
-  const email = 'dean@nu-lipa.edu.ph';
-  const { data: existingProfiles, error: profileError } = await admin
-    .from('users')
-    .select('user_id, auth_user_id')
-    .eq('office_id', deanOffice.office_id)
-    .eq('role', 'dean')
-    .limit(2);
-  if (profileError) throw profileError;
-  if ((existingProfiles?.length ?? 0) > 1) {
-    throw new Error('More than one Dean profile exists for the Dean office.');
-  }
-  const existingProfile = existingProfiles?.[0] as
-    | { user_id: number; auth_user_id: string | null }
-    | undefined;
-  if (existingProfile?.auth_user_id) {
-    const { data: linkedAuth, error: linkedAuthError } =
-      await admin.auth.admin.getUserById(existingProfile.auth_user_id);
-    if (linkedAuthError) throw linkedAuthError;
-    if (linkedAuth.user?.email?.toLowerCase() === email.toLowerCase()) {
-      return {
-        program: 'Dean',
-        email,
-        temporaryPassword: null,
-        created: false,
-        note: 'An Auth account is already linked; no password was changed.',
-      };
-    }
-    throw new Error('The Dean profile links to a missing or unexpected Auth account.');
-  }
-
-  const temporaryPassword = generateTemporaryPassword();
-  const { data: authResult, error: authError } =
-    await admin.auth.admin.createUser({
-      email,
-      password: temporaryPassword,
-      email_confirm: true,
-      user_metadata: { office_role: 'dean' },
-    });
-  if (authError) {
-    if (isAlreadyRegisteredError(authError.message)) {
-      throw new Error(
-        `The Auth email ${email} is already in use but is not linked to this Dean profile. Review it manually; no account was changed.`,
-      );
-    }
-    throw authError;
-  }
-
-  const profile = {
-    username: email,
-    role: 'dean',
-    email,
-    affiliation: 'Dean',
-    office_id: deanOffice.office_id,
-    program_id: null,
-    auth_user_id: authResult.user.id,
-    is_active: true,
-    full_name: 'Dean',
-    first_name: 'Dean',
-    last_name: 'NU Lipa',
-  };
-  const saveResult = existingProfile
-    ? await admin.from('users').update(profile).eq('user_id', existingProfile.user_id)
-    : await admin.from('users').insert(profile);
-  if (saveResult.error) {
-    await admin.auth.admin.deleteUser(authResult.user.id);
-    throw saveResult.error;
-  }
-
-  return {
-    program: 'Dean',
-    email,
-    temporaryPassword,
-    created: true,
-    note: 'Unique one-time temporary password. Share it through a secure channel.',
-  };
-}
-
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (request.method !== 'POST') {
@@ -299,7 +214,6 @@ Deno.serve(async (request) => {
     for (const program of programs) {
       accounts.push(await createOrLinkAccount(admin, program));
     }
-    accounts.push(await createDeanAccount(admin));
     return response({
       accounts,
       warning:

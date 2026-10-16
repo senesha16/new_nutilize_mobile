@@ -50,7 +50,8 @@ class _ItemReservationPageState extends State<ItemReservationPage> {
             'faculty',
             'faculty_member',
           }.contains(_normalizedRole) ||
-          AuthService.programIdForProgramChairRole(_normalizedRole) != null);
+          AuthService.programIdForProgramChairRole(_normalizedRole) != null ||
+          AuthService.isDeanRole(_normalizedRole));
 
   @override
   void initState() {

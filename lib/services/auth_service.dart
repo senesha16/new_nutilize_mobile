@@ -68,6 +68,12 @@ class AuthService {
     }[normalized];
   }
 
+  static bool isDeanRole(String? role) => const {
+    'dean_sace',
+    'dean_sabm',
+    'dean_sahs',
+  }.contains(role?.trim().toLowerCase());
+
   static Map<String, dynamic>? normalizeProfile(Map<String, dynamic>? profile) {
     if (profile == null) return null;
     final normalized = Map<String, dynamic>.from(profile);

@@ -93,7 +93,7 @@ class _ProgramChairAccountSetupPageState
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'This creates or links 14 program-specific accounts and one Dean office account using NU Lipa email aliases. Each new account receives a unique, randomly generated temporary password. Existing Auth passwords are never reset.',
+                  'This creates or links the 14 program-specific Program Chair accounts using NU Lipa email aliases. Dean accounts are created through the Dean registration flow. Each new Program Chair account receives a unique, randomly generated temporary password; existing Auth passwords are never reset.',
                   style: TextStyle(
                     color: Color(0xFF707891),
                     height: 1.45,

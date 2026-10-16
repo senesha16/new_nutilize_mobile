@@ -208,7 +208,8 @@ class _RoomReservationPageState extends State<RoomReservationPage> {
             'faculty',
             'faculty_member',
           }.contains(_normalizedRole) ||
-          AuthService.programIdForProgramChairRole(_normalizedRole) != null);
+          AuthService.programIdForProgramChairRole(_normalizedRole) != null ||
+          AuthService.isDeanRole(_normalizedRole));
 
   static const _roomTypes = [
     'Classroom',
