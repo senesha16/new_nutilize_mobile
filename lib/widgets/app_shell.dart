@@ -236,6 +236,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         snapshot.timeline,
       ),
       reservedItems: current.reservedItems,
+      eventVenues: current.eventVenues,
       rejectionReason: snapshot.rejectionReason,
       rejectedBy: snapshot.rejectedBy,
     );

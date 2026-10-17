@@ -4,7 +4,6 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:new_nutilize_mobile/features/calendar/reservation_data.dart';
-import 'package:new_nutilize_mobile/services/auth_service.dart';
 import 'package:new_nutilize_mobile/services/reservation_service.dart';
 import 'package:new_nutilize_mobile/widgets/app_bottom_nav.dart';
 import 'package:new_nutilize_mobile/widgets/app_shell_scope.dart';
@@ -61,10 +60,15 @@ class ReservationDetailsPage extends StatefulWidget {
 
 class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
   late ReservationRecord _reservation;
+  final _reservationService = ReservationService();
   bool _isCancelling = false;
+  bool _loadingReconsideration = false;
+  bool _respondingToReconsideration = false;
+  bool _refreshingAfterReconsideration = false;
   Map<String, dynamic>? _reconsideration;
-  bool _isRespondingToCondition = false;
-  bool _conditionLoadFailed = false;
+  String? _reconsiderationError;
+  String? _reconsiderationResponse;
+  String? _reservationRefreshError;
 
   @override
   void initState() {
@@ -78,7 +82,118 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       }
     } catch (_) {}
     ReservationActivityStore.listenable.addListener(_syncReservationFromStore);
-    _loadReconsideration();
+    _loadRequesterReconsideration();
+  }
+
+  Future<void> _loadRequesterReconsideration() async {
+    final reservationId = int.tryParse(_reservation.id ?? '');
+    if (reservationId == null) return;
+    setState(() {
+      _loadingReconsideration = true;
+      _reconsiderationError = null;
+    });
+    try {
+      final reconsideration = await _reservationService
+          .getRequesterReconsideration(reservationId);
+      if (!mounted) return;
+      setState(() {
+        _reconsideration = reconsideration;
+        _loadingReconsideration = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingReconsideration = false;
+        _reconsiderationError =
+            'Could not load the approval message. Please try again.';
+      });
+    }
+  }
+
+  Future<void> _respondToReconsideration(bool accepted) async {
+    final approvalId = _reconsideration?['approval_id'] as int?;
+    if (approvalId == null) {
+      setState(() {
+        _reconsiderationError =
+            'This approval message is missing its response link. Refresh to try again.';
+      });
+      return;
+    }
+    setState(() {
+      _respondingToReconsideration = true;
+      _reconsiderationError = null;
+    });
+    try {
+      await _reservationService.respondToReconsideration(
+        approvalId: approvalId,
+        accepted: accepted,
+      );
+      if (!mounted) return;
+      setState(() {
+        _reconsideration = null;
+        _respondingToReconsideration = false;
+        _reservationRefreshError = null;
+        _reconsiderationResponse = accepted
+            ? 'Your response was sent. The approver can now continue reviewing the request.'
+            : 'You declined the requested condition. The approver can now continue reviewing the request.';
+      });
+      await _refreshReservationAfterReconsideration();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _respondingToReconsideration = false;
+        _reconsiderationError =
+            'Could not send your response. Please try again.';
+      });
+    }
+  }
+
+  Future<void> _refreshReservationAfterReconsideration() async {
+    final userId = _reservation.userId;
+    if (userId == null) {
+      setState(() {
+        _reservationRefreshError =
+            'Your response was sent, but reservation details could not be refreshed. Reopen this page to see the latest status.';
+      });
+      return;
+    }
+    setState(() {
+      _refreshingAfterReconsideration = true;
+      _reservationRefreshError = null;
+    });
+    try {
+      final records = await _reservationService.getReservationRecordsForUser(
+        userId,
+      );
+      ReservationRecord? refreshedReservation;
+      for (final record in records) {
+        if (record.id == _reservation.id) {
+          refreshedReservation = record;
+          break;
+        }
+      }
+      if (!mounted) return;
+      if (refreshedReservation == null) {
+        setState(() {
+          _refreshingAfterReconsideration = false;
+          _reservationRefreshError =
+              'Your response was sent, but reservation details could not be refreshed. Reopen this page to see the latest status.';
+        });
+        return;
+      }
+      setState(() {
+        _reservation = refreshedReservation!;
+        _refreshingAfterReconsideration = false;
+      });
+      ReservationActivityStore.upsert(refreshedReservation);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _refreshingAfterReconsideration = false;
+        _reservationRefreshError =
+            'Your response was sent, but reservation details could not be refreshed. Please retry.';
+      });
+    }
   }
 
   @override
@@ -87,63 +202,6 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
       _syncReservationFromStore,
     );
     super.dispose();
-  }
-
-  Future<void> _loadReconsideration() async {
-    final reservationId = int.tryParse(_reservation.id ?? '');
-    final currentUserId = AuthService.currentUser?['user_id']?.toString();
-    if (reservationId == null ||
-        currentUserId == null ||
-        _reservation.userId?.toString() != currentUserId) {
-      return;
-    }
-
-    try {
-      final reconsideration = await ReservationService()
-          .getRequesterReconsideration(reservationId);
-      if (!mounted) return;
-      setState(() {
-        _reconsideration = reconsideration;
-        _conditionLoadFailed = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() => _conditionLoadFailed = true);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to load the chair condition: $error')),
-      );
-    }
-  }
-
-  Future<void> _respondToCondition({required bool accepted}) async {
-    final approvalId = _reconsideration?['approval_id'] as int?;
-    if (approvalId == null) return;
-    setState(() => _isRespondingToCondition = true);
-    try {
-      await ReservationService().respondToReconsideration(
-        approvalId: approvalId,
-        accepted: accepted,
-      );
-      if (!mounted) return;
-      setState(() => _reconsideration = null);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            accepted
-                ? 'Condition accepted. The Program Chair will make the final decision.'
-                : 'Condition declined. The Program Chair will make the final decision.',
-          ),
-        ),
-      );
-      await _loadReconsideration();
-    } catch (error) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Unable to send your response: $error')),
-      );
-    } finally {
-      if (mounted) setState(() => _isRespondingToCondition = false);
-    }
   }
 
   void _syncReservationFromStore() {
@@ -281,6 +339,7 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
             reservationTime: _reservation.reservationTime,
             timeline: updatedTimeline,
             reservedItems: _reservation.reservedItems,
+            eventVenues: _reservation.eventVenues,
             rejectionReason: _reservation.rejectionReason,
             rejectedBy: _reservation.rejectedBy,
           );
@@ -336,26 +395,55 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     _ReservationSummaryCard(reservation: _reservation),
+                    if (_loadingReconsideration) ...[
+                      const SizedBox(height: 12),
+                      const LinearProgressIndicator(minHeight: 2),
+                    ],
+                    if (_reconsideration != null) ...[
+                      const SizedBox(height: 14),
+                      _ReconsiderationResponseCard(
+                        message:
+                            _reconsideration!['reconsideration_message']
+                                as String? ??
+                            '',
+                        approver: _reconsideration!['approval_stage'] == 'dean'
+                            ? 'Dean'
+                            : 'Program Chair',
+                        responding: _respondingToReconsideration,
+                        error: _reconsiderationError,
+                        onRetry: _loadRequesterReconsideration,
+                        onAccept: () => _respondToReconsideration(true),
+                        onDecline: () => _respondToReconsideration(false),
+                      ),
+                    ] else if (_reconsiderationResponse != null) ...[
+                      const SizedBox(height: 14),
+                      _ReconsiderationResponseNotice(
+                        message: _reconsiderationResponse!,
+                      ),
+                      if (_reservationRefreshError != null) ...[
+                        const SizedBox(height: 8),
+                        _ReconsiderationResponseNotice(
+                          message: _reservationRefreshError!,
+                          isError: true,
+                          onRetry: _refreshingAfterReconsideration
+                              ? null
+                              : _refreshReservationAfterReconsideration,
+                        ),
+                      ],
+                    ] else if (_reconsiderationError != null) ...[
+                      const SizedBox(height: 14),
+                      _ReconsiderationResponseNotice(
+                        message: _reconsiderationError!,
+                        isError: true,
+                        onRetry: _loadRequesterReconsideration,
+                      ),
+                    ],
                     const SizedBox(height: 14),
                     _ApprovalProcessCard(
                       currentStep: _reservation.approvalState.progressIndex,
                       message: _reservation.approvalSummary,
                       approvalSteps: _reservation.approvalSteps,
                     ),
-                    if (_reconsideration != null || _conditionLoadFailed) ...[
-                      const SizedBox(height: 14),
-                      _ProgramChairConditionCard(
-                        message:
-                            _reconsideration?['reconsideration_message']
-                                as String? ??
-                            '',
-                        isLoading: _isRespondingToCondition,
-                        loadFailed: _conditionLoadFailed,
-                        onAccept: () => _respondToCondition(accepted: true),
-                        onReject: () => _respondToCondition(accepted: false),
-                        onRetry: _loadReconsideration,
-                      ),
-                    ],
                     const SizedBox(height: 18),
                     _ApprovalTimelineCard(reservation: _reservation),
                     if (_reservation.reservationStatus.toLowerCase().contains(
@@ -462,107 +550,6 @@ class _ReservationDetailsPageState extends State<ReservationDetailsPage> {
   }
 }
 
-class _ProgramChairConditionCard extends StatelessWidget {
-  const _ProgramChairConditionCard({
-    required this.message,
-    required this.isLoading,
-    required this.loadFailed,
-    required this.onAccept,
-    required this.onReject,
-    required this.onRetry,
-  });
-
-  final String message;
-  final bool isLoading;
-  final bool loadFailed;
-  final VoidCallback onAccept;
-  final VoidCallback onReject;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFEFF3FF),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFD9E1FF)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.chat_bubble_outline, color: _brandBlue, size: 20),
-              SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  'Program Chair asks you to reconsider',
-                  style: TextStyle(
-                    color: Color(0xFF26346F),
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          if (loadFailed) ...[
-            const SizedBox(height: 10),
-            const Text(
-              'The condition could not be loaded.',
-              style: TextStyle(color: Color(0xFF505A78), height: 1.4),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton.icon(
-                onPressed: onRetry,
-                icon: const Icon(Icons.refresh),
-                label: const Text('Try again'),
-              ),
-            ),
-          ] else ...[
-            const SizedBox(height: 10),
-            Text(
-              message,
-              style: const TextStyle(color: Color(0xFF39415C), height: 1.45),
-            ),
-            const SizedBox(height: 14),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton(
-                    onPressed: isLoading ? null : onReject,
-                    child: const Text('Reject condition'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton(
-                    onPressed: isLoading ? null : onAccept,
-                    style: FilledButton.styleFrom(backgroundColor: _brandBlue),
-                    child: isLoading
-                        ? const SizedBox(
-                            height: 18,
-                            width: 18,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Text('Accept condition'),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-}
-
 class _ReportIssueDialog extends StatefulWidget {
   const _ReportIssueDialog({required this.reservedItems});
 
@@ -570,6 +557,167 @@ class _ReportIssueDialog extends StatefulWidget {
 
   @override
   State<_ReportIssueDialog> createState() => _ReportIssueDialogState();
+}
+
+class _ReconsiderationResponseCard extends StatelessWidget {
+  const _ReconsiderationResponseCard({
+    required this.message,
+    required this.approver,
+    required this.responding,
+    required this.error,
+    required this.onRetry,
+    required this.onAccept,
+    required this.onDecline,
+  });
+
+  final String message;
+  final String approver;
+  final bool responding;
+  final String? error;
+  final VoidCallback onRetry;
+  final VoidCallback onAccept;
+  final VoidCallback onDecline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFFBEE),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF1D88B)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.chat_bubble_outline_rounded,
+                color: Color(0xFF9B6C00),
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  '$approver requests reconsideration',
+                  style: const TextStyle(
+                    color: Color(0xFF26324B),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            message.trim().isEmpty
+                ? 'Please review the requested condition and choose how to respond.'
+                : message.trim(),
+            style: const TextStyle(
+              color: Color(0xFF3E4657),
+              fontSize: 13,
+              height: 1.45,
+            ),
+          ),
+          if (error != null) ...[
+            const SizedBox(height: 10),
+            Text(
+              error!,
+              style: const TextStyle(color: Color(0xFFB3261E), fontSize: 12),
+            ),
+            Align(
+              alignment: Alignment.centerRight,
+              child: TextButton(
+                onPressed: responding ? null : onRetry,
+                child: const Text('Refresh message'),
+              ),
+            ),
+          ],
+          const SizedBox(height: 12),
+          if (responding)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(8),
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+            )
+          else
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: onDecline,
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF9E3333),
+                      side: const BorderSide(color: Color(0xFFCB7770)),
+                    ),
+                    child: const Text('Decline'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: onAccept,
+                    style: FilledButton.styleFrom(backgroundColor: _brandBlue),
+                    child: const Text('Accept'),
+                  ),
+                ),
+              ],
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReconsiderationResponseNotice extends StatelessWidget {
+  const _ReconsiderationResponseNotice({
+    required this.message,
+    this.isError = false,
+    this.onRetry,
+  });
+
+  final String message;
+  final bool isError;
+  final VoidCallback? onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = isError ? const Color(0xFFB3261E) : const Color(0xFF287447);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: isError ? const Color(0xFFFFF2F0) : const Color(0xFFEDF7F0),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: isError ? const Color(0xFFF1CBC6) : const Color(0xFFCBE6D2),
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            isError ? Icons.error_outline_rounded : Icons.check_circle_outline,
+            color: color,
+            size: 19,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: color, fontSize: 12, height: 1.4),
+            ),
+          ),
+          if (onRetry != null)
+            TextButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
 }
 
 class _ReportIssueDialogState extends State<_ReportIssueDialog> {
@@ -1247,26 +1395,40 @@ class _ReservationSummaryCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 10),
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              _MetaItem(
-                icon: Icons.calendar_month_rounded,
-                label: _formatDate(reservation.date),
+          if (reservation.eventVenues.isEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _MetaItem(
+                  icon: Icons.calendar_month_rounded,
+                  label: _formatDate(reservation.date),
+                ),
+                const SizedBox(height: 7),
+                _MetaItem(
+                  icon: Icons.access_time_rounded,
+                  label: reservation.reservationTime,
+                ),
+                const SizedBox(height: 7),
+                _MetaItem(
+                  icon: Icons.meeting_room_rounded,
+                  label: reservation.roomNumber,
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          if (reservation.eventVenues.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text(
+              'Venues and schedules',
+              style: TextStyle(
+                color: Color(0xFF35489A),
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
               ),
-              const _MetaSeparator(),
-              _MetaItem(
-                icon: Icons.access_time_rounded,
-                label: reservation.reservationTime,
-              ),
-              const _MetaSeparator(),
-              _MetaItem(
-                icon: Icons.meeting_room_rounded,
-                label: reservation.roomNumber,
-              ),
-            ],
-          ),
-          if (reservation.reservedItems.isNotEmpty) ...[
+            ),
+            const SizedBox(height: 8),
+            ...reservation.eventVenues.map(_eventVenueCard),
+          ] else if (reservation.reservedItems.isNotEmpty) ...[
             const SizedBox(height: 12),
             const Text(
               'Borrowed Items',
@@ -1277,12 +1439,14 @@ class _ReservationSummaryCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: reservation.reservedItems
-                  .map(
-                    (it) => Container(
+            LayoutBuilder(
+              builder: (context, constraints) => Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: reservation.reservedItems.map((item) {
+                  return ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+                    child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
                         vertical: 6,
@@ -1299,7 +1463,9 @@ class _ReservationSummaryCard extends StatelessWidget {
                         ],
                       ),
                       child: Text(
-                        it,
+                        item,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           color: Color(0xFF111111),
                           fontSize: 12,
@@ -1307,11 +1473,173 @@ class _ReservationSummaryCard extends StatelessWidget {
                         ),
                       ),
                     ),
-                  )
-                  .toList(),
+                  );
+                }).toList(),
+              ),
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _eventVenueCard(ReservationVenueDetail venue) {
+    final removed = venue.status.toLowerCase() == 'removed';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(bottom: 9),
+      padding: const EdgeInsets.all(11),
+      decoration: BoxDecoration(
+        color: removed ? const Color(0xFFFFF5F3) : Colors.white,
+        borderRadius: BorderRadius.circular(11),
+        border: Border.all(
+          color: removed ? const Color(0xFFF0D1CC) : const Color(0xFFDDE2EF),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.location_on_outlined,
+                color: Color(0xFF35489A),
+                size: 18,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  venue.name,
+                  style: const TextStyle(
+                    color: Color(0xFF17213A),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+              _EventStatusBadge(removed: removed),
+            ],
+          ),
+          const SizedBox(height: 7),
+          Padding(
+            padding: const EdgeInsets.only(left: 25),
+            child: Text(
+              '${_formatDate(venue.startTime)} · ${_formatEventTime(venue.startTime)}–${_formatEventTime(venue.endTime)}',
+              style: const TextStyle(
+                color: Color(0xFF545F76),
+                fontSize: 11,
+                height: 1.35,
+              ),
+            ),
+          ),
+          if (venue.removalReason?.trim().isNotEmpty == true) ...[
+            const SizedBox(height: 5),
+            Padding(
+              padding: const EdgeInsets.only(left: 25),
+              child: Text(
+                'Reason: ${venue.removalReason}',
+                style: const TextStyle(color: Color(0xFF9A4B42), fontSize: 11),
+              ),
+            ),
+          ],
+          if (venue.equipment.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Padding(
+              padding: EdgeInsets.only(left: 25),
+              child: Text(
+                'Borrowed for this venue',
+                style: TextStyle(
+                  color: Color(0xFF69758D),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+            const SizedBox(height: 5),
+            ...venue.equipment.map(_eventEquipmentRow),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _eventEquipmentRow(ReservationEquipmentDetail equipment) {
+    final removed = equipment.status.toLowerCase() == 'removed';
+    return Padding(
+      padding: const EdgeInsets.only(left: 25, top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                removed
+                    ? Icons.remove_circle_outline
+                    : Icons.inventory_2_outlined,
+                size: 15,
+                color: removed
+                    ? const Color(0xFFB34A4A)
+                    : const Color(0xFF35489A),
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  '${equipment.name} · Quantity ${equipment.quantity}${removed ? ' · Removed' : ''}',
+                  style: TextStyle(
+                    color: removed
+                        ? const Color(0xFF9A4B42)
+                        : const Color(0xFF17213A),
+                    fontSize: 11,
+                    height: 1.35,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (equipment.removalReason?.trim().isNotEmpty == true)
+            Padding(
+              padding: const EdgeInsets.only(left: 22, top: 2),
+              child: Text(
+                'Reason: ${equipment.removalReason}',
+                style: const TextStyle(color: Color(0xFF9A4B42), fontSize: 10),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  String _formatEventTime(DateTime value) {
+    final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
+    final minute = value.minute.toString().padLeft(2, '0');
+    final period = value.hour >= 12 ? 'PM' : 'AM';
+    return '$hour:$minute $period';
+  }
+}
+
+class _EventStatusBadge extends StatelessWidget {
+  const _EventStatusBadge({required this.removed});
+
+  final bool removed;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: removed ? const Color(0xFFFFE5E0) : const Color(0xFFE8F5EC),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        removed ? 'Removed' : 'Included',
+        style: TextStyle(
+          color: removed ? const Color(0xFF9A4B42) : const Color(0xFF287447),
+          fontSize: 9,
+          fontWeight: FontWeight.w800,
+        ),
       ),
     );
   }
@@ -1678,44 +2006,29 @@ class _TimelineRow extends StatelessWidget {
 }
 
 class _MetaItem extends StatelessWidget {
-  const _MetaItem({required this.icon, required this.label});
+  const _MetaItem({required this.icon, required this.label, this.maxLines = 1});
 
   final IconData icon;
   final String label;
+  final int maxLines;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.only(right: 6),
       child: Row(
-        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 15, color: const Color(0xFF111111)),
           const SizedBox(width: 5),
-          Text(
-            label,
-            style: const TextStyle(color: Color(0xFF111111), fontSize: 11),
+          Expanded(
+            child: Text(
+              label,
+              maxLines: maxLines,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Color(0xFF111111), fontSize: 11),
+            ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _MetaSeparator extends StatelessWidget {
-  const _MetaSeparator();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 2),
-      child: Text(
-        '|',
-        style: TextStyle(
-          color: Color(0xFF111111),
-          fontSize: 11,
-          fontWeight: FontWeight.w400,
-        ),
       ),
     );
   }

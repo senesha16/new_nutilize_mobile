@@ -175,6 +175,7 @@ class FacultyApprovalRequest {
     this.roomName,
     this.status = 'Pending',
     this.reconsiderationMessage,
+    this.institutionalEventResources = const [],
   });
 
   final int approvalId;
@@ -192,6 +193,62 @@ class FacultyApprovalRequest {
   final String? roomName;
   final String status;
   final String? reconsiderationMessage;
+  final List<InstitutionalEventResource> institutionalEventResources;
+  bool get isInstitutionalEvent => institutionalEventResources.isNotEmpty;
+}
+
+class InstitutionalEventVenueSchedule {
+  const InstitutionalEventVenueSchedule({
+    required this.roomId,
+    required this.startTime,
+    required this.endTime,
+  });
+
+  final int roomId;
+  final DateTime startTime;
+  final DateTime endTime;
+}
+
+class InstitutionalEventEquipmentRequest {
+  const InstitutionalEventEquipmentRequest({
+    required this.itemId,
+    required this.quantity,
+    required this.venueIndex,
+  });
+
+  final int itemId;
+  final int quantity;
+  final int venueIndex;
+}
+
+class InstitutionalEventResource {
+  const InstitutionalEventResource({
+    required this.id,
+    required this.kind,
+    required this.name,
+    required this.status,
+    this.startTime,
+    this.endTime,
+    this.scheduleLabel,
+    this.quantity,
+    this.venueName,
+    this.removalReason,
+  });
+
+  final int id;
+  final String kind;
+  final String name;
+  final String status;
+  final DateTime? startTime;
+  final DateTime? endTime;
+  final String? scheduleLabel;
+  final int? quantity;
+  final String? venueName;
+  final String? removalReason;
+
+  String get label => kind == 'venue'
+      ? name
+      : '$name${quantity == null ? '' : ' (quantity: $quantity)'}';
 }
 
 bool _isUnitAvailableStatus(String? status) {
@@ -678,6 +735,91 @@ class ReservationService {
           .add('$itemName (quantity: $quantity)');
     }
 
+    final institutionalEventRows = rows(
+      await _client
+          .from('institutional_event_requests')
+          .select('reservation_id')
+          .in_('reservation_id', reservationIds),
+    );
+    final institutionalEventIds = institutionalEventRows
+        .map((row) => row['reservation_id'] as int)
+        .toSet();
+    final eventResourcesByReservation =
+        <int, List<InstitutionalEventResource>>{};
+    final venueResourcesById = <int, InstitutionalEventResource>{};
+    final venueRowsById = <int, Map<String, dynamic>>{};
+    if (institutionalEventIds.isNotEmpty) {
+      final eventVenueRows = rows(
+        await _client
+            .from('institutional_event_venues')
+            .select(
+              'event_venue_id, reservation_id, room_id, start_time, end_time, status, removal_reason',
+            )
+            .in_('reservation_id', institutionalEventIds.toList()),
+      );
+      for (final venue in eventVenueRows) {
+        final eventVenueId = venue['event_venue_id'] as int;
+        final room = roomsById[venue['room_id'] as int];
+        final resource = InstitutionalEventResource(
+          id: eventVenueId,
+          kind: 'venue',
+          name: room == null
+              ? 'Venue ${venue['room_id']}'
+              : '${room['room_type']} ${room['room_number']}'.trim(),
+          status: venue['status'] as String? ?? 'included',
+          startTime: DateTime.parse(venue['start_time'].toString()),
+          endTime: DateTime.parse(venue['end_time'].toString()),
+          removalReason: venue['removal_reason'] as String?,
+        );
+        venueRowsById[eventVenueId] = venue;
+        venueResourcesById[eventVenueId] = resource;
+        eventResourcesByReservation
+            .putIfAbsent(venue['reservation_id'] as int, () => [])
+            .add(resource);
+      }
+
+      final equipmentRows = rows(
+        await _client
+            .from('institutional_event_equipment')
+            .select(
+              'event_equipment_id, reservation_id, event_venue_id, reservation_items_id, status, removal_reason',
+            )
+            .in_('reservation_id', institutionalEventIds.toList()),
+      );
+      final itemLinksById = {
+        for (final link in itemLinks) link['reservation_items_id'] as int: link,
+      };
+      for (final equipment in equipmentRows) {
+        final itemLinkId = equipment['reservation_items_id'] as int;
+        final itemLink = itemLinksById[itemLinkId];
+        final itemId = itemLink?['item_id'] as int?;
+        final venueId = equipment['event_venue_id'] as int;
+        final venue = venueRowsById[venueId];
+        final venueResource = venueResourcesById[venueId];
+        eventResourcesByReservation
+            .putIfAbsent(equipment['reservation_id'] as int, () => [])
+            .add(
+              InstitutionalEventResource(
+                id: equipment['event_equipment_id'] as int,
+                kind: 'equipment',
+                name: itemId == null
+                    ? 'Equipment'
+                    : itemNamesById[itemId] ?? 'Item $itemId',
+                status: equipment['status'] as String? ?? 'included',
+                quantity: quantitiesByItemLinkId[itemLinkId] ?? 1,
+                venueName: venueResource?.name,
+                startTime: venue == null
+                    ? null
+                    : DateTime.parse(venue['start_time'].toString()),
+                endTime: venue == null
+                    ? null
+                    : DateTime.parse(venue['end_time'].toString()),
+                removalReason: equipment['removal_reason'] as String?,
+              ),
+            );
+      }
+    }
+
     final requests = <FacultyApprovalRequest>[];
     for (final approval in approvalRows) {
       final reservationId = approval['reservation_id'] as int;
@@ -715,12 +857,16 @@ class ReservationService {
           submittedAt: DateTime.parse(reservation['created_at'].toString()),
           hasOutsideParticipants:
               reservation['outside_participants'] as bool? ?? false,
-          itemSummaries: itemSummariesByReservation[reservationId] ?? const [],
+          itemSummaries: institutionalEventIds.contains(reservationId)
+              ? const []
+              : itemSummariesByReservation[reservationId] ?? const [],
           chairsQuantity: chairsByReservationId[reservationId],
           roomName: roomNameByReservation[reservationId],
           status: approval['status'] as String? ?? 'Pending',
           reconsiderationMessage:
               approval['reconsideration_message'] as String?,
+          institutionalEventResources:
+              eventResourcesByReservation[reservationId] ?? const [],
         ),
       );
     }
@@ -785,12 +931,38 @@ class ReservationService {
     }
   }
 
+  Future<void> respondToInstitutionalEventApproval({
+    required int approvalId,
+    required String decision,
+    String? message,
+    String? rejectionReason,
+    List<int> removedVenueIds = const [],
+    List<int> removedEquipmentIds = const [],
+  }) async {
+    final response = await _client.rpc(
+      'respond_to_institutional_event_approval',
+      params: {
+        'p_approval_id': approvalId,
+        'p_decision': decision,
+        'p_message': message,
+        'p_rejection_reason': rejectionReason,
+        'p_removed_venue_ids': removedVenueIds,
+        'p_removed_equipment_ids': removedEquipmentIds,
+      },
+    );
+    if (response != true) {
+      throw StateError('The Institutional Event response was not confirmed.');
+    }
+  }
+
   Future<Map<String, dynamic>?> getRequesterReconsideration(
     int reservationId,
   ) async {
     final response = await _client
         .from('reservation_approvals')
-        .select('approval_id, reconsideration_message, condition_responded_at')
+        .select(
+          'approval_id, approval_stage, reconsideration_message, condition_responded_at',
+        )
         .eq('reservation_id', reservationId)
         .in_('approval_stage', ['program_chair', 'dean'])
         .eq('status', 'Condition Requested')
@@ -1084,6 +1256,96 @@ class ReservationService {
       },
     );
     return _roomIdsFromRpc(result);
+  }
+
+  Future<Map<int, int>> getInstitutionalEventEquipmentAvailability({
+    required List<int> itemIds,
+    required DateTime startTime,
+    required DateTime endTime,
+  }) async {
+    if (itemIds.isEmpty) return const {};
+    try {
+      final result = await _client.rpc(
+        'institutional_event_item_availability',
+        params: {
+          'p_item_ids': itemIds,
+          'p_start_of_activity': _scheduleTimestamp(startTime),
+          'p_end_of_activity': _scheduleTimestamp(endTime),
+        },
+      );
+      if (result is! List) {
+        throw StateError(
+          'Equipment availability was not returned by the server.',
+        );
+      }
+      final availability = <int, int>{};
+      for (final row in result) {
+        if (row is! Map) {
+          throw StateError('Equipment availability response was invalid.');
+        }
+        final itemId = _asInt(row['item_id']);
+        final availableQuantity = _asInt(row['available_quantity']);
+        if (itemId == null || availableQuantity == null) {
+          throw StateError('Equipment availability response was incomplete.');
+        }
+        availability[itemId] = availableQuantity;
+      }
+      return availability;
+    } catch (availabilityError) {
+      try {
+        final unitsResponse = await _client
+            .from('item_units')
+            .select('unit_id, item_id, status')
+            .in_('item_id', itemIds);
+        if (unitsResponse is! List) {
+          throw StateError('Equipment inventory was not returned.');
+        }
+        final reservedResponse = await _client.rpc(
+          'reserved_item_unit_ids',
+          params: {
+            'p_item_ids': itemIds,
+            'p_start_of_activity': _scheduleTimestamp(startTime),
+            'p_end_of_activity': _scheduleTimestamp(endTime),
+          },
+        );
+        if (reservedResponse is! List) {
+          throw StateError('Reserved equipment units were not returned.');
+        }
+
+        final reservedUnitIds = <int>{};
+        for (final row in reservedResponse) {
+          if (row is! Map) {
+            throw StateError('Reserved equipment response was invalid.');
+          }
+          final unitId = _asInt(row['unit_id']);
+          if (unitId != null) reservedUnitIds.add(unitId);
+        }
+
+        final availability = {for (final id in itemIds) id: 0};
+        for (final rawUnit in unitsResponse) {
+          if (rawUnit is! Map) {
+            throw StateError('Equipment inventory response was invalid.');
+          }
+          final unitId = _asInt(rawUnit['unit_id']);
+          final itemId = _asInt(rawUnit['item_id']);
+          if (unitId == null ||
+              itemId == null ||
+              reservedUnitIds.contains(unitId) ||
+              !_isUnitAvailableStatus(rawUnit['status']?.toString())) {
+            continue;
+          }
+          availability.update(itemId, (count) => count + 1, ifAbsent: () => 1);
+        }
+        return availability;
+      } catch (fallbackError) {
+        throw StateError(
+          'Could not verify equipment availability. Apply database migration '
+          '0027 and confirm migration 0026 is installed. '
+          'Availability check error: $availabilityError. '
+          'Fallback check error: $fallbackError',
+        );
+      }
+    }
   }
 
   Future<bool> _roomTimeIsTaken({
@@ -1779,6 +2041,9 @@ class ReservationService {
           }
 
           final roomNameFuture = _fetchReservationRoomName(reservationId);
+          final eventDetailsFuture = _fetchInstitutionalEventHistoryDetails(
+            reservationId,
+          );
           final timelineFuture = _buildApprovalTimeline(
             reservationId,
             date,
@@ -1796,18 +2061,29 @@ class ReservationService {
 
           final results = await Future.wait([
             roomNameFuture,
+            eventDetailsFuture,
             timelineFuture,
             reservedItemsFuture,
             detailCheckFuture,
           ]);
 
-          final roomName = results[0] as String? ?? 'Reserved Room';
-          final timeline = results[1] as List<ReservationTimelineEntry>? ?? [];
-          final reservedItems = results[2] as List<String>? ?? [];
-          final detailCheck = results[3] as Map<String, dynamic>?;
+          final eventDetails = results[1] as Map<String, dynamic>?;
+          final roomName =
+              eventDetails?['roomName'] as String? ??
+              results[0] as String? ??
+              'Reserved Room';
+          final timeline = results[2] as List<ReservationTimelineEntry>? ?? [];
+          final reservedItems =
+              eventDetails?['reservedItems'] as List<String>? ??
+              results[3] as List<String>? ??
+              [];
+          final detailCheck = results[4] as Map<String, dynamic>?;
 
-          var reservationType = 'Venue Reservation';
-          if (detailCheck != null &&
+          var reservationType = eventDetails == null
+              ? 'Venue Reservation'
+              : 'Institutional Event Reservation';
+          if (eventDetails == null &&
+              detailCheck != null &&
               detailCheck['reservation_items_id'] != null) {
             reservationType = 'Item Reservation';
           }
@@ -1827,6 +2103,9 @@ class ReservationService {
                 : databaseTimestamps.last,
             timeline: timeline,
             reservedItems: reservedItems,
+            eventVenues:
+                eventDetails?['eventVenues'] as List<ReservationVenueDetail>? ??
+                const [],
             rejectionReason:
                 _isRejectedStatus(effectiveStatus) &&
                     rejectionReason?.isNotEmpty == true
@@ -2178,6 +2457,194 @@ class ReservationService {
     } catch (_) {
       return 'Room Reservation';
     }
+  }
+
+  Future<bool> _institutionalEventContainsGym(int reservationId) async {
+    final eventVenues = await _client
+        .from('institutional_event_venues')
+        .select('room_id')
+        .eq('reservation_id', reservationId);
+    final roomIds = (eventVenues as List)
+        .map((row) => row['room_id'] as int)
+        .toSet()
+        .toList();
+    if (roomIds.isEmpty) return false;
+    final rooms = await _client
+        .from('rooms')
+        .select('room_id, room_type')
+        .in_('room_id', roomIds);
+    return (rooms as List).any(
+      (room) => (room['room_type'] as String? ?? '').toLowerCase() == 'gym',
+    );
+  }
+
+  Future<Map<String, dynamic>?> _fetchInstitutionalEventHistoryDetails(
+    int reservationId,
+  ) async {
+    final eventRequest = await _client
+        .from('institutional_event_requests')
+        .select('reservation_id')
+        .eq('reservation_id', reservationId)
+        .maybeSingle();
+    if (eventRequest == null) return null;
+
+    final venueRows =
+        (await _client
+                    .from('institutional_event_venues')
+                    .select(
+                      'event_venue_id, room_id, start_time, end_time, status, removal_reason',
+                    )
+                    .eq('reservation_id', reservationId)
+                    .order('start_time')
+                as List)
+            .cast<Map<String, dynamic>>();
+    final roomIds = venueRows
+        .map((venue) => venue['room_id'] as int)
+        .toSet()
+        .toList();
+    final rooms = roomIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : (await _client
+                      .from('rooms')
+                      .select('room_id, room_number, room_type')
+                      .in_('room_id', roomIds)
+                  as List)
+              .cast<Map<String, dynamic>>();
+    final roomsById = {for (final room in rooms) room['room_id'] as int: room};
+    final venueNamesById = <int, String>{};
+    final eventVenues = <int, ReservationVenueDetail>{};
+    final venueNames = <String>[];
+    for (final venue in venueRows) {
+      final venueId = venue['event_venue_id'] as int;
+      final room = roomsById[venue['room_id'] as int];
+      final name = room == null
+          ? 'Venue ${venue['room_id']}'
+          : _roomDisplayName(room);
+      venueNamesById[venueId] = name;
+      if (!venueNames.contains(name)) venueNames.add(name);
+      eventVenues[venueId] = ReservationVenueDetail(
+        name: name,
+        startTime: DateTime.parse(venue['start_time'].toString()),
+        endTime: DateTime.parse(venue['end_time'].toString()),
+        status: venue['status'] as String? ?? 'included',
+        removalReason: venue['removal_reason'] as String?,
+      );
+    }
+
+    final equipmentRows =
+        (await _client
+                    .from('institutional_event_equipment')
+                    .select(
+                      'event_equipment_id, event_venue_id, reservation_items_id, status, removal_reason',
+                    )
+                    .eq('reservation_id', reservationId)
+                as List)
+            .cast<Map<String, dynamic>>();
+    final itemLinkIds = equipmentRows
+        .map((equipment) => equipment['reservation_items_id'] as int)
+        .toSet()
+        .toList();
+    final itemLinks = itemLinkIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : (await _client
+                      .from('reservation_items')
+                      .select('reservation_items_id, item_id')
+                      .in_('reservation_items_id', itemLinkIds)
+                  as List)
+              .cast<Map<String, dynamic>>();
+    final itemIds = itemLinks
+        .map((link) => link['item_id'] as int)
+        .toSet()
+        .toList();
+    final items = itemIds.isEmpty
+        ? <Map<String, dynamic>>[]
+        : (await _client
+                      .from('items')
+                      .select('item_id, item_name')
+                      .in_('item_id', itemIds)
+                  as List)
+              .cast<Map<String, dynamic>>();
+    final itemNameById = {
+      for (final item in items)
+        item['item_id'] as int: item['item_name'] as String,
+    };
+    final itemIdByLinkId = {
+      for (final link in itemLinks)
+        link['reservation_items_id'] as int: link['item_id'] as int,
+    };
+    final details =
+        (await _client
+                    .from('reservation_details')
+                    .select('reservation_items_id, quantity')
+                    .eq('reservation_id', reservationId)
+                as List)
+            .cast<Map<String, dynamic>>();
+    final quantityByLinkId = {
+      for (final detail in details)
+        if (detail['reservation_items_id'] != null)
+          detail['reservation_items_id'] as int:
+              detail['quantity'] as int? ?? 1,
+    };
+    final equipmentLabels = <String>[];
+    for (final equipment in equipmentRows) {
+      final linkId = equipment['reservation_items_id'] as int;
+      final itemId = itemIdByLinkId[linkId];
+      final name = itemId == null
+          ? 'Equipment'
+          : itemNameById[itemId] ?? 'Item $itemId';
+      final quantity = quantityByLinkId[linkId] ?? 1;
+      final venueName =
+          venueNamesById[equipment['event_venue_id'] as int] ?? 'venue';
+      final status = equipment['status'] as String? ?? 'included';
+      final removedLabel = status == 'removed' ? ' (removed)' : '';
+      equipmentLabels.add(
+        '$name (quantity: $quantity, $venueName)$removedLabel',
+      );
+      final venueId = equipment['event_venue_id'] as int;
+      final venue = eventVenues[venueId];
+      if (venue != null) {
+        eventVenues[venueId] = ReservationVenueDetail(
+          name: venue.name,
+          startTime: venue.startTime,
+          endTime: venue.endTime,
+          status: venue.status,
+          removalReason: venue.removalReason,
+          equipment: [
+            ...venue.equipment,
+            ReservationEquipmentDetail(
+              name: name,
+              quantity: quantity,
+              status: status,
+              removalReason: equipment['removal_reason'] as String?,
+            ),
+          ],
+        );
+      }
+    }
+
+    return {
+      'roomName': _compactVenueSummary(venueNames),
+      'reservedItems': equipmentLabels,
+      'eventVenues': eventVenues.values.toList(),
+    };
+  }
+
+  String _roomDisplayName(Map<String, dynamic> room) {
+    final type = (room['room_type'] as String? ?? '').trim();
+    final number = (room['room_number'] as String? ?? '').trim();
+    if (number.isEmpty || number.toLowerCase() == type.toLowerCase()) {
+      return type.isEmpty ? 'Venue' : type;
+    }
+    return '$type $number'.trim();
+  }
+
+  String _compactVenueSummary(List<String> venueNames) {
+    if (venueNames.isEmpty) return 'Institutional event';
+    if (venueNames.length == 1) return venueNames.first;
+    if (venueNames.length == 2) {
+      return '${venueNames[0]}, ${venueNames[1]}';
+    }
+    return '${venueNames[0]}, ${venueNames[1]} +${venueNames.length - 2} more';
   }
 
   /// Fetch item names reserved under a reservation (if any)
@@ -2721,8 +3188,11 @@ class ReservationService {
       final prerequisites = await Future.wait([
         _getReservationRoomType(reservationId),
         _getReservationItemIds(reservationId),
+        _institutionalEventContainsGym(reservationId),
       ]);
-      final roomType = prerequisites[0] as String?;
+      final roomType = prerequisites[2] == true
+          ? 'Gym'
+          : prerequisites[0] as String?;
       final itemIds = prerequisites[1] as List<int>;
       final approvalChain = await calculateApprovalChain(
         roomType: roomType ?? '',
@@ -3249,6 +3719,51 @@ class ReservationService {
   }
 
   // MARK: - Reservation Creation
+
+  Future<int> createInstitutionalEventReservation({
+    required String activityName,
+    required int userId,
+    required List<InstitutionalEventVenueSchedule> venues,
+    required List<InstitutionalEventEquipmentRequest> equipment,
+    required bool hasOutsideParticipants,
+    required String proofOfConsentUrl,
+  }) async {
+    if (venues.isEmpty) {
+      throw ArgumentError('An Institutional Event needs at least one venue.');
+    }
+    final response = await _client.rpc(
+      'create_institutional_event_reservation',
+      params: {
+        'p_user_id': userId,
+        'p_activity_name': activityName,
+        'p_outside_participants': hasOutsideParticipants,
+        'p_proof_of_consent_url': proofOfConsentUrl,
+        'p_venues': venues
+            .map(
+              (venue) => {
+                'room_id': venue.roomId,
+                'start_time': venue.startTime.toIso8601String(),
+                'end_time': venue.endTime.toIso8601String(),
+              },
+            )
+            .toList(),
+        'p_equipment': equipment
+            .map(
+              (request) => {
+                'item_id': request.itemId,
+                'quantity': request.quantity,
+                'venue_index': request.venueIndex,
+              },
+            )
+            .toList(),
+      },
+    );
+    if (response is int) return response;
+    if (response is num) return response.toInt();
+    throw StateError(
+      'The Institutional Event reservation was not confirmed by the server.',
+    );
+  }
 
   /// Create a new reservation with approval chain
   Future<int?> createReservation({

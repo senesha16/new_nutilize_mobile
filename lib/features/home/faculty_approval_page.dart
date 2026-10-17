@@ -163,6 +163,52 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
     }
   }
 
+  Future<void> _removeSelectedEventResources(
+    FacultyApprovalRequest request,
+  ) async {
+    final decision = await showDialog<_SelectedEventResources>(
+      context: context,
+      builder: (_) => _RemoveEventResourcesDialog(
+        resources: request.institutionalEventResources
+            .where((resource) => resource.status.toLowerCase() == 'included')
+            .toList(),
+      ),
+    );
+    if (decision == null) return;
+    setState(() => _busyApprovalIds.add(request.approvalId));
+    try {
+      await _reservationService.respondToInstitutionalEventApproval(
+        approvalId: request.approvalId,
+        decision: 'approve',
+        rejectionReason: decision.reason,
+        removedVenueIds: decision.venueIds,
+        removedEquipmentIds: decision.equipmentIds,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text(
+            'Selected resources were removed and the remaining event was forwarded.',
+          ),
+        ),
+      );
+      await _loadRequests();
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          behavior: SnackBarBehavior.floating,
+          content: Text('Unable to update this event request: $error'),
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _busyApprovalIds.remove(request.approvalId));
+      }
+    }
+  }
+
   Future<void> _respond(
     FacultyApprovalRequest request, {
     bool? approved,
@@ -638,6 +684,74 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
                 ],
               ),
             ],
+            if (request.isInstitutionalEvent) ...[
+              const SizedBox(height: 14),
+              const Text(
+                'INSTITUTIONAL EVENT RESOURCES',
+                style: TextStyle(
+                  color: _muted,
+                  fontSize: 10,
+                  letterSpacing: 0.8,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+              const SizedBox(height: 8),
+              ...request.institutionalEventResources.map((resource) {
+                final start = resource.startTime;
+                final end = resource.endTime;
+                final schedule = start == null || end == null
+                    ? null
+                    : '${_formatDate(start)} · ${_formatTime(start)}–${_formatTime(end)}';
+                return Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 7),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 11,
+                    vertical: 9,
+                  ),
+                  decoration: BoxDecoration(
+                    color: resource.status.toLowerCase() == 'removed'
+                        ? const Color(0xFFFFF2F0)
+                        : const Color(0xFFF6F8FC),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        resource.kind == 'venue'
+                            ? 'Venue · ${resource.name}'
+                            : 'Equipment · ${resource.name} × ${resource.quantity ?? 1}',
+                        style: const TextStyle(
+                          color: _ink,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      if (resource.kind == 'equipment' &&
+                          resource.venueName != null)
+                        Text(
+                          'Assigned to ${resource.venueName}',
+                          style: const TextStyle(color: _muted, fontSize: 11),
+                        ),
+                      if (schedule != null)
+                        Text(
+                          schedule,
+                          style: const TextStyle(color: _muted, fontSize: 11),
+                        ),
+                      if (resource.status.toLowerCase() == 'removed')
+                        Text(
+                          'Removed${resource.removalReason?.trim().isNotEmpty == true ? ': ${resource.removalReason}' : ''}',
+                          style: const TextStyle(
+                            color: Color(0xFFB3261E),
+                            fontSize: 11,
+                          ),
+                        ),
+                    ],
+                  ),
+                );
+              }),
+            ],
             const SizedBox(height: 13),
             Row(
               children: [
@@ -768,6 +882,32 @@ class _FacultyApprovalPageState extends State<FacultyApprovalPage> {
                     ),
                   ),
                 ],
+              ),
+            ],
+            if (request.isInstitutionalEvent &&
+                (_isProgramChair || _isDean) &&
+                !isAwaitingFinalDecision &&
+                request.institutionalEventResources.any(
+                  (resource) => resource.status.toLowerCase() == 'included',
+                )) ...[
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: busy
+                      ? null
+                      : () => _removeSelectedEventResources(request),
+                  icon: const Icon(Icons.remove_circle_outline_rounded),
+                  label: const Text('Remove selected resources and approve'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: _navy,
+                    side: const BorderSide(color: _line),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(13),
+                    ),
+                  ),
+                ),
               ),
             ],
           ],
@@ -1154,6 +1294,119 @@ class _ReconsiderRequestDialogState extends State<_ReconsiderRequestDialog> {
           ),
           onPressed: _submit,
           child: const Text('Send condition'),
+        ),
+      ],
+    );
+  }
+}
+
+class _SelectedEventResources {
+  const _SelectedEventResources({
+    required this.venueIds,
+    required this.equipmentIds,
+    required this.reason,
+  });
+
+  final List<int> venueIds;
+  final List<int> equipmentIds;
+  final String reason;
+}
+
+class _RemoveEventResourcesDialog extends StatefulWidget {
+  const _RemoveEventResourcesDialog({required this.resources});
+
+  final List<InstitutionalEventResource> resources;
+
+  @override
+  State<_RemoveEventResourcesDialog> createState() =>
+      _RemoveEventResourcesDialogState();
+}
+
+class _RemoveEventResourcesDialogState
+    extends State<_RemoveEventResourcesDialog> {
+  final _selectedVenueIds = <int>{};
+  final _selectedEquipmentIds = <int>{};
+  final _reasonController = TextEditingController();
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSelection =
+        _selectedVenueIds.isNotEmpty || _selectedEquipmentIds.isNotEmpty;
+    final reason = _reasonController.text.trim();
+    return AlertDialog(
+      title: const Text('Remove selected event resources'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Selected resources will be removed. The rest of the event continues for approval.',
+              ),
+              const SizedBox(height: 8),
+              ...widget.resources.map((resource) {
+                final isVenue = resource.kind == 'venue';
+                final selected = isVenue
+                    ? _selectedVenueIds.contains(resource.id)
+                    : _selectedEquipmentIds.contains(resource.id);
+                final label = isVenue
+                    ? 'Venue · ${resource.name}'
+                    : 'Equipment · ${resource.name} × ${resource.quantity ?? 1}'
+                          '${resource.venueName == null ? '' : '\nAssigned to ${resource.venueName}'}';
+                return CheckboxListTile(
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                  value: selected,
+                  title: Text(label, style: const TextStyle(fontSize: 13)),
+                  onChanged: (checked) => setState(() {
+                    final ids = isVenue
+                        ? _selectedVenueIds
+                        : _selectedEquipmentIds;
+                    if (checked == true) {
+                      ids.add(resource.id);
+                    } else {
+                      ids.remove(resource.id);
+                    }
+                  }),
+                );
+              }),
+              TextField(
+                controller: _reasonController,
+                maxLines: 3,
+                maxLength: 500,
+                onChanged: (_) => setState(() {}),
+                decoration: const InputDecoration(
+                  labelText: 'Reason shared with the requester',
+                  alignLabelWithHint: true,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: !hasSelection || reason.isEmpty
+              ? null
+              : () => Navigator.of(context).pop(
+                  _SelectedEventResources(
+                    venueIds: _selectedVenueIds.toList(),
+                    equipmentIds: _selectedEquipmentIds.toList(),
+                    reason: reason,
+                  ),
+                ),
+          child: const Text('Remove and approve'),
         ),
       ],
     );

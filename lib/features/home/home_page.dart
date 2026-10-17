@@ -691,6 +691,8 @@ class _RecentActivityCard extends StatelessWidget {
                       children: [
                         Text(
                           reservation.roomName,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
                             color: Color(0xFF111111),
                             fontSize: 14,

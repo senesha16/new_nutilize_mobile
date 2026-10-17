@@ -53,6 +53,38 @@ class ReservationApprovalState {
   final int progressIndex;
 }
 
+class ReservationVenueDetail {
+  const ReservationVenueDetail({
+    required this.name,
+    required this.startTime,
+    required this.endTime,
+    this.status = 'included',
+    this.removalReason,
+    this.equipment = const [],
+  });
+
+  final String name;
+  final DateTime startTime;
+  final DateTime endTime;
+  final String status;
+  final String? removalReason;
+  final List<ReservationEquipmentDetail> equipment;
+}
+
+class ReservationEquipmentDetail {
+  const ReservationEquipmentDetail({
+    required this.name,
+    required this.quantity,
+    this.status = 'included',
+    this.removalReason,
+  });
+
+  final String name;
+  final int quantity;
+  final String status;
+  final String? removalReason;
+}
+
 class ReservationRecord {
   const ReservationRecord({
     this.id,
@@ -66,6 +98,7 @@ class ReservationRecord {
     this.lastUpdatedAt,
     this.timeline = const [],
     this.reservedItems = const [],
+    this.eventVenues = const [],
     this.rejectionReason,
     this.rejectedBy,
   });
@@ -81,6 +114,7 @@ class ReservationRecord {
   final DateTime? lastUpdatedAt;
   final List<ReservationTimelineEntry> timeline;
   final List<String> reservedItems;
+  final List<ReservationVenueDetail> eventVenues;
   final String? rejectionReason;
   final String? rejectedBy;
 
@@ -409,17 +443,17 @@ List<ReservationRecord> recentReservations(DateTime now, {int limit = 3}) {
     return !reservationDate.isBefore(today);
   }
 
-  final overdueReservations = allReservations
-      .where(
-        (reservation) =>
-            reservation.reservationStatus.toLowerCase().contains('overdue'),
-      )
-      .toList()
-    ..sort(
-      (a, b) => (b.lastUpdatedAt ?? b.date).compareTo(
-        a.lastUpdatedAt ?? a.date,
-      ),
-    );
+  final overdueReservations =
+      allReservations
+          .where(
+            (reservation) =>
+                reservation.reservationStatus.toLowerCase().contains('overdue'),
+          )
+          .toList()
+        ..sort(
+          (a, b) =>
+              (b.lastUpdatedAt ?? b.date).compareTo(a.lastUpdatedAt ?? a.date),
+        );
 
   final upcomingReservations = allReservations.where(isUpcoming).toList();
 
@@ -1136,9 +1170,7 @@ class NotificationActivityStore {
 
   static void removeById(String id) {
     _publish(
-      listenable.value
-          .where((notification) => notification.id != id)
-          .toList(),
+      listenable.value.where((notification) => notification.id != id).toList(),
     );
   }
 

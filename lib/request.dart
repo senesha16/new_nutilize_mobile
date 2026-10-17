@@ -8,6 +8,8 @@ import 'home.dart';
 import 'calendar.dart';
 import 'features/request/request_page.dart' as features_request;
 import 'features/request/item_reservation_page.dart' as features_item;
+import 'features/request/institutional_event_reservation_page.dart'
+    as features_institutional_event;
 import 'features/request/reservation_history_page.dart' as features_history;
 
 class RequestPage extends StatelessWidget {
@@ -32,13 +34,19 @@ class RequestPage extends StatelessWidget {
     } catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not check reservation eligibility: $error')),
+        SnackBar(
+          content: Text('Could not check reservation eligibility: $error'),
+        ),
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final role = AuthService.currentUser?['role']?.toString();
+    final canRequestInstitutionalEvent =
+        AuthService.programIdForProgramChairRole(role) != null ||
+        AuthService.isDeanRole(role);
     return Scaffold(
       backgroundColor: const Color(0xFFF3F5FB),
       body: SafeArea(
@@ -79,6 +87,19 @@ class RequestPage extends StatelessWidget {
                         const features_item.ItemReservationPage(),
                       ),
                     ),
+                    if (canRequestInstitutionalEvent) ...[
+                      const SizedBox(height: 16),
+                      _ReservationCard(
+                        icon: Icons.event_available_rounded,
+                        title: 'Institutional Event Reservation',
+                        subtitle:
+                            'Reserve multiple venues and borrow equipment together',
+                        onTap: () => _openReservation(
+                          context,
+                          const features_institutional_event.InstitutionalEventReservationPage(),
+                        ),
+                      ),
+                    ],
                     const SizedBox(height: 32),
                     const Text(
                       'More Actions',
@@ -89,11 +110,11 @@ class RequestPage extends StatelessWidget {
                       ),
                     ),
                     const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 40, vertical: 12),
-                      child: Divider(
-                        color: Color(0xFFD0D0D6),
-                        thickness: 1,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 40,
+                        vertical: 12,
                       ),
+                      child: Divider(color: Color(0xFFD0D0D6), thickness: 1),
                     ),
                     const SizedBox(height: 8),
                     _ReservationCard(
@@ -102,7 +123,10 @@ class RequestPage extends StatelessWidget {
                       subtitle: '',
                       onTap: () {
                         Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const features_history.ReservationHistoryPage()),
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                const features_history.ReservationHistoryPage(),
+                          ),
                         );
                       },
                     ),
@@ -152,11 +176,7 @@ class _ReservationCard extends StatelessWidget {
                 color: const Color(0xFFF6C914),
                 shape: BoxShape.circle,
               ),
-              child: Icon(
-                icon,
-                color: Colors.white,
-                size: 36,
-              ),
+              child: Icon(icon, color: Colors.white, size: 36),
             ),
             const SizedBox(height: 12),
             Text(
